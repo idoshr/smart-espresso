@@ -23,4 +23,4 @@ def strtobool(term, table=None):
     return term
 
 
-font = ImageFont.truetype("Roboto-Regular.ttf", 12)
+font = ImageFont.truetype("espresso/Roboto-Regular.ttf", 12)
