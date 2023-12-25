@@ -1,5 +1,5 @@
-from gpiozero import PWMLED, MCP3008
-
+from gpiozero import MCP3008
+from homeassistant_api import Client, State
 
 class MCP3008AnalogSensor:
     OFFSET_VOLTAGE = 0.32725940400586195
@@ -43,3 +43,16 @@ class MCP3008AnalogSensor:
     @property
     def message_bar(self):
         return f'{self.name} Bar: {round(self.bar, 2)}'
+
+    def update_home_assistant(self, client: Client):
+        client.set_state(State(entity_id=f'sensor.espresso_machine_{self.name.lower()}_pressure',
+                               state=round(self.bar, 2),
+                               attributes={"unit_of_measurement": "Bar",
+                                           "friendly_name": f"{self.name} Pressure"}))
+
+
+
+    # value = pot.voltage
+    # if value < OFFSET_VOLTAGE:
+    #     print(f'Lowest value {value}')
+    # message = f'MPa: {round(((value - OFFSET_VOLTAGE) * 3.333 / 1024) * 250, 2)}'
