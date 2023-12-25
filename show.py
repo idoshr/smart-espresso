@@ -20,6 +20,7 @@ if HA_ENABLE:
         raise ValueError("HA_URL and HA_TOKEN are required")
 
     # Initialize HomeAssistant Client before you use it.
+    print('Connecting to Home Assistant')
     client_ha = Client(f"{HA_URL}/api",
                        HA_TOKEN,
                        verify_ssl=HA_VERIFY_SSL)
