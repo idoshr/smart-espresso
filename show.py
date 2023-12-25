@@ -1,7 +1,7 @@
 import os
 from time import sleep
 
-from gpiozero import PWMLED, MCP3008
+from mcp3008_analog_sensor import MCP3008AnalogSensor
 from luma.core.interface.serial import i2c
 from luma.oled.device import sh1106
 from luma.core.render import canvas
@@ -36,69 +36,28 @@ print(f'device mode {device.mode}')
 # see https://github.com/rm-hull/luma.core/blob/master/luma/core/render.py
 
 
-class AnalogSensor:
-    OFFSET_VOLTAGE = 0.32725940400586195
-    OFFSET = 0.09721543722520765
-    
-    def __init__(self, pin, name):
-        self.name = name
-        self.pin = pin
-
-        # Load MCP3008
-        self.pot = MCP3008(self.pin)
-        self._value = None
-
-    def read(self):
-        self._value = self.pot.value
-        return self._value
-    
-    @property
-    def value(self):
-        if self._value is not None:
-            return self._value
-        else:
-            return self.read()
-    
-    @property
-    def mpa(self):
-        if self.value < self.OFFSET:
-            self.OFFSET = self.value
-            print(f'Lowest value {self.value}')
-
-        return (self.value - self.OFFSET) / 2
-
-    @property
-    def bar(self):
-        return self.mpa * 10
-
-    @property
-    def message_mpa(self):
-        return f'{self.name} MPa: {round(self.mpa, 4)}'
-
-    @property
-    def message_bar(self):
-        return f'{self.name} Bar: {round(self.bar, 2)}'
-
-
-hp = AnalogSensor(0, 'Head')     # Head Pressure
-bp = AnalogSensor(3, 'Boiler')     # Boiler Pressure
+head_p = MCP3008AnalogSensor(0, 'Head')     # Head Pressure
+boiler_p = MCP3008AnalogSensor(3, 'Boiler')     # Boiler Pressure
 while True:
     # value = pot.voltage
     # if value < OFFSET_VOLTAGE:
     #     print(f'Lowest value {value}')
     # message = f'MPa: {round(((value - OFFSET_VOLTAGE) * 3.333 / 1024) * 250, 2)}'
-    hp.read()
-    bp.read()
+    head_p.read()
+    boiler_p.read()
     client.set_state(State(entity_id='sensor.espresso_machine_boiler_pressure',
-                           state=round(bp.bar, 2), attributes={"unit_of_measurement": "Bar",
-                                                               "friendly_name": "Boiler Pressure"}))
+                           state=round(boiler_p.bar, 2),
+                           attributes={"unit_of_measurement": "Bar",
+                                       "friendly_name": "Boiler Pressure"}))
+
     client.set_state(State(entity_id='sensor.espresso_machine_head_pressure',
-                           state=round(hp.bar, 2), attributes={"unit_of_measurement": "Bar",
-                                                               "friendly_name": "Head Pressure"}))
+                           state=round(head_p.bar, 2),
+                           attributes={"unit_of_measurement": "Bar",
+                                       "friendly_name": "Head Pressure"}))
     with canvas(device, dither=True) as draw:
-        draw.text((5, 15), bp.message_mpa, fill='white', font=font)
-        draw.text((5, 30), bp.message_bar, fill='white', font=font)
-        draw.text((5, 45), hp.message_bar, fill='white', font=font)
+        draw.text((5, 15), boiler_p.message_mpa, fill='white', font=font)
+        draw.text((5, 30), boiler_p.message_bar, fill='white', font=font)
+        draw.text((5, 45), head_p.message_bar, fill='white', font=font)
 
     sleep(0.1)
 
