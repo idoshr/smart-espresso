@@ -8,7 +8,7 @@ from mcp3008_analog_sensor import MCP3008AnalogSensor
 from utils import font
 
 
-def run(analog_devices: list[MCP3008AnalogSensor], client_ha: Client, device: sh1106):
+def fetch_and_show_data(analog_devices: list[MCP3008AnalogSensor], client_ha: Client, device: sh1106):
     while True:
 
         for analog_device in analog_devices:

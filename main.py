@@ -5,7 +5,7 @@ from luma.oled.device import sh1106
 from homeassistant_api import Client
 
 from mcp3008_analog_sensor import MCP3008AnalogSensor
-from show import run
+from show import fetch_and_show_data
 from utils import strtobool
 
 
@@ -44,4 +44,4 @@ if '__name__' == '__main__':
         MCP3008AnalogSensor(0, 'Head'),         # Head Pressure
         MCP3008AnalogSensor(3, 'Boiler')        # Boiler Pressure
     ]
-    run(analog_devices, client_ha, device)
+    fetch_and_show_data(analog_devices, client_ha, device)
