@@ -4,9 +4,9 @@ from luma.core.interface.serial import i2c
 from luma.oled.device import sh1106
 from homeassistant_api import Client
 
-from mcp3008_analog_sensor import MCP3008AnalogSensor
-from show import fetch_and_show_data
-from utils import strtobool
+from espresso.mcp3008_analog_sensor import MCP3008AnalogSensor
+from espresso.show import fetch_and_show_data
+from espresso.utils import strtobool
 
 
 HA_ENABLE = strtobool(os.environ.get("HA_ENABLE") or False)

@@ -4,8 +4,8 @@ from luma.oled.device import sh1106
 from luma.core.render import canvas
 from homeassistant_api import Client
 
-from mcp3008_analog_sensor import MCP3008AnalogSensor
-from utils import font
+from espresso.mcp3008_analog_sensor import MCP3008AnalogSensor
+from espresso.utils import font
 
 
 def fetch_and_show_data(analog_devices: list[MCP3008AnalogSensor], client_ha: Client, device: sh1106):
