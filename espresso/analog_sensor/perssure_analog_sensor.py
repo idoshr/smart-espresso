@@ -24,11 +24,11 @@ class PressureAnalogSensor(MCP3008AnalogSensor):
 
     @property
     def message_mpa(self):
-        return f'{self.name} MPa: {round(self.mpa, 4)}'
+        return f'{self.name}: {round(self.mpa, 4)} MPa'
 
     @property
     def message_bar(self):
-        return f'{self.name} Bar: {round(self.bar, 2)}'
+        return f'{self.name}: {round(self.bar, 2)} Bar'
 
     @staticmethod
     def unit_of_measurement():
