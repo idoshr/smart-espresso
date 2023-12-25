@@ -39,7 +39,7 @@ print(f'device size {device.size}')
 print(f'device mode {device.mode}')
 
 
-if '__name__' == '__main__':
+if __name__ == '__main__':
     analog_devices = [
         MCP3008AnalogSensor(0, 'Head'),         # Head Pressure
         MCP3008AnalogSensor(3, 'Boiler')        # Boiler Pressure
