@@ -1,28 +1,14 @@
-from gpiozero import MCP3008
 from homeassistant_api import Client, State
 
-class MCP3008AnalogSensor:
+from espresso.analog_sensor.mcp3008_analog_sensor import MCP3008AnalogSensor
+
+
+class PressureAnalogSensor(MCP3008AnalogSensor):
     OFFSET_VOLTAGE = 0.32725940400586195
     OFFSET = 0.09721543722520765
 
     def __init__(self, pin, name):
-        self.name = name
-        self.pin = pin
-
-        # Load MCP3008
-        self.pot = MCP3008(self.pin)
-        self._value = None
-
-    def read(self):
-        self._value = self.pot.value
-        return self._value
-
-    @property
-    def value(self):
-        if self._value is not None:
-            return self._value
-        else:
-            return self.read()
+        super().__init__(pin, name)
 
     @property
     def mpa(self):
@@ -44,10 +30,22 @@ class MCP3008AnalogSensor:
     def message_bar(self):
         return f'{self.name} Bar: {round(self.bar, 2)}'
 
+    @staticmethod
+    def unit_of_measurement():
+        return 'Bar'
+
+    @property
+    def message(self):
+        return self.message_bar
+
+    @property
+    def normalized_value(self):
+        return self.bar
+
     def update_home_assistant(self, client: Client):
         client.set_state(State(entity_id=f'sensor.espresso_machine_{self.name.lower()}_pressure',
                                state=round(self.bar, 2),
-                               attributes={"unit_of_measurement": "Bar",
+                               attributes={"unit_of_measurement": self.unit_of_measurement(),
                                            "friendly_name": f"{self.name} Pressure"}))
 
 

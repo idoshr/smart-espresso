@@ -4,7 +4,7 @@ from luma.oled.device import sh1106
 from luma.core.render import canvas
 from homeassistant_api import Client
 
-from espresso.mcp3008_analog_sensor import MCP3008AnalogSensor
+from espresso.analog_sensor.perssure_analog_sensor import MCP3008AnalogSensor
 from espresso.utils import font
 
 
@@ -23,7 +23,7 @@ def fetch_and_show_data(analog_devices: list[MCP3008AnalogSensor], client_ha: Cl
         with canvas(device, dither=True) as draw:
             position_hight = 15
             for analog_device in analog_devices:
-                draw.text((5, position_hight), analog_device.message_mpa, fill='white', font=font)
+                draw.text((5, position_hight), analog_device.message, fill='white', font=font)
                 position_hight += 15
 
         sleep(0.1)

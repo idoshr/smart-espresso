@@ -4,7 +4,7 @@ from luma.core.interface.serial import i2c
 from luma.oled.device import sh1106
 from homeassistant_api import Client
 
-from espresso.mcp3008_analog_sensor import MCP3008AnalogSensor
+from espresso.analog_sensor.perssure_analog_sensor import PressureAnalogSensor
 from espresso.show import fetch_and_show_data
 from espresso.utils import strtobool
 
@@ -41,7 +41,7 @@ print(f'device mode {device.mode}')
 
 if __name__ == '__main__':
     analog_devices = [
-        MCP3008AnalogSensor(0, 'Head'),         # Head Pressure
-        MCP3008AnalogSensor(3, 'Boiler')        # Boiler Pressure
+        PressureAnalogSensor(pin=0, name='Head'),         # Head Pressure
+        PressureAnalogSensor(pin=3, name='Boiler')        # Boiler Pressure
     ]
     fetch_and_show_data(analog_devices, client_ha, device)
