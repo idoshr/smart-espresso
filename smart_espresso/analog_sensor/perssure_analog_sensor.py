@@ -1,6 +1,6 @@
 from homeassistant_api import Client, State
 
-from espresso.analog_sensor.mcp3008_analog_sensor import MCP3008AnalogSensor
+from smart_espresso.analog_sensor.mcp3008_analog_sensor import MCP3008AnalogSensor
 
 
 class PressureAnalogSensor(MCP3008AnalogSensor):

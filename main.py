@@ -4,9 +4,9 @@ from luma.core.interface.serial import i2c
 from luma.oled.device import sh1106
 from homeassistant_api import Client
 
-from espresso.analog_sensor.perssure_analog_sensor import PressureAnalogSensor
-from espresso.show import fetch_and_show_data
-from espresso.utils import strtobool
+from smart_espresso.analog_sensor.perssure_analog_sensor import PressureAnalogSensor
+from smart_espresso.smart_espresso import SmartEspresso
+from smart_espresso.utils import strtobool
 
 
 HA_ENABLE = strtobool(os.environ.get("HA_ENABLE") or False)
@@ -27,16 +27,16 @@ if HA_ENABLE:
 
 # NB ssd1306 devices are monochromatic; a pixel is enabled with
 #    white and disabled with black.
-# NB the ssd1306 class has no way of knowing the device resolution/size.
+# NB the ssd1306 class has no way of knowing the display resolution/size.
 
-device = sh1106(i2c(port=1, address=0x3c), width=128, height=64, rotate=0)
+display = sh1106(i2c(port=1, address=0x3c), width=128, height=64, rotate=0)
 
 # set the contrast to minimum.
-device.contrast(1)
+display.contrast(1)
 
 # show some info.
-print(f'device size {device.size}')
-print(f'device mode {device.mode}')
+print(f'device size {display.size}')
+print(f'device mode {display.mode}')
 
 
 if __name__ == '__main__':
@@ -44,4 +44,7 @@ if __name__ == '__main__':
         PressureAnalogSensor(pin=0, name='Head'),         # Head Pressure
         PressureAnalogSensor(pin=3, name='Boiler')        # Boiler Pressure
     ]
-    fetch_and_show_data(analog_devices, client_ha, device)
+    se = SmartEspresso(analog_devices=analog_devices,
+                       client_ha=client_ha,
+                       display=display)
+    se.run()
