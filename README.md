@@ -89,3 +89,9 @@ if __name__ == '__main__':
 | 1     | 1.3" OLED Display Module White/Blue Color Drive Chip SH1106 128X64 1.3 inch OLED LCD LED IIC I2C Communicate For ArduinoProjects | https://a.aliexpress.com/_oEzEfpA | Nice but too small                                                              |
 
 ### Wiring diagram
+
+
+![display](docs/img/display.png)
+
+
+![analog](docs/img/analog.png)
