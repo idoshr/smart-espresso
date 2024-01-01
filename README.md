@@ -92,6 +92,16 @@ if __name__ == '__main__':
 | 1     | DIY Prototype Raspberry Pi Expansion Board PCB Shield  Compatible for Raspberry Pi 4B/3B/3B  Board For DIY Starter Projects      | https://a.aliexpress.com/_opgseK8 |                                                                                 |
 | 1     | 1.3" OLED Display Module White/Blue Color Drive Chip SH1106 128X64 1.3 inch OLED LCD LED IIC I2C Communicate For ArduinoProjects | https://a.aliexpress.com/_oEzEfpA | Nice but too small                                                              |
 
+
+### Tools
+
+* Soldering iron
+* Soldering wire
+* Multimeter
+* Ratchet wrench
+* Screwdriver
+* Teflon tape
+
 ### Wiring diagram
 
 
