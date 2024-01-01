@@ -4,8 +4,6 @@ The goal is to create a smart espresso machine using a Raspberry Pi 4 and a few 
 The pressure sensors are connected to a MCP3008 ADC and the Raspberry Pi is connected to a Home Assistant instance to monitor the pressure.
 
 
-
-
 ## Installation
 
 ```bash
@@ -22,7 +20,8 @@ pip install -r requirements.txt
 | display        | luma oled device                              |
 
 
-## Example
+### Example
+
 ```python
 import os
 
@@ -78,7 +77,9 @@ if __name__ == '__main__':
 ```
 
 
-### Prerequisite list
+## Prerequisite
+
+### Hardware
 
 | Items | Description                                                                                                                      | Link                              | Notes                                                                           |
 |-------|----------------------------------------------------------------------------------------------------------------------------------|-----------------------------------|---------------------------------------------------------------------------------|
@@ -102,7 +103,7 @@ if __name__ == '__main__':
 * Screwdriver
 * Teflon tape
 
-### Wiring diagram
+## Wiring diagram
 
 
 ![display](docs/img/display.png)
@@ -111,7 +112,7 @@ if __name__ == '__main__':
 ![analog](docs/img/analog.png)
 
 
-### References / credits / inspiration
+## References / credits / inspiration
 * https://wiki.dfrobot.com/Gravity__Water_Pressure_Sensor_SKU__SEN0257
 * https://m.youtube.com/watch?v=JlgXGrb4lVE
 * https://sites.google.com/view/coffee4randy/home?authuser=0
