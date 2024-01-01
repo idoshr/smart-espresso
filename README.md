@@ -1,4 +1,8 @@
 # Smart Espresso
+This project is a work in progress. 
+The goal is to create a smart espresso machine using a Raspberry Pi 4 and a few sensors to monitor the pressure of the water in the boiler and in the head of the machine.
+The pressure sensors are connected to a MCP3008 ADC and the Raspberry Pi is connected to a Home Assistant instance to monitor the pressure.
+
 
 
 
@@ -76,7 +80,7 @@ if __name__ == '__main__':
 
 ### Prerequisite list
 
-| Items | description                                                                                                                      | url                               | notes                                                                           |
+| Items | Description                                                                                                                      | Link                              | Notes                                                                           |
 |-------|----------------------------------------------------------------------------------------------------------------------------------|-----------------------------------|---------------------------------------------------------------------------------|
 | 1     | Raspberry Pi 4 Model B 2GB RAM                                                                                                   |                                   |                                                                                 |
 | 1     | MCP3008-I/P MCP3008 DIP-16                                                                                                       | https://a.aliexpress.com/_olcJc4g |                                                                                 |
@@ -95,3 +99,10 @@ if __name__ == '__main__':
 
 
 ![analog](docs/img/analog.png)
+
+
+### References / credits / inspiration
+* https://wiki.dfrobot.com/Gravity__Water_Pressure_Sensor_SKU__SEN0257
+* https://m.youtube.com/watch?v=JlgXGrb4lVE
+* https://sites.google.com/view/coffee4randy/home?authuser=0
+* https://hackaday.com/2023/10/07/smart-coffee-replaces-espresso-machine-controller-with-arduino-sensors/#more-628135
