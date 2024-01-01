@@ -29,10 +29,10 @@ class SmartEspresso:
                 # NB this will only send the data to the display after this "with" block is complete.
                 # see https://github.com/rm-hull/luma.core/blob/master/luma/core/render.py
                 with canvas(self.display, dither=True) as draw:
-                    position_hight = 15
+                    position_height = 15
                     for analog_device in self.analog_devices:
-                        draw.text((5, position_hight), analog_device.message, fill='white', font=font)
-                        position_hight += 15
+                        draw.text((5, position_height), analog_device.message, fill='white', font=font)
+                        position_height += 15
 
             sleep(self.render_interval)
 
