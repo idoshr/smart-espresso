@@ -1,4 +1,8 @@
+import os
+
 from PIL import ImageFont
+
+PATH = os.path.dirname(os.path.abspath(__file__))
 
 STRTOBOOL_DEFAULT_TABLE = {'false': False, 'no': False, '0': False,
                            'true': True, 'yes': True, '1': True,
@@ -23,4 +27,4 @@ def strtobool(term, table=None):
     return term
 
 
-font = ImageFont.truetype("espresso/Roboto-Regular.ttf", 12)
+font = ImageFont.truetype(f"{PATH}/Roboto-Regular.ttf", 12)

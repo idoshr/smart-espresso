@@ -17,6 +17,9 @@ class SmartEspresso:
         self.render_interval: float = render_interval
 
     def run(self):
+        if not self.analog_devices:
+            raise ValueError('No analog devices to read')
+
         while True:
             for analog_device in self.analog_devices:
                 analog_device.read()
