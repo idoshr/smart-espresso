@@ -1,4 +1,6 @@
 # Smart Espresso
+
+# WORK IN PROGRESS 
 This project is a work in progress. 
 The goal is to create a smart espresso machine using a Raspberry Pi 4 and a few sensors to monitor the pressure of the water in the boiler and in the head of the machine.
 The pressure sensors are connected to a MCP3008 ADC and the Raspberry Pi is connected to a Home Assistant instance to monitor the pressure.
