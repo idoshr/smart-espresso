@@ -2,4 +2,4 @@ gpiozero==1.6.2
 luma.core==2.4.1
 luma.oled==3.13.0
 homeassistant-api==4.1.1.post2
-Pillow==10.1.0
+Pillow==10.2.0
