@@ -1,6 +1,6 @@
 # Smart Espresso
 
-# WORK IN PROGRESS 
+# _**WORK IN PROGRESS**_ 
 This project is a work in progress. 
 The goal is to create a smart espresso machine using a Raspberry Pi 4 and a few sensors to monitor the pressure of the water in the boiler and in the head of the machine.
 The pressure sensors are connected to a MCP3008 ADC and the Raspberry Pi is connected to a Home Assistant instance to monitor the pressure.
@@ -55,13 +55,24 @@ displays it on the OLED display and sync data with Home-assistant.
 * Teflon tape
 
 ## Wiring diagram
-
-
+### How to wire the display to the Raspberry Pi:
 ![display](docs/img/display.png)
 
-
+### How to wire the pressure sensor to the MCP3008 and the MCP3008 to the Raspberry Pi:
 ![analog](docs/img/analog.png)
 
+## Raspberry Pi configuration
+### Enable SPI
+```bash
+sudo raspi-config
+```
+Select "Interfacing Options" and then "SPI" and enable it.
+
+### Install the required packages
+```bash
+sudo apt-get install python3-dev python3-pip
+pip3 install smart-esppresso
+```
 
 ## References / credits / inspiration
 * https://wiki.dfrobot.com/Gravity__Water_Pressure_Sensor_SKU__SEN0257
