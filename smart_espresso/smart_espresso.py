@@ -4,8 +4,7 @@ from homeassistant_api import Client
 from luma.core.render import canvas
 from luma.oled.device import sh1106
 
-from smart_espresso.analog_sensor.perssure_analog_sensor import \
-    MCP3008AnalogSensor
+from smart_espresso.analog_sensor.perssure_analog_sensor import MCP3008AnalogSensor
 from smart_espresso.utils import font
 
 

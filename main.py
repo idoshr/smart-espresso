@@ -4,8 +4,7 @@ from homeassistant_api import Client
 from luma.core.interface.serial import i2c
 from luma.oled.device import sh1106
 
-from smart_espresso.analog_sensor.perssure_analog_sensor import \
-    PressureAnalogSensor
+from smart_espresso.analog_sensor.perssure_analog_sensor import PressureAnalogSensor
 from smart_espresso.smart_espresso import SmartEspresso
 from smart_espresso.utils import strtobool
 
