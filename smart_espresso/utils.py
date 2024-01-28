@@ -4,11 +4,18 @@ from PIL import ImageFont
 
 PATH = os.path.dirname(os.path.abspath(__file__))
 
-STRTOBOOL_DEFAULT_TABLE = {'false': False, 'no': False, '0': False,
-                           'true': True, 'yes': True, '1': True,
-                           'on': True, 'off': False,
-                           'y': True, 'n': False,
-                           }
+STRTOBOOL_DEFAULT_TABLE = {
+    "false": False,
+    "no": False,
+    "0": False,
+    "true": True,
+    "yes": True,
+    "1": True,
+    "on": True,
+    "off": False,
+    "y": True,
+    "n": False,
+}
 
 
 # COPY FROM -> from celery.utils.serialization import strtobool
@@ -23,7 +30,7 @@ def strtobool(term, table=None):
         try:
             return table[term.lower()]
         except KeyError:
-            raise TypeError(f'Cannot coerce {term!r} to type bool')
+            raise TypeError(f"Cannot coerce {term!r} to type bool")
     return term
 
 

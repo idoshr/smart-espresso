@@ -1,10 +1,10 @@
+from abc import ABC, abstractmethod
+
 from gpiozero import MCP3008
 from homeassistant_api import Client
-from abc import ABC, abstractmethod
 
 
 class MCP3008AnalogSensor(ABC):
-
     def __init__(self, pin, name):
         self.name = name
         self.pin = pin
@@ -26,20 +26,19 @@ class MCP3008AnalogSensor(ABC):
 
     @abstractmethod
     def update_home_assistant(self, client: Client):
-        raise NotImplemented
+        raise NotImplementedError
 
     @property
     @abstractmethod
     def message(self):
-        raise NotImplemented
+        raise NotImplementedError
 
     @property
     @abstractmethod
     def normalized_value(self):
-        raise NotImplemented
+        raise NotImplementedError
 
     @staticmethod
     @abstractmethod
     def unit_of_measurement():
-        raise NotImplemented
-
+        raise NotImplementedError
