@@ -6,28 +6,6 @@ The goal is to create a smart espresso machine using a Raspberry Pi 4 and a few 
 The pressure sensors are connected to a MCP3008 ADC and the Raspberry Pi is connected to a Home Assistant instance to monitor the pressure.
 
 
-## Installation
-
-```bash
-pip install -r requirements.txt
-```
-
-## Usage
-
-### Params
-| Key            | Description                                   |
-|----------------|-----------------------------------------------|
-| analog_devices | List of analog devices (PressureAnalogSensor) | 
-| client_ha      | Home Assistant Client                         |
-| display        | luma oled device                              |
-
-
-### Example
-
-This [example](main.py) is a simple script that reads the pressure from 2 pressure sensors, 
-displays it on the OLED display and sync data with Home-assistant.
-
-
 ## Prerequisite
 
 ### Hardware
@@ -56,10 +34,36 @@ displays it on the OLED display and sync data with Home-assistant.
 
 ## Wiring diagram
 ### How to wire the display to the Raspberry Pi:
+
 ![display](docs/img/display.png)
 
+| RaspberryPi  | SH1106      |
+|--------------|-------------|
+| Pin 6 (GND)  | Pin 1 (GND) |
+| Pin 1 (3.3V) | Pin 2 (VCC) |
+| Pin 5 (SCL1) | Pin 3 (SCL) |
+| Pin 3 (SDA1) | Pin 4 (SDA) |
+
+
+https://pinout.xyz/pinout/i2c
+
 ### How to wire the pressure sensor to the MCP3008 and the MCP3008 to the Raspberry Pi:
+
 ![analog](docs/img/analog.png)
+
+| RaspberryPi   | MCP3008          |
+|---------------|------------------|
+| Pin 1 (3.3V)  | Pin 16 (VDD)     |
+| Pin 1 (3.3V)  | Pin 15 (VREF)    |
+| Pin 6 (GND)   | Pin 14 (AGND)    |
+| Pin 23 (SCLK) | Pin 13 (CLK)     |
+| Pin 21 (MISO) | Pin 12 (DOUT)    |
+| Pin 19 (MOSI) | Pin 11 (DIN)     |
+| Pin 24 (CE0)  | Pin 10 (CS/SHDN) |
+| Pin 6 (GND)   | Pin 9 (DGND)     |
+
+https://pinout.xyz/pinout/spi
+
 
 ## Raspberry Pi configuration
 ### Enable SPI
@@ -73,6 +77,21 @@ Select "Interfacing Options" and then "SPI" and enable it.
 sudo apt-get install python3-dev python3-pip
 pip3 install smart-esppresso
 ```
+
+## Usage
+
+### Params
+| Key            | Description                                   |
+|----------------|-----------------------------------------------|
+| analog_devices | List of analog devices (PressureAnalogSensor) | 
+| client_ha      | Home Assistant Client                         |
+| display        | luma oled device                              |
+
+
+### Example
+
+This [example](main.py) is a simple script that reads the pressure from 2 pressure sensors, 
+displays it on the OLED display and sync data with Home-assistant.
 
 ## References / credits / inspiration
 * https://wiki.dfrobot.com/Gravity__Water_Pressure_Sensor_SKU__SEN0257
