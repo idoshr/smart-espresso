@@ -42,6 +42,6 @@ if __name__ == "__main__":
         PressureAnalogSensor(pin=1, name="Boiler"),  # Boiler Pressure
     ]
     se = SmartEspresso(
-        analog_devices=analog_devices, client_ha=client_ha #, display=display
+        analog_devices=analog_devices, client_ha=client_ha , display=None
     )
     se.run()
