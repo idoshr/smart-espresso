@@ -26,22 +26,22 @@ if HA_ENABLE:
 #    white and disabled with black.
 # NB the ssd1306 class has no way of knowing the display resolution/size.
 
-display = sh1106(i2c(port=1, address=0x3C), width=128, height=64, rotate=0)
+# display = sh1106(i2c(port=1, address=0x3C), width=128, height=64, rotate=0)
 
 # set the contrast to minimum.
-display.contrast(1)
+# display.contrast(1)
 
 # show some info.
-print(f"device size {display.size}")
-print(f"device mode {display.mode}")
+# print(f"device size {display.size}")
+# print(f"device mode {display.mode}")
 
 
 if __name__ == "__main__":
     analog_devices = [
         PressureAnalogSensor(pin=0, name="Head"),  # Head Pressure
-        PressureAnalogSensor(pin=3, name="Boiler"),  # Boiler Pressure
+        PressureAnalogSensor(pin=1, name="Boiler"),  # Boiler Pressure
     ]
     se = SmartEspresso(
-        analog_devices=analog_devices, client_ha=client_ha, display=display
+        analog_devices=analog_devices, client_ha=client_ha #, display=display
     )
     se.run()
