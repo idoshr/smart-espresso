@@ -31,7 +31,7 @@ class SmartEspresso:
 
             if self.client_ha:
                 for analog_device in self.analog_devices:
-                    analog_device.read()
+                    analog_device.update_home_assistant(self.client_ha)
 
             if self.display:
                 # NB this will only send the data to the display after this "with" block is complete.
