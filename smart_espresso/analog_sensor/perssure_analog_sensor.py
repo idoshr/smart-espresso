@@ -43,7 +43,7 @@ class PressureAnalogSensor(MCP3008AnalogSensor):
         return self.bar
 
     def update_home_assistant(self, client: Client):
-        client.set_state(
+        return client.set_state(
             State(
                 entity_id=f"sensor.espresso_machine_{self.name.lower()}_pressure",
                 state=round(self.bar, 2),
