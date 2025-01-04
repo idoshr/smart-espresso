@@ -28,7 +28,6 @@ class SmartEspresso:
         while True:
             for analog_device in self.analog_devices:
                 analog_device.read()
-                print(analog_device.message)
 
             if self.client_ha:
                 for analog_device in self.analog_devices:
