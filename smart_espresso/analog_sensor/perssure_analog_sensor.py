@@ -1,14 +1,28 @@
 from homeassistant_api import Client, State
 
-from smart_espresso.analog_sensor.mcp3008_analog_sensor import MCP3008AnalogSensor
+from smart_espresso.analog_sensor.analog_sensor import AnalogSensor, ADCInterface
 
 
-class PressureAnalogSensor(MCP3008AnalogSensor):
+class PressureAnalogSensor(AnalogSensor):
+    """
+    Pressure sensor implementation supporting multiple ADC types.
+
+    Works with pressure sensors that output 0-5V signals.
+    Compatible with any ADC that implements ADCInterface (MCP3008ADC, ADS1115ADC, etc.).
+    """
+
     OFFSET_VOLTAGE = 0.32725940400586195
     OFFSET = 0.09721543722520765
 
-    def __init__(self, pin, name):
-        super().__init__(pin, name)
+    def __init__(self, adc: ADCInterface, name: str):
+        """
+        Initialize pressure sensor.
+
+        Args:
+            adc: An ADC instance implementing ADCInterface (MCP3008ADC or ADS1115ADC)
+            name: Name of the sensor (e.g., "Head", "Boiler")
+        """
+        super().__init__(adc, name)
 
     @property
     def mpa(self):

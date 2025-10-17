@@ -1,44 +1,34 @@
-from abc import ABC, abstractmethod
-
 from gpiozero import MCP3008
-from homeassistant_api import Client
+
+from smart_espresso.analog_sensor.analog_sensor import ADCInterface
 
 
-class MCP3008AnalogSensor(ABC):
-    def __init__(self, pin, name):
-        self.name = name
+class MCP3008ADC(ADCInterface):
+    """
+    MCP3008 Analog-to-Digital Converter implementation.
+
+    10-bit ADC with SPI interface.
+    8 channels (0-7).
+    """
+
+    def __init__(self, pin: int):
+        """
+        Initialize MCP3008 ADC.
+
+        Args:
+            pin: Channel number (0-7) on the MCP3008
+        """
+        if not 0 <= pin <= 7:
+            raise ValueError(f"Invalid pin {pin}. Must be 0-7 for MCP3008")
+
         self.pin = pin
-
-        # Load MCP3008
         self.pot = MCP3008(self.pin)
-        self._value = None
 
     def read(self):
-        self._value = self.pot.value
-        return self._value
+        """Read normalized value (0.0 to 1.0) from MCP3008."""
+        return self.pot.value
 
     @property
-    def value(self):
-        if self._value is not None:
-            return self._value
-        else:
-            return self.read()
-
-    @abstractmethod
-    def update_home_assistant(self, client: Client):
-        raise NotImplementedError
-
-    @property
-    @abstractmethod
-    def message(self):
-        raise NotImplementedError
-
-    @property
-    @abstractmethod
-    def normalized_value(self):
-        raise NotImplementedError
-
-    @staticmethod
-    @abstractmethod
-    def unit_of_measurement():
-        raise NotImplementedError
+    def voltage(self):
+        """Get the actual voltage reading (assuming 3.3V reference)."""
+        return self.pot.voltage
