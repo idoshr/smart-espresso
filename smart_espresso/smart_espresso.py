@@ -4,19 +4,19 @@ from homeassistant_api import Client
 from luma.core.render import canvas
 from luma.oled.device import sh1106
 
-from smart_espresso.analog_sensor.pressure_analog_sensor import MCP3008AnalogSensor
+from smart_espresso.analog_sensor.analog_sensor import AnalogSensor
 from smart_espresso.utils import font
 
 
 class SmartEspresso:
     def __init__(
         self,
-        analog_devices: list[MCP3008AnalogSensor],
+        analog_devices: list[AnalogSensor],
         client_ha: Client,
         display: sh1106,
         render_interval: float = 0.1,
     ):
-        self.analog_devices: list[MCP3008AnalogSensor] = analog_devices
+        self.analog_devices: list[AnalogSensor] = analog_devices
         self.client_ha: Client = client_ha
         self.display: sh1106 = display
         self.render_interval: float = render_interval

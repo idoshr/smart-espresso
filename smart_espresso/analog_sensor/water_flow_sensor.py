@@ -1,9 +1,9 @@
 from homeassistant_api import Client, State
 
-from smart_espresso.analog_sensor.mcp3008_analog_sensor import MCP3008AnalogSensor
+from smart_espresso.analog_sensor.analog_sensor import AnalogSensor
 
 
-class WaterFlowAnalogSensor(MCP3008AnalogSensor):
+class WaterFlowAnalogSensor(AnalogSensor):
     def __init__(self, pin, name):
         super().__init__(pin, name)
 
