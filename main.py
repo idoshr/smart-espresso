@@ -6,7 +6,7 @@ from luma.oled.device import sh1106
 
 from smart_espresso.analog_sensor.mcp3008_analog_sensor import MCP3008ADC
 from smart_espresso.analog_sensor.ads1115_analog_sensor import ADS1115ADC
-from smart_espresso.analog_sensor.perssure_analog_sensor import PressureAnalogSensor
+from smart_espresso.analog_sensor.pressure_analog_sensor import PressureAnalogSensor
 from smart_espresso.smart_espresso import SmartEspresso
 from smart_espresso.utils import strtobool
 
