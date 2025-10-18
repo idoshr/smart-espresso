@@ -72,9 +72,18 @@ A DIY smart espresso machine monitoring system using Raspberry Pi 4 and pressure
 
 | Qty | Item | Purpose | Link |
 |-----|------|---------|------|
+| 1 | **DHT22 (AM2302)** | Temperature & humidity sensor (optional) | [AliExpress](https://www.aliexpress.com/w/wholesale-dht22.html) |
 | 1 | Resistor kit (1Ω - 4.7MΩ) | For voltage dividers if needed | [AliExpress](https://a.aliexpress.com/_oBZ1yNa) |
 | 1 | Heat shrink tube set | Wire insulation | [AliExpress](https://a.aliexpress.com/_okRXZ5m) |
 | 1 | Raspberry Pi expansion board | Prototyping (optional) | [AliExpress](https://a.aliexpress.com/_opgseK8) |
+
+### DHT22 Temperature & Humidity Sensor (Optional)
+
+- **Range**: -40°C to 80°C, 0-100% humidity
+- **Accuracy**: ±0.5°C, ±2-5% RH
+- **Interface**: Digital (single-wire protocol)
+- **Power**: 3.3V or 5V (5V recommended for better range)
+- **Note**: Most modules include built-in pull-up resistor
 
 ### Tools Required
 
@@ -147,6 +156,30 @@ A DIY smart espresso machine monitoring system using Raspberry Pi 4 and pressure
 **I2C Address:** Default is `0x48`. Can be changed via ADDR pin if needed.
 
 💡 **Tip**: ADS1115 and SH1106 display can share the same I2C bus, making wiring simpler!
+
+---
+
+### DHT22 Temperature & Humidity Sensor → Raspberry Pi (GPIO)
+
+| Raspberry Pi Pin | Function | → | DHT22 Pin |
+|------------------|----------|---|-----------|
+| Pin 2 | 5V Power | → | VCC/+ |
+| Pin 7 | GPIO4 (Digital) | → | DATA/OUT |
+| Pin 6 | Ground | → | GND/- |
+
+**Alternative GPIO Pins** (if GPIO4 is unavailable):
+- GPIO17 (Pin 11)
+- GPIO27 (Pin 13)
+- GPIO22 (Pin 15)
+
+**Important Notes:**
+- Most DHT22 modules have a built-in pull-up resistor
+- If yours doesn't, add a 4.7kΩ - 10kΩ resistor between VCC and DATA pins
+- 5V power is recommended for better range and stability (3.3V also works)
+- Keep wiring under 20cm for reliability (or use shielded cable)
+- DHT22 can only be sampled every 2 seconds (max 0.5Hz)
+
+💡 **Tip**: GPIO4 is recommended as it doesn't conflict with SPI (MCP3008) or I2C (ADS1115/Display) interfaces!
 
 
 
@@ -403,6 +436,41 @@ se = SmartEspresso(
 )
 se.run()
 ```
+
+### With DHT22 Temperature & Humidity Sensor
+
+```python
+from smart_espresso.analog_sensor.ads1115_analog_sensor import ADS1115ADC
+from smart_espresso.analog_sensor.pressure_analog_sensor import PressureAnalogSensor
+from smart_espresso.analog_sensor.dht22_sensor import DHT22Sensor
+from smart_espresso.smart_espresso import SmartEspresso
+
+# Create pressure sensors (analog)
+analog_devices = [
+    PressureAnalogSensor(adc=ADS1115ADC(pin=0, gain=2/3), name="Head"),
+    PressureAnalogSensor(adc=ADS1115ADC(pin=1, gain=2/3), name="Boiler"),
+]
+
+# Create DHT22 temperature and humidity sensor (digital)
+digital_sensors = [
+    DHT22Sensor(
+        pin=4,  # GPIO4 (Physical Pin 7)
+        name="Environment",
+        use_fahrenheit=False  # Set to True for Fahrenheit
+    )
+]
+
+# Run with both analog and digital sensors
+se = SmartEspresso(
+    analog_devices=analog_devices,
+    digital_sensors=digital_sensors,
+    client_ha=None,
+    display=None
+)
+se.run()
+```
+
+💡 **Note**: See [example_dht22.py](example_dht22.py) for a complete working example with display and Home Assistant integration.
 
 ### Running as a System Service
 
