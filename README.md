@@ -101,8 +101,8 @@ from smart_espresso.smart_espresso import SmartEspresso
 
 # Create sensors
 analog_devices = [
-    PressureAnalogSensor(adc=ADS1115ADC(pin=0, gain=2/3), name="Head"),
-    PressureAnalogSensor(adc=ADS1115ADC(pin=1, gain=2/3), name="Boiler"),
+    PressureAnalogSensor(adc=ADS1115ADC(pin=0, gain=2/3), name="Head", max_pressure_mpa=2.0),
+    PressureAnalogSensor(adc=ADS1115ADC(pin=1, gain=2/3), name="Boiler", max_pressure_mpa=0.5),
 ]
 
 # Run
@@ -110,7 +110,7 @@ se = SmartEspresso(analog_devices=analog_devices, client_ha=None, display=None)
 se.run()
 ```
 
-**With MCP3008**: Replace `ADS1115ADC(pin=0, gain=2/3)` with `MCP3008ADC(pin=0)`
+**With MCP3008**: Replace `ADS1115ADC(pin=0, gain=2/3)` with `MCP3008ADC(pin=0)` (keep `max_pressure_mpa` parameter)
 
 ## Troubleshooting
 

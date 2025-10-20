@@ -42,11 +42,13 @@ if HA_ENABLE:
 analog_devices = [
     PressureAnalogSensor(
         adc=ADS1115ADC(pin=0, gain=2/3),
-        name="Head"
+        name="Head",
+        max_pressure_mpa=2.0  # 0-2MPa sensor for brew head (0-20 bar)
     ),
     PressureAnalogSensor(
         adc=ADS1115ADC(pin=1, gain=2/3),
-        name="Boiler"
+        name="Boiler",
+        max_pressure_mpa=0.5  # 0-0.5MPa sensor for boiler (0-5 bar)
     ),
 ]
 

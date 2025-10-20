@@ -50,11 +50,13 @@ if __name__ == "__main__":
         analog_devices = [
             PressureAnalogSensor(
                 adc=ADS1115ADC(pin=0, gain=2/3),
-                name="Head"
+                name="Head",
+                max_pressure_mpa=2.0  # 0-2MPa sensor for brew head (0-20 bar)
             ),  # Head Pressure on ADS1115 channel A0
             PressureAnalogSensor(
                 adc=ADS1115ADC(pin=1, gain=2/3),
-                name="Boiler"
+                name="Boiler",
+                max_pressure_mpa=0.5  # 0-0.5MPa sensor for boiler (0-5 bar)
             ),  # Boiler Pressure on ADS1115 channel A1
         ]
     else:
@@ -62,11 +64,13 @@ if __name__ == "__main__":
         analog_devices = [
             PressureAnalogSensor(
                 adc=MCP3008ADC(pin=0),
-                name="Head"
+                name="Head",
+                max_pressure_mpa=2.0  # 0-2MPa sensor for brew head (0-20 bar)
             ),  # Head Pressure
             PressureAnalogSensor(
                 adc=MCP3008ADC(pin=1),
-                name="Boiler"
+                name="Boiler",
+                max_pressure_mpa=0.5  # 0-0.5MPa sensor for boiler (0-5 bar)
             ),  # Boiler Pressure
         ]
 
