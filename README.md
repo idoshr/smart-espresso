@@ -90,6 +90,19 @@ export HA_URL="http://192.168.1.100:8123"
 export HA_TOKEN="your_token_here"
 ```
 
+### Generating Home Assistant API Token
+
+To integrate with Home Assistant, you need a long-lived access token:
+
+1. Open your Home Assistant web interface
+2. Click on your profile (bottom left corner)
+3. Scroll down to "Long-Lived Access Tokens" section
+4. Click "Create Token"
+5. Give it a descriptive name (e.g., "Smart Espresso")
+6. Copy the generated token and use it as `HA_TOKEN`
+
+**Important**: Save the token immediately - it won't be shown again. For more details, see the [Home Assistant Authentication documentation](https://developers.home-assistant.io/docs/auth_api/#long-lived-access-token).
+
 ## Usage
 
 See [main.py](main.py) for complete example.
