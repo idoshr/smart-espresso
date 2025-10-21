@@ -1,0 +1,8 @@
+# Development and testing dependencies
+
+# Link validation dependencies
+requests>=2.31.0
+beautifulsoup4>=4.12.0
+
+# Include production dependencies
+-r requirements.txt

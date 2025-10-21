@@ -135,3 +135,6 @@ Thumbs.db
 
 # Project specific
 *.log
+
+# Link validation reports
+aliexpress-links-report.txt
