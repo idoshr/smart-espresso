@@ -4,8 +4,8 @@ from smart_espresso.analog_sensor.analog_sensor import AnalogSensor
 
 
 class WaterFlowAnalogSensor(AnalogSensor):
-    def __init__(self, pin, name):
-        super().__init__(pin, name)
+    def __init__(self, adc, name):
+        super().__init__(adc, name)
 
     @property
     def liter(self):
@@ -31,7 +31,7 @@ class WaterFlowAnalogSensor(AnalogSensor):
         client.set_state(
             State(
                 entity_id=f"sensor.espresso_machine_{self.name.lower()}_pressure",
-                state=round(self.liter, 2),
+                state=str(round(self.liter, 2)),
                 attributes={
                     "unit_of_measurement": self.unit_of_measurement(),
                     "friendly_name": f"{self.name} Pressure",

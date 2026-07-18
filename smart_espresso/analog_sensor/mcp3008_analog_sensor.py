@@ -24,11 +24,21 @@ class MCP3008ADC(ADCInterface):
         self.pin = pin
         self.pot = MCP3008(self.pin)
 
+        # Cached from the last read() call. gpiozero's .value and .voltage
+        # each trigger their own SPI transaction, so reading both separately
+        # doubles the bus traffic per sample; we derive voltage from a single
+        # cached .value read instead.
+        self._cached_voltage = None
+
     def read(self):
         """Read normalized value (0.0 to 1.0) from MCP3008."""
-        return self.pot.value
+        value = self.pot.value
+        self._cached_voltage = value * self.pot.max_voltage
+        return value
 
     @property
     def voltage(self):
-        """Get the actual voltage reading (assuming 3.3V reference)."""
-        return self.pot.voltage
+        """Get the voltage from the most recent read(); triggers a hardware read on first use."""
+        if self._cached_voltage is None:
+            self._cached_voltage = self.pot.voltage
+        return self._cached_voltage

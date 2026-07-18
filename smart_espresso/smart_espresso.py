@@ -1,4 +1,4 @@
-from time import sleep
+from time import monotonic, sleep
 from typing import Union
 
 from homeassistant_api import Client
@@ -17,6 +17,7 @@ class SmartEspresso:
         client_ha: Client = None,
         display: sh1106 = None,
         render_interval: float = 0.1,
+        ha_update_interval: float = 1.0,
     ):
         """
         Initialize SmartEspresso monitoring system.
@@ -27,6 +28,10 @@ class SmartEspresso:
             client_ha: Home Assistant API client
             display: OLED display device
             render_interval: Update interval in seconds (default: 0.1)
+            ha_update_interval: Minimum seconds between Home Assistant pushes
+                (default: 1.0). Kept separate from render_interval so the
+                display can refresh quickly without flooding HA's REST API
+                with a request per sensor on every render tick.
         """
         self.analog_devices: list[AnalogSensor] = analog_devices or []
         self.digital_sensors: list = digital_sensors or []
@@ -34,20 +39,30 @@ class SmartEspresso:
         self.client_ha: Client = client_ha
         self.display: sh1106 = display
         self.render_interval: float = render_interval
+        self.ha_update_interval: float = ha_update_interval
+        self._last_ha_update: float = 0.0
 
     def run(self):
         if not self.all_sensors:
             raise ValueError("No sensors to read (provide analog_devices or digital_sensors)")
 
         while True:
+            loop_start = monotonic()
+
             # Read all sensors
             for sensor in self.all_sensors:
                 sensor.read()
 
-            # Update Home Assistant
-            if self.client_ha:
+            # Update Home Assistant, throttled independently of render_interval
+            # so a slow/unreachable HA instance can't stall sensor sampling or
+            # the display, and so we don't hammer its REST API every tick.
+            if self.client_ha and (loop_start - self._last_ha_update) >= self.ha_update_interval:
                 for sensor in self.all_sensors:
-                    sensor.update_home_assistant(self.client_ha)
+                    try:
+                        sensor.update_home_assistant(self.client_ha)
+                    except Exception as e:
+                        print(f"Failed to update Home Assistant for {sensor.name}: {e}")
+                self._last_ha_update = loop_start
 
             # Update display
             if self.display:
@@ -64,6 +79,7 @@ class SmartEspresso:
                         )
                         position_height += 15
 
-            sleep(self.render_interval)
+            elapsed = monotonic() - loop_start
+            sleep(max(0.0, self.render_interval - elapsed))
 
         # NB the display will be turn off after we exit this application.
