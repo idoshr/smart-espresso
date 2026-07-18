@@ -1,4 +1,5 @@
 """DHT22 (AM2302) Temperature and Humidity Sensor implementation."""
+import threading
 import time
 from typing import Optional
 
@@ -7,7 +8,7 @@ try:
 except ImportError:
     Adafruit_DHT = None
 
-from homeassistant_api import Client
+from homeassistant_api import Client, State
 
 
 class DHT22Sensor:
@@ -15,6 +16,11 @@ class DHT22Sensor:
     DHT22 (AM2302) digital temperature and humidity sensor.
 
     Note: This is a digital sensor, not analog, so it doesn't use the ADCInterface.
+
+    Adafruit_DHT.read_retry() bit-bangs GPIO and can block for a few hundred
+    milliseconds even when successful. To keep that latency off the shared
+    render loop, actual sampling happens on a background daemon thread;
+    read() just returns the most recently cached value.
     """
 
     def __init__(self, pin: int, name: str = "DHT22", use_fahrenheit: bool = False):
@@ -41,34 +47,43 @@ class DHT22Sensor:
         self._min_read_interval = 2.0  # DHT22 max sampling rate is 0.5Hz (every 2 seconds)
         self.sensor_type = Adafruit_DHT.DHT22
 
+        self._lock = threading.Lock()
+        self._stop_event = threading.Event()
+        self._poll_thread = threading.Thread(target=self._poll_loop, daemon=True)
+        self._poll_thread.start()
+
+    def _poll_loop(self):
+        """Background loop that performs the blocking sensor read every _min_read_interval."""
+        while not self._stop_event.is_set():
+            humidity, temperature = Adafruit_DHT.read_retry(self.sensor_type, self.pin)
+
+            if humidity is not None and temperature is not None:
+                # Convert to Fahrenheit if requested
+                if self.use_fahrenheit:
+                    temperature = temperature * 9.0 / 5.0 + 32.0
+
+                with self._lock:
+                    self._humidity = humidity
+                    self._temperature = temperature
+                    self._last_read_time = time.time()
+
+            self._stop_event.wait(self._min_read_interval)
+
     def read(self) -> tuple[Optional[float], Optional[float]]:
         """
-        Read temperature and humidity from sensor.
+        Return the most recently sampled temperature and humidity.
 
-        Returns:
-            Tuple of (humidity, temperature) or (None, None) if read failed
-
-        Note: DHT22 can only be read every 2 seconds maximum
+        This never blocks on hardware I/O: actual sampling happens on a
+        background thread (see _poll_loop) since DHT22 can only be read
+        every 2 seconds and each read may take a few hundred ms.
         """
-        current_time = time.time()
-
-        # Enforce minimum read interval to avoid sensor errors
-        if current_time - self._last_read_time < self._min_read_interval:
+        with self._lock:
             return self._humidity, self._temperature
 
-        # Read with retry for reliability
-        humidity, temperature = Adafruit_DHT.read_retry(self.sensor_type, self.pin)
-
-        if humidity is not None and temperature is not None:
-            self._humidity = humidity
-            self._temperature = temperature
-            self._last_read_time = current_time
-
-            # Convert to Fahrenheit if requested
-            if self.use_fahrenheit and temperature is not None:
-                self._temperature = temperature * 9.0 / 5.0 + 32.0
-
-        return self._humidity, self._temperature
+    def stop(self):
+        """Stop the background polling thread."""
+        self._stop_event.set()
+        self._poll_thread.join(timeout=self._min_read_interval)
 
     @property
     def temperature(self) -> Optional[float]:
@@ -118,25 +133,29 @@ class DHT22Sensor:
             # Update temperature sensor
             if self._temperature is not None:
                 client.set_state(
-                    entity_id=temp_entity_id,
-                    state=round(self._temperature, 1),
-                    attributes={
-                        "unit_of_measurement": self.temperature_unit,
-                        "friendly_name": f"{self.name} Temperature",
-                        "device_class": "temperature",
-                    },
+                    State(
+                        entity_id=temp_entity_id,
+                        state=str(round(self._temperature, 1)),
+                        attributes={
+                            "unit_of_measurement": self.temperature_unit,
+                            "friendly_name": f"{self.name} Temperature",
+                            "device_class": "temperature",
+                        },
+                    )
                 )
 
             # Update humidity sensor
             if self._humidity is not None:
                 client.set_state(
-                    entity_id=humidity_entity_id,
-                    state=round(self._humidity, 1),
-                    attributes={
-                        "unit_of_measurement": "%",
-                        "friendly_name": f"{self.name} Humidity",
-                        "device_class": "humidity",
-                    },
+                    State(
+                        entity_id=humidity_entity_id,
+                        state=str(round(self._humidity, 1)),
+                        attributes={
+                            "unit_of_measurement": "%",
+                            "friendly_name": f"{self.name} Humidity",
+                            "device_class": "humidity",
+                        },
+                    )
                 )
         except Exception as e:
             print(f"Failed to update Home Assistant for {self.name}: {e}")

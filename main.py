@@ -27,15 +27,10 @@ if HA_ENABLE:
 # NB ssd1306 devices are monochromatic; a pixel is enabled with
 #    white and disabled with black.
 # NB the ssd1306 class has no way of knowing the display resolution/size.
-
-# display = sh1106(i2c(port=1, address=0x3C), width=128, height=64, rotate=0)
-
-# set the contrast to minimum.
-# display.contrast(1)
-
-# show some info.
-# print(f"device size {display.size}")
-# print(f"device mode {display.mode}")
+DISPLAY_ENABLE = strtobool(os.environ.get("DISPLAY_ENABLE") or False)
+display = None
+if DISPLAY_ENABLE:
+    display = sh1106(i2c(port=1, address=0x3C), width=128, height=64, rotate=0)
 
 
 if __name__ == "__main__":
@@ -75,7 +70,7 @@ if __name__ == "__main__":
         ]
 
     se = SmartEspresso(
-        analog_devices=analog_devices, client_ha=client_ha, display=None
+        analog_devices=analog_devices, client_ha=client_ha, display=display
     )
     se.run()
 # sudo ip route add 192.168.68.56 via 192.168.68.1 dev wlan0

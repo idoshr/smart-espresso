@@ -99,7 +99,7 @@ class PressureAnalogSensor(AnalogSensor):
         return client.set_state(
             State(
                 entity_id=f"sensor.espresso_machine_{self.name.lower()}_pressure",
-                state=round(self.bar, 2),
+                state=str(round(self.bar, 2)),
                 attributes={
                     "unit_of_measurement": self.unit_of_measurement(),
                     "friendly_name": f"{self.name} Pressure",

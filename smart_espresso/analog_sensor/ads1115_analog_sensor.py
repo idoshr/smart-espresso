@@ -64,19 +64,26 @@ class ADS1115ADC(ADCInterface):
         # For gain=2/3, max voltage is 6.144V (suitable for full 5V range)
         self.max_voltage = 4.096 / self.gain if self.gain >= 1 else 6.144
 
+        # Cached from the last read() call so that voltage can be read
+        # repeatedly within a loop iteration without re-triggering an I2C
+        # conversion (each ADS1115 conversion takes ~8ms).
+        self._cached_voltage = None
+
     def read(self):
         """
         Read the normalized value from the ADS1115.
         Returns a value between 0.0 and 1.0 normalized to the voltage range.
         For gain=1 (±4.096V range), 5V sensor will read close to 1.0 at max.
         """
-        voltage = self.channel.voltage
-        return min(voltage / self.max_voltage, 1.0)  # Cap at 1.0
+        self._cached_voltage = self.channel.voltage
+        return min(self._cached_voltage / self.max_voltage, 1.0)  # Cap at 1.0
 
     @property
     def voltage(self):
-        """Get the actual voltage reading."""
-        return self.channel.voltage
+        """Get the voltage from the most recent read(); triggers a hardware read on first use."""
+        if self._cached_voltage is None:
+            self._cached_voltage = self.channel.voltage
+        return self._cached_voltage
 
     @property
     def raw_value(self):
