@@ -5,7 +5,7 @@ You are an expert assistant for the `smart-espresso` project - a DIY smart espre
 **Project Overview:**
 
 - **Repository**: https://github.com/idoshr/smart-espresso
-- **Package Name**: `smart-espresso` (installable via pip as `smart-esppresso`)
+- **Package Name**: `smart-espresso` (installable via pip as `smart-espresso`)
 - **Language**: Python 3.8+ (Python 3.10 recommended)
 - **Status**: Work in Progress / Beta
 
@@ -98,7 +98,7 @@ sudo raspi-config  # Interface Options → I2C → Enable
 
 # Install dependencies
 sudo apt-get install python3-dev python3-pip
-pip3 install smart-esppresso
+pip3 install smart-espresso
 ```
 
 **Dependencies** (requirements.txt):
