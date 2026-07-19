@@ -25,6 +25,7 @@ DIY espresso machine monitoring with Raspberry Pi 4, pressure sensors, OLED disp
 | 2 | Pressure Sensors (0-0.5MPa, 0-2MPa) | [AliExpress](https://a.aliexpress.com/_omToNFi) | ⚠️ Get 3.3V version (G1/8) |
 | 1 | SH1106 OLED Display (1.3", I2C) | [AliExpress](https://a.aliexpress.com/_oEzEfpA) | Optional |
 | 2 | Brass Pipe Fittings (F-F-M 1/8") | [AliExpress](https://a.aliexpress.com/_okOIGjW) | For sensor mounting |
+| 1 | Project Enclosure Box | [AliExpress](https://a.aliexpress.com/_c3qopgP1) | Houses the Raspberry Pi & electronics |
 
 **Tools**: Soldering iron, multimeter, ratchet wrench, Teflon tape
 
