@@ -1,0 +1,52 @@
+# Hardware manifest — single source of truth for parts and their purchase links.
+#
+# Why this file exists:
+#   AliExpress product links (a.aliexpress.com/_xxxx) expire when a seller
+#   removes a listing. Keeping every link in one place means a dead link is a
+#   one-line fix here, and the automated checker (scripts/check_links.py, run
+#   weekly by .github/workflows/link-check.yml) tells you the moment one breaks.
+#
+# How to update a dead link:
+#   1. Find a current equivalent product on AliExpress (or any vendor).
+#   2. Replace the `url` below. Keep the stable `id` unchanged.
+#   3. Add the new link to the README table if you list it there.
+#
+# Fields:
+#   id       - stable identifier, never changes (used to track a part over time)
+#   name     - human-readable component name
+#   qty      - quantity needed
+#   url      - current purchase link (the volatile part)
+#   notes    - optional guidance
+#   optional - true if the part is not strictly required
+
+components:
+  - id: adc-mcp3008
+    name: MCP3008 ADC (10-bit SPI)
+    qty: 1
+    url: https://a.aliexpress.com/_olcJc4g
+    notes: Alternative to ADS1115.
+
+  - id: adc-ads1115
+    name: ADS1115 ADC (16-bit I2C)
+    qty: 1
+    url: https://a.aliexpress.com/_c3c7goPp
+    notes: Default ADC.
+
+  - id: pressure-sensors
+    name: Pressure Sensors (0-0.5MPa, 0-2MPa)
+    qty: 2
+    url: https://a.aliexpress.com/_omToNFi
+    notes: "Get the 3.3V version (G1/8)."
+
+  - id: oled-sh1106
+    name: SH1106 OLED Display (1.3", I2C)
+    qty: 1
+    url: https://a.aliexpress.com/_oEzEfpA
+    notes: Optional display.
+    optional: true
+
+  - id: brass-fittings
+    name: Brass Pipe Fittings (F-F-M 1/8")
+    qty: 2
+    url: https://a.aliexpress.com/_okOIGjW
+    notes: For sensor mounting.
