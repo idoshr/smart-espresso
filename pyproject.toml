@@ -53,13 +53,13 @@ build-backend = "setuptools.build_meta"
 [tool.setuptools]
 zip-safe = false
 platforms = ["any"]
-packages=["smart_espress"]
+packages=["smart_espresso"]
 
 [tool.setuptools.dynamic]
-version = {attr = "smart_espress._version.version"}
+version = {attr = "smart_espresso._version.version"}
 
 [tool.setuptools_scm]
-write_to = "smart_espress/_version.py"
+write_to = "smart_espresso/_version.py"
 
 [tool.black]
 line-length = 88
@@ -88,8 +88,8 @@ force_grid_wrap = 0
 use_parentheses = true
 
 [tool.pytest.ini_options]
-#addopts = "--cov=smart_espress --cov-config=setup.cfg"
-testpaths = ["tests"]
+#addopts = "--cov=smart_espresso --cov-config=setup.cfg"
+testpaths = ["smart_espresso/test"]
 filterwarnings = [
   "error",
   "ignore::ResourceWarning",

@@ -11,6 +11,8 @@ DIY espresso machine monitoring with Raspberry Pi 4, pressure sensors, OLED disp
 ## Features
 
 - Real-time pressure monitoring (boiler & brew head)
+- Water flow / shot-volume metering (hall-effect pulse sensor)
+- Temperature & humidity monitoring (DHT22 / AM2302)
 - Dual ADC support: MCP3008 (10-bit SPI) or ADS1115 (16-bit I2C)
 - OLED display (SH1106 128x64)
 - Home Assistant integration
@@ -23,6 +25,8 @@ DIY espresso machine monitoring with Raspberry Pi 4, pressure sensors, OLED disp
 | 1 | Raspberry Pi 4 Model B (2GB+) | | Main controller |
 | 1 | MCP3008 ADC **or** ADS1115 ADC | [MCP3008](https://a.aliexpress.com/_olcJc4g) / [ADS1115](https://a.aliexpress.com/_c3c7goPp) | ADS1115 default |
 | 2 | Pressure Sensors (0-0.5MPa, 0-2MPa) | [AliExpress](https://a.aliexpress.com/_omToNFi) | ⚠️ Get 3.3V version (G1/8) |
+| 1 | Water Flow Meter (hall-effect, pulse output) | [AliExpress](https://a.aliexpress.com/_c4MPGp0X) | Optional — shot volume / flow rate |
+| 1 | DHT22 / AM2302 Temp & Humidity Sensor | | Optional |
 | 1 | SH1106 OLED Display (1.3", I2C) | [AliExpress](https://a.aliexpress.com/_oEzEfpA) | Optional |
 | 2 | Brass Pipe Fittings (F-F-M 1/8") | [AliExpress](https://a.aliexpress.com/_okOIGjW) | For sensor mounting |
 
@@ -64,6 +68,34 @@ Connect sensors: VCC→3.3V, GND→GND, OUT→CH0/CH1
 
 Connect sensors: VCC→3.3V, GND→GND, OUT→A0/A1
 
+### Water Flow Meter (GPIO pulse)
+
+The flow meter is a digital hall-effect sensor: it outputs a square-wave
+pulse train whose frequency is proportional to flow rate. Wire its signal
+line to a GPIO pin and count edges — it does **not** go through the ADC.
+
+| Pi Pin | → | Flow Meter |
+|--------|---|------------|
+| 4 (5V) | → | VCC (red) |
+| 6 (GND) | → | GND (black) |
+| 11 (GPIO17) | → | Signal / OUT (yellow) |
+
+⚠️ **5V logic warning**: Most of these meters are powered at 5V and their
+open-collector output idles high at 5V — above the Pi's 3.3V-tolerant GPIO
+limit. Add a pull-up to **3.3V** (not 5V) if the output is open-collector,
+or use a logic-level shifter / resistor divider on the signal line.
+
+### DHT22 / AM2302 (GPIO 1-wire)
+
+| Pi Pin | → | DHT22 |
+|--------|---|-------|
+| 1 (3.3V) | → | VCC |
+| 7 (GPIO4) | → | DATA |
+| 6 (GND) | → | GND |
+
+A 10kΩ pull-up resistor between VCC and DATA is recommended (many AM2302
+breakout modules include it on-board). See [example_dht22.py](example_dht22.py).
+
 ## Installation
 
 ```bash
@@ -71,7 +103,7 @@ Connect sensors: VCC→3.3V, GND→GND, OUT→A0/A1
 sudo raspi-config  # Enable I2C and/or SPI
 
 # Install package
-pip3 install smart-esppresso
+pip3 install smart-espresso
 
 # Or from source
 git clone https://github.com/idoshr/smart-espresso.git
@@ -125,6 +157,56 @@ se.run()
 
 **With MCP3008**: Replace `ADS1115ADC(pin=0, gain=2/3)` with `MCP3008ADC(pin=0)` (keep `max_pressure_mpa` parameter)
 
+## Water Flow Meter Sensor
+
+A hall-effect water flow meter lets you measure **flow rate** (L/min) and
+**dispensed volume** (total litres per shot). A small pinwheel inside the body
+spins as water passes; a hall-effect sensor picks up the magnet on the wheel
+and emits one voltage pulse per rotation. Because the output is a pulse train
+— not an analog voltage — it connects straight to a GPIO pin and is read by
+counting pulses over time, **not** through the MCP3008/ADS1115 ADC.
+
+### Typical specifications
+
+These sensors are usually from the **YF-S201 / YF-S401** family. Confirm the
+figures against your exact unit — the two models differ significantly:
+
+| Spec | YF-S201 (G1/2") | YF-S401 (G1/4") |
+|------|-----------------|-----------------|
+| Working voltage | 5–18 V DC | 5–24 V DC |
+| Working current | ≤ 15 mA (@5V) | ≤ 15 mA (@5V) |
+| Flow rate range | 1–30 L/min | 0.3–6 L/min |
+| Max working pressure | ≤ 1.75 MPa | ≤ 0.8 MPa |
+| Output signal | Hall-effect square wave (5V) | Hall-effect square wave (5V) |
+| Pulse characteristic | F ≈ 7.5 × Q (L/min) | F ≈ 5.5 × Q (L/min) |
+| K-factor (pulses/L) | ≈ 450 | ≈ 5880 |
+| Load capacity | ≤ 10 mA | ≤ 10 mA |
+| Operating temp | ≤ 80 °C | ≤ 80 °C |
+
+> **For espresso, prefer the smaller YF-S401.** A double shot is roughly
+> 60 mL in ~25 s ≈ 0.14 L/min, which sits below the YF-S201's 1 L/min
+> minimum but well inside the YF-S401's 0.3–6 L/min range, giving far more
+> pulses (and resolution) per shot.
+
+### How the reading works
+
+- **Flow rate:** `Q (L/min) = frequency_Hz / K` where `K` is the pulse
+  constant above (e.g. `7.5` for the YF-S201).
+- **Volume:** `Volume (L) = total_pulse_count / pulses_per_litre`
+  (e.g. `/ 450` for the YF-S201, `/ 5880` for the YF-S401).
+- **Calibrate for accuracy:** the K-factor varies with plumbing and flow
+  profile. Dispense a known volume (e.g. weigh 500 g of water), count the
+  pulses, and set `pulses_per_litre = pulses / litres_dispensed`.
+
+### Integration
+
+`WaterFlowAnalogSensor` in
+[`smart_espresso/analog_sensor/water_flow_sensor.py`](smart_espresso/analog_sensor/water_flow_sensor.py)
+provides the base class (reporting units in litres). Implement its `liter`
+property to return the accumulated volume from your pulse counter — for
+example a `gpiozero.Button`/edge-callback or an interrupt on the signal GPIO
+that increments a counter, divided by the calibrated `pulses_per_litre`.
+
 ## Troubleshooting
 
 - **No devices**: `sudo raspi-config` → Enable I2C/SPI, then `sudo i2cdetect -y 1`
@@ -138,10 +220,13 @@ se.run()
 ```
 smart_espresso/
 ├── analog_sensor/
-│   ├── analog_sensor.py           # Base classes
+│   ├── analog_sensor.py           # Base classes (ADCInterface, AnalogSensor)
 │   ├── mcp3008_analog_sensor.py   # MCP3008 ADC
 │   ├── ads1115_analog_sensor.py   # ADS1115 ADC
-│   └── pressure_analog_sensor.py  # Pressure sensor
+│   ├── pressure_analog_sensor.py  # Pressure sensor
+│   ├── water_flow_sensor.py       # Water flow meter (pulse) sensor
+│   └── dht22_sensor.py            # DHT22 temp/humidity sensor
+├── test/                          # Unit tests
 ├── smart_espresso.py              # Main class
 └── utils.py                       # Helpers
 ```

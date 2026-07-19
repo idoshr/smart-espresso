@@ -30,11 +30,12 @@ class WaterFlowAnalogSensor(AnalogSensor):
     def update_home_assistant(self, client: Client):
         client.set_state(
             State(
-                entity_id=f"sensor.espresso_machine_{self.name.lower()}_pressure",
+                entity_id=f"sensor.espresso_machine_{self.name.lower()}_flow",
                 state=str(round(self.liter, 2)),
                 attributes={
                     "unit_of_measurement": self.unit_of_measurement(),
-                    "friendly_name": f"{self.name} Pressure",
+                    "friendly_name": f"{self.name} Flow",
+                    "device_class": "volume",
                 },
             )
         )
