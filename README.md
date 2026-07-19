@@ -33,6 +33,14 @@ DIY espresso machine monitoring with Raspberry Pi 4, pressure sensors, OLED disp
 
 **Tools**: Soldering iron, multimeter, ratchet wrench, Teflon tape
 
+> **Note on purchase links:** AliExpress listings expire over time. All links
+> are kept in a single source of truth, [`docs/hardware.yml`](docs/hardware.yml),
+> and checked automatically every week by the
+> [Hardware Link Check](.github/workflows/link-check.yml) workflow. If a link
+> above is dead, please update `docs/hardware.yml` and this table, or
+> [open an issue](https://github.com/idoshr/smart-espresso/issues). Run the
+> checker locally with `python scripts/check_links.py`.
+
 ## Wiring
 
 ### OLED Display (I2C)
