@@ -25,7 +25,7 @@ DIY espresso machine monitoring with Raspberry Pi 4, pressure sensors, OLED disp
 | 1 | Raspberry Pi 4 Model B (2GB+) | | Main controller |
 | 1 | MCP3008 ADC **or** ADS1115 ADC | [MCP3008](https://a.aliexpress.com/_olcJc4g) / [ADS1115](https://a.aliexpress.com/_c3c7goPp) | ADS1115 default |
 | 2 | Pressure Sensors (0-0.5MPa, 0-2MPa) | [AliExpress](https://a.aliexpress.com/_omToNFi) | ⚠️ Get 3.3V version (G1/8) |
-| 1 | Water Flow Meter (hall-effect, pulse output) | [AliExpress](https://a.aliexpress.com/_c4MPGp0X) | Optional — shot volume / flow rate |
+| 1 | Mini Water Flow Sensor (DC3-24V, pulse output) | [AliExpress](https://a.aliexpress.com/_c4MPGp0X) | Optional — shot volume / flow rate |
 | 1 | DHT22 / AM2302 Temp & Humidity Sensor | | Optional |
 | 1 | SH1106 OLED Display (1.3", I2C) | [AliExpress](https://a.aliexpress.com/_oEzEfpA) | Optional |
 | 2 | Brass Pipe Fittings (F-F-M 1/8") | [AliExpress](https://a.aliexpress.com/_okOIGjW) | For sensor mounting |
@@ -70,20 +70,24 @@ Connect sensors: VCC→3.3V, GND→GND, OUT→A0/A1
 
 ### Water Flow Meter (GPIO pulse)
 
-The flow meter is a digital hall-effect sensor: it outputs a square-wave
+The flow sensor is a digital hall-effect device: it outputs a square-wave
 pulse train whose frequency is proportional to flow rate. Wire its signal
 line to a GPIO pin and count edges — it does **not** go through the ADC.
+It has a 3-wire lead: **red = VCC, yellow = signal, black = GND**.
 
-| Pi Pin | → | Flow Meter |
-|--------|---|------------|
-| 4 (5V) | → | VCC (red) |
+| Pi Pin | → | Flow Sensor |
+|--------|---|-------------|
+| 1 (3.3V) | → | VCC (red) |
 | 6 (GND) | → | GND (black) |
 | 11 (GPIO17) | → | Signal / OUT (yellow) |
 
-⚠️ **5V logic warning**: Most of these meters are powered at 5V and their
-open-collector output idles high at 5V — above the Pi's 3.3V-tolerant GPIO
-limit. Add a pull-up to **3.3V** (not 5V) if the output is open-collector,
-or use a logic-level shifter / resistor divider on the signal line.
+✅ **Power it at 3.3V.** This sensor accepts DC 3-24V, so running VCC from
+the Pi's 3.3V rail keeps the pulse output at 3.3V — safe for the Pi's GPIO
+with **no level shifter needed**. (If you instead power it from 5V, the
+output idles high near 5V, which exceeds the Pi's 3.3V GPIO limit — then
+you'd need a resistor divider or logic-level shifter on the signal line.)
+Enable the GPIO's internal pull-up in software; the hall output pulls the
+line low on each pulse.
 
 ### DHT22 / AM2302 (GPIO 1-wire)
 
@@ -159,44 +163,46 @@ se.run()
 
 ## Water Flow Meter Sensor
 
-A hall-effect water flow meter lets you measure **flow rate** (L/min) and
+A hall-effect water flow sensor lets you measure **flow rate** (L/min) and
 **dispensed volume** (total litres per shot). A small pinwheel inside the body
 spins as water passes; a hall-effect sensor picks up the magnet on the wheel
 and emits one voltage pulse per rotation. Because the output is a pulse train
 — not an analog voltage — it connects straight to a GPIO pin and is read by
 counting pulses over time, **not** through the MCP3008/ADS1115 ADC.
 
-### Typical specifications
+This project targets the compact **DC3-24V mini flow sensor** sold for coffee
+machines (small plastic inline body with push-on hose barbs and a 3-wire
+lead), which suits espresso's low flow far better than the larger threaded
+YF-S201-style meters.
 
-These sensors are usually from the **YF-S201 / YF-S401** family. Confirm the
-figures against your exact unit — the two models differ significantly:
+### Specifications
 
-| Spec | YF-S201 (G1/2") | YF-S401 (G1/4") |
-|------|-----------------|-----------------|
-| Working voltage | 5–18 V DC | 5–24 V DC |
-| Working current | ≤ 15 mA (@5V) | ≤ 15 mA (@5V) |
-| Flow rate range | 1–30 L/min | 0.3–6 L/min |
-| Max working pressure | ≤ 1.75 MPa | ≤ 0.8 MPa |
-| Output signal | Hall-effect square wave (5V) | Hall-effect square wave (5V) |
-| Pulse characteristic | F ≈ 7.5 × Q (L/min) | F ≈ 5.5 × Q (L/min) |
-| K-factor (pulses/L) | ≈ 450 | ≈ 5880 |
-| Load capacity | ≤ 10 mA | ≤ 10 mA |
-| Operating temp | ≤ 80 °C | ≤ 80 °C |
+| Spec | Value |
+|------|-------|
+| Working voltage | DC 3–24 V (power at 3.3V for the Pi — see wiring) |
+| Output signal | Hall-effect pulse (open-collector square wave) |
+| Wiring | Red = VCC, Yellow = signal, Black = GND |
+| Body / ports | Plastic inline, hose-barb (push-on tubing) |
+| Typical use | Mini coffee machines, low-flow liquid metering |
+| Flow rate range | ~0.3–3 L/min *(verify/calibrate — see below)* |
+| K-factor (pulses/L) | **not printed on the listing — must be calibrated** |
 
-> **For espresso, prefer the smaller YF-S401.** A double shot is roughly
-> 60 mL in ~25 s ≈ 0.14 L/min, which sits below the YF-S201's 1 L/min
-> minimum but well inside the YF-S401's 0.3–6 L/min range, giving far more
-> pulses (and resolution) per shot.
+> The listing does not publish an exact flow range or pulse constant, and
+> small plastic flow sensors vary unit-to-unit, so **calibrate** rather than
+> trusting a nominal K-factor (see below). For reference, a double espresso
+> is roughly 60 mL in ~25 s ≈ 0.14 L/min — a slow flow, so verify your unit
+> registers pulses reliably at that rate.
 
 ### How the reading works
 
-- **Flow rate:** `Q (L/min) = frequency_Hz / K` where `K` is the pulse
-  constant above (e.g. `7.5` for the YF-S201).
-- **Volume:** `Volume (L) = total_pulse_count / pulses_per_litre`
-  (e.g. `/ 450` for the YF-S201, `/ 5880` for the YF-S401).
-- **Calibrate for accuracy:** the K-factor varies with plumbing and flow
-  profile. Dispense a known volume (e.g. weigh 500 g of water), count the
-  pulses, and set `pulses_per_litre = pulses / litres_dispensed`.
+- **Volume:** `Volume (L) = total_pulse_count / pulses_per_litre`.
+- **Flow rate:** `Q (L/min) = 60 × pulses_per_second / pulses_per_litre`,
+  equivalently `frequency_Hz / K` where `K` is the sensor's pulses-per-second
+  per L/min constant.
+- **Calibrate for accuracy (required here):** dispense a known volume (e.g.
+  weigh 500 g ≈ 0.5 L of water), count the pulses, and set
+  `pulses_per_litre = pulses / litres_dispensed`. Repeat at espresso-like
+  flow rates, since the constant drifts with flow profile and plumbing.
 
 ### Integration
 
