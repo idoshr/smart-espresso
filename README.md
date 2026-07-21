@@ -78,6 +78,10 @@ Connect sensors: VCC→3.3V, GND→GND, OUT→CH0/CH1
 Connect the two pressure sensors (VCC→3.3V, GND→GND, signal → analog input):
 Head pressure → A0, Boiler pressure → A1.
 
+The water flow sensor is **not** wired to the ADS1115 — connect its hall-effect
+signal to a GPIO pin (GPIO17 by default), with VCC→3.3V and GND→GND. See the
+usage example below.
+
 ## Installation
 
 ```bash
