@@ -75,12 +75,15 @@ Connect sensors: VCC→3.3V, GND→GND, OUT→CH0/CH1
 | 5 (SCL) | → | SCL |
 | 6 (GND) | → | GND |
 
-Connect the two pressure sensors (VCC→3.3V, GND→GND, signal → analog input):
-Head pressure → A0, Boiler pressure → A1.
+Connect the sensors (VCC→3.3V, GND→GND, signal → analog input):
+Head pressure → A0, Boiler pressure → A1, water flow (hall-effect pulse
+output) → A2. See the usage example below.
 
-The water flow sensor is **not** wired to the ADS1115 — connect its hall-effect
-signal to a GPIO pin (GPIO17 by default), with VCC→3.3V and GND→GND. See the
-usage example below.
+> The water flow meter emits a pulse train; wiring its output to the ADS1115
+> A2 channel lets the software recover the pulses by sampling the channel
+> voltage. Sampling rate limits accuracy at very high flow, so for high-flow
+> use a GPIO edge-interrupt wiring is more precise — but ADC sampling is
+> sufficient for espresso shot metering.
 
 ## Installation
 
@@ -131,29 +134,12 @@ from smart_espresso.analog_sensor.pressure_analog_sensor import PressureAnalogSe
 from smart_espresso.analog_sensor.water_flow_sensor import WaterFlowAnalogSensor
 from smart_espresso.smart_espresso import SmartEspresso
 
-# Water flow sensor: hall-effect pulse output on a GPIO pin (not the ADC).
-# Implement `liter` from your calibrated pulse counter.
-class GPIOWaterFlowSensor(WaterFlowAnalogSensor):
-    PULSES_PER_LITRE = 5880  # calibrate for your unit
-
-    def __init__(self, name, gpio_pin=17):
-        from gpiozero import Button
-        super().__init__(adc=None, name=name)
-        self._pulses = 0
-        self._button = Button(gpio_pin, pull_up=True)
-        self._button.when_pressed = lambda: setattr(
-            self, "_pulses", self._pulses + 1
-        )
-
-    @property
-    def liter(self):
-        return self._pulses / self.PULSES_PER_LITRE
-
-# Create sensors
+# Create sensors. The water flow meter's pulse output is wired to the
+# ADS1115 A2 channel; the sensor counts pulses by sampling that channel.
 analog_devices = [
     PressureAnalogSensor(adc=ADS1115ADC(pin=0, gain=2/3), name="Head", max_pressure_mpa=2.0),
     PressureAnalogSensor(adc=ADS1115ADC(pin=1, gain=2/3), name="Boiler", max_pressure_mpa=0.5),
-    GPIOWaterFlowSensor(name="Brew", gpio_pin=17),
+    WaterFlowAnalogSensor(adc=ADS1115ADC(pin=2, gain=1), name="Brew", pulses_per_liter=5880),
 ]
 
 # Run
