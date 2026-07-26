@@ -128,37 +128,29 @@ See [main.py](main.py) for complete example.
 ```python
 from smart_espresso.analog_sensor.ads1115_analog_sensor import ADS1115ADC
 from smart_espresso.analog_sensor.pressure_analog_sensor import PressureAnalogSensor
-from smart_espresso.analog_sensor.water_flow_sensor import WaterFlowAnalogSensor
+from smart_espresso.analog_sensor.water_flow_sensor import GPIOWaterFlowSensor
 from smart_espresso.smart_espresso import SmartEspresso
 
 # Water flow sensor: hall-effect pulse output on a GPIO pin (not the ADC).
-# Implement `liter` from your calibrated pulse counter.
-class GPIOWaterFlowSensor(WaterFlowAnalogSensor):
-    PULSES_PER_LITRE = 5880  # calibrate for your unit
-
-    def __init__(self, name, gpio_pin=17):
-        from gpiozero import Button
-        super().__init__(adc=None, name=name)
-        self._pulses = 0
-        self._button = Button(gpio_pin, pull_up=True)
-        self._button.when_pressed = lambda: setattr(
-            self, "_pulses", self._pulses + 1
-        )
-
-    @property
-    def liter(self):
-        return self._pulses / self.PULSES_PER_LITRE
-
-# Create sensors
+# Calibrate `pulses_per_litre` for your specific sensor.
 analog_devices = [
     PressureAnalogSensor(adc=ADS1115ADC(pin=0, gain=2/3), name="Head", max_pressure_mpa=2.0),
     PressureAnalogSensor(adc=ADS1115ADC(pin=1, gain=2/3), name="Boiler", max_pressure_mpa=0.5),
-    GPIOWaterFlowSensor(name="Brew", gpio_pin=17),
+    GPIOWaterFlowSensor(name="Brew", gpio_pin=17, pulses_per_litre=5880),
 ]
 
 # Run
 se = SmartEspresso(analog_devices=analog_devices, client_ha=None, display=None)
 se.run()
+```
+
+The flow sensor is optional in [main.py](main.py) — enable it and tune it with
+environment variables:
+
+```bash
+export FLOW_ENABLE="True"           # off by default
+export FLOW_GPIO_PIN="17"           # BCM pin the signal wire is on
+export FLOW_PULSES_PER_LITRE="5880" # calibrate for your sensor
 ```
 
 **With MCP3008**: Replace `ADS1115ADC(pin=0, gain=2/3)` with `MCP3008ADC(pin=0)` (keep `max_pressure_mpa` parameter)

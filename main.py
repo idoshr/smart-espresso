@@ -7,6 +7,7 @@ from luma.oled.device import sh1106
 from smart_espresso.analog_sensor.mcp3008_analog_sensor import MCP3008ADC
 from smart_espresso.analog_sensor.ads1115_analog_sensor import ADS1115ADC
 from smart_espresso.analog_sensor.pressure_analog_sensor import PressureAnalogSensor
+from smart_espresso.analog_sensor.water_flow_sensor import GPIOWaterFlowSensor
 from smart_espresso.smart_espresso import SmartEspresso
 from smart_espresso.utils import strtobool
 
@@ -68,6 +69,20 @@ if __name__ == "__main__":
                 max_pressure_mpa=0.5  # 0-0.5MPa sensor for boiler (0-5 bar)
             ),  # Boiler Pressure
         ]
+
+    # Water flow / shot-volume sensor (hall-effect pulse output on a GPIO pin,
+    # independent of the ADC). Optional — enable it when the sensor is wired.
+    FLOW_ENABLE = strtobool(os.environ.get("FLOW_ENABLE") or False)
+    if FLOW_ENABLE:
+        FLOW_GPIO_PIN = int(os.environ.get("FLOW_GPIO_PIN") or 17)
+        FLOW_PULSES_PER_LITRE = float(os.environ.get("FLOW_PULSES_PER_LITRE") or 5880)
+        analog_devices.append(
+            GPIOWaterFlowSensor(
+                name="Brew",
+                gpio_pin=FLOW_GPIO_PIN,
+                pulses_per_litre=FLOW_PULSES_PER_LITRE,
+            )
+        )
 
     se = SmartEspresso(
         analog_devices=analog_devices, client_ha=client_ha, display=display
