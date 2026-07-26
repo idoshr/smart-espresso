@@ -7,6 +7,7 @@ from luma.oled.device import sh1106
 from smart_espresso.analog_sensor.mcp3008_analog_sensor import MCP3008ADC
 from smart_espresso.analog_sensor.ads1115_analog_sensor import ADS1115ADC
 from smart_espresso.analog_sensor.pressure_analog_sensor import PressureAnalogSensor
+from smart_espresso.analog_sensor.water_flow_sensor import WaterFlowAnalogSensor
 from smart_espresso.smart_espresso import SmartEspresso
 from smart_espresso.utils import strtobool
 
@@ -53,6 +54,10 @@ if __name__ == "__main__":
                 name="Boiler",
                 max_pressure_mpa=0.5  # 0-0.5MPa sensor for boiler (0-5 bar)
             ),  # Boiler Pressure on ADS1115 channel A1
+            WaterFlowAnalogSensor(
+                adc=ADS1115ADC(pin=2, gain=1),
+                name="Brew",
+            ),  # Water flow (hall-effect pulse) on ADS1115 channel A2 (3rd port)
         ]
     else:
         # MCP3008 configuration (10-bit ADC, SPI interface)
@@ -67,6 +72,10 @@ if __name__ == "__main__":
                 name="Boiler",
                 max_pressure_mpa=0.5  # 0-0.5MPa sensor for boiler (0-5 bar)
             ),  # Boiler Pressure
+            WaterFlowAnalogSensor(
+                adc=MCP3008ADC(pin=2),
+                name="Brew",
+            ),  # Water flow (hall-effect pulse) on MCP3008 channel CH2
         ]
 
     se = SmartEspresso(
