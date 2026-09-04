@@ -1,0 +1,710 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#EFF1EC">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="/manifest.webmanifest">
+<title>Espresso Bar Status</title>
+<!-- Webfonts are a progressive enhancement: the page falls back to system
+     faces when the machine's network has no internet access. -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@500;600&family=Karla:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  :root {
+    /* Milk, matcha and a soft crema — pastels taken from the bar, not a
+       palette generator. */
+    --bg: #EFF1EC;
+    --card: #FBFCFA;
+    --edge: #E1E6DE;
+    --ink: #39423C;
+    --ink-soft: #7C8880;
+    --ink-faint: #A6B0A8;
+
+    --crema: #E8B392;      /* brew head: crema on a fresh shot */
+    --crema-soft: #F8E6DA;
+    --matcha: #9CC0A4;     /* boiler: steam, greenery */
+    --matcha-soft: #E2EFE3;
+    --water: #A6C6D8;      /* flow and tank */
+    --water-soft: #E1EDF4;
+    --clay: #D08A78;       /* something needs attention */
+    --clay-soft: #F7E1DB;
+
+    --display: "Familjen Grotesk", ui-rounded, system-ui, sans-serif;
+    --body: "Karla", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+
+    --radius: 18px;
+    --shadow: 0 3px 14px rgba(57, 66, 60, .06);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #232724;
+      --card: #2C312D;
+      --edge: #39403A;
+      --ink: #EBEFEA;
+      --ink-soft: #9DA9A1;
+      --ink-faint: #75817A;
+      --crema-soft: #423029;
+      --matcha-soft: #2B3B2F;
+      --water-soft: #263640;
+      --clay-soft: #402A26;
+      --shadow: 0 3px 14px rgba(0, 0, 0, .3);
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --bg: #232724;
+    --card: #2C312D;
+    --edge: #39403A;
+    --ink: #EBEFEA;
+    --ink-soft: #9DA9A1;
+    --ink-faint: #75817A;
+    --crema-soft: #423029;
+    --matcha-soft: #2B3B2F;
+    --water-soft: #263640;
+    --clay-soft: #402A26;
+    --shadow: 0 3px 14px rgba(0, 0, 0, .3);
+  }
+
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+  body {
+    margin: 0 auto;
+    max-width: 460px;
+    padding: 22px 16px calc(30px + env(safe-area-inset-bottom));
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--body);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 18px;
+    padding: 0 2px;
+  }
+
+  h1 {
+    font-family: var(--display);
+    font-size: 21px;
+    font-weight: 600;
+    letter-spacing: -.015em;
+    margin: 0;
+  }
+
+  .tagline {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: .1em;
+    color: var(--ink-faint);
+    margin-top: 4px;
+  }
+
+  .live {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: .08em;
+    color: var(--ink-soft);
+    background: var(--card);
+    border: 1px solid var(--edge);
+    border-radius: 999px;
+    padding: 6px 11px;
+    white-space: nowrap;
+  }
+
+  .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--matcha); }
+  .dot.off { background: var(--ink-faint); }
+
+  .stack { display: flex; flex-direction: column; gap: 12px; }
+
+  .card {
+    background: var(--card);
+    border: 1px solid var(--edge);
+    border-radius: var(--radius);
+    padding: 16px;
+    box-shadow: var(--shadow);
+  }
+
+  .card-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+
+  .title {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+  }
+
+  .note {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--ink-faint);
+  }
+
+  /* ---- what the machine is doing ---- */
+  .state {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    background: var(--state-soft, var(--card));
+    border-color: transparent;
+  }
+
+  .state-text { flex: 1; min-width: 0; }
+
+  .state-label {
+    font-family: var(--display);
+    font-size: 25px;
+    font-weight: 600;
+    letter-spacing: -.02em;
+    line-height: 1.05;
+  }
+
+  .state-detail {
+    font-size: 12.5px;
+    color: var(--ink-soft);
+    margin-top: 5px;
+  }
+
+  .lamp {
+    width: 10px; height: 10px;
+    flex: none;
+    border-radius: 50%;
+    background: var(--state-color, var(--ink-faint));
+    box-shadow: 0 0 0 5px color-mix(in srgb, var(--state-color, #999) 20%, transparent);
+  }
+
+  .shot {
+    text-align: right;
+    flex: none;
+  }
+
+  .shot b {
+    font-family: var(--display);
+    font-size: 30px;
+    font-weight: 600;
+    letter-spacing: -.02em;
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+  }
+
+  .shot small {
+    display: block;
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--ink-soft);
+    margin-top: 5px;
+  }
+
+  /* Target extraction window, drawn under the shot timer. */
+  .shot-track {
+    position: relative;
+    width: 92px;
+    height: 3px;
+    margin-top: 8px;
+    border-radius: 3px;
+    background: var(--edge);
+    overflow: hidden;
+  }
+
+  .shot-track i {
+    position: absolute;
+    inset: 0 auto 0 0;
+    background: var(--crema);
+    border-radius: 3px;
+    transition: width .3s ease;
+  }
+
+  .shot-track u {
+    position: absolute;
+    top: -2px; bottom: -2px;
+    border-left: 1px solid var(--ink-faint);
+    border-right: 1px solid var(--ink-faint);
+    opacity: .7;
+  }
+
+  /* ---- pressure rings ---- */
+  .rings { display: flex; gap: 12px; }
+  .rings > * { flex: 1 1 0; min-width: 0; padding: 14px 12px 12px; }
+
+  .ring { width: 100%; height: auto; display: block; }
+
+  .ring-read {
+    text-align: center;
+    margin-top: -34px;
+    padding-bottom: 8px;
+  }
+
+  .ring-read b {
+    font-family: var(--display);
+    font-size: 26px;
+    font-weight: 600;
+    letter-spacing: -.02em;
+    font-variant-numeric: tabular-nums;
+    display: block;
+    line-height: 1;
+  }
+
+  .ring-read span {
+    font-family: var(--mono);
+    font-size: 9.5px;
+    letter-spacing: .1em;
+    color: var(--ink-faint);
+  }
+
+  .ring-foot {
+    font-size: 11.5px;
+    color: var(--ink-soft);
+    text-align: center;
+  }
+
+  /* ---- figures ---- */
+  .figure { display: flex; align-items: baseline; gap: 7px; }
+
+  .figure b {
+    font-family: var(--display);
+    font-size: 40px;
+    font-weight: 600;
+    letter-spacing: -.03em;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .figure span { font-size: 13px; color: var(--ink-soft); }
+
+  .meta {
+    display: flex;
+    gap: 16px;
+    font-size: 12.5px;
+    color: var(--ink-soft);
+    margin-top: 9px;
+  }
+
+  .meta b {
+    font-weight: 600;
+    color: var(--ink);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ---- tank ---- */
+  .level {
+    height: 12px;
+    margin: 14px 0 4px;
+    border-radius: 999px;
+    background: var(--water-soft);
+    overflow: hidden;
+  }
+
+  .level i {
+    display: block;
+    height: 100%;
+    border-radius: 999px;
+    background: var(--water);
+    transition: width .4s ease, background .4s ease;
+  }
+
+  .level i.low { background: var(--clay); }
+
+  .tank-foot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-top: 14px;
+  }
+
+  .refill-hint {
+    font-size: 12px;
+    color: var(--clay);
+  }
+
+  button.reset {
+    font-family: var(--body);
+    font-size: 13.5px;
+    font-weight: 600;
+    color: var(--ink);
+    background: var(--matcha-soft);
+    border: 1px solid transparent;
+    border-radius: 999px;
+    padding: 10px 18px;
+    cursor: pointer;
+    transition: background .2s, color .2s;
+  }
+
+  button.reset.armed { background: var(--clay); color: #FFF; }
+  button.reset:focus-visible { outline: 2px solid var(--ink-soft); outline-offset: 2px; }
+
+  /* ---- pour chart ---- */
+  .chart {
+    display: flex;
+    align-items: flex-end;
+    gap: 2px;
+    height: 64px;
+    margin-top: 16px;
+  }
+
+  .bar {
+    flex: 1 1 0;
+    min-width: 0;
+    height: 3px;
+    border-radius: 3px;
+    background: var(--water-soft);
+    transition: height .25s ease, background .25s ease;
+  }
+
+  .bar.on { background: var(--water); }
+  .bar.now { background: var(--crema); }
+
+  .axis {
+    display: flex;
+    justify-content: space-between;
+    font-family: var(--mono);
+    font-size: 9.5px;
+    color: var(--ink-faint);
+    margin-top: 8px;
+  }
+
+  /* ---- sensor rows ---- */
+  .rows { display: flex; flex-direction: column; }
+
+  .row {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    font-size: 13px;
+    padding: 9px 0;
+    border-bottom: 1px solid var(--edge);
+  }
+
+  .row:last-child { border-bottom: none; padding-bottom: 0; }
+  .row .v { font-family: var(--mono); font-size: 12px; color: var(--ink-soft); }
+
+  footer {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: .08em;
+    color: var(--ink-faint);
+    text-align: center;
+    margin-top: 18px;
+  }
+
+  body.stale .stack { opacity: .4; }
+  .stack { transition: opacity .3s; }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>The bar</h1>
+    <div class="tagline" id="tagline">espresso machine</div>
+  </div>
+  <div class="live"><span class="dot" id="dot"></span><span id="conn">live</span></div>
+</header>
+
+<div class="stack">
+  <div class="card state" id="state">
+    <span class="lamp"></span>
+    <div class="state-text">
+      <div class="state-label" id="state-label">No reading</div>
+      <div class="state-detail" id="state-detail">waiting for the machine</div>
+    </div>
+    <div class="shot" id="shot" hidden>
+      <b id="shot-seconds">0s</b>
+      <small id="shot-ml">0 ml</small>
+      <div class="shot-track"><u id="shot-window"></u><i id="shot-progress"></i></div>
+    </div>
+  </div>
+
+  <div class="rings" id="rings"></div>
+
+  <div class="card" id="tank-card">
+    <div class="card-head">
+      <span class="title">Water tank</span>
+      <span class="note" id="tank-note"></span>
+    </div>
+    <div class="figure"><b id="tank-remaining">--</b><span id="tank-capacity">ml left</span></div>
+    <div class="level"><i id="tank-fill" style="width:0%"></i></div>
+    <div class="meta">
+      <span>drawn <b id="tank-used">0 ml</b></span>
+      <span>about <b id="tank-shots">0</b> doubles left</span>
+    </div>
+    <div class="tank-foot">
+      <span class="refill-hint" id="tank-warn" hidden>Time to refill</span>
+      <button class="reset" id="tank-reset" type="button">Tank filled</button>
+    </div>
+  </div>
+
+  <div class="card" id="flow-card">
+    <div class="card-head">
+      <span class="title" id="flow-title">Water poured</span>
+      <span class="note" id="flow-window"></span>
+    </div>
+    <div class="figure"><b id="flow-recent">0</b><span>ml</span></div>
+    <div class="meta">
+      <span>now <b id="flow-rate">0.0 ml/s</b></span>
+      <span>all time <b id="flow-total">0 ml</b></span>
+    </div>
+    <div class="chart" id="flow-chart"></div>
+    <div class="axis"><span id="flow-axis-start">-2:00</span><span>now</span></div>
+  </div>
+
+  <div class="card" id="other-card" hidden>
+    <div class="card-head"><span class="title">Around the machine</span></div>
+    <div class="rows" id="other-rows"></div>
+  </div>
+</div>
+
+<footer id="footer">checking every second</footer>
+
+<script>
+// What a barista actually watches for: 9 bar at the group, a boiler sitting
+// around 1 bar, and a double landing in the 25-30 second window.
+const GUIDES = {
+  head:   { band: [8, 10], accent: 'var(--crema)', soft: 'var(--crema-soft)',
+            caption: '9 bar is the sweet spot' },
+  boiler: { band: [0.8, 1.4], accent: 'var(--matcha)', soft: 'var(--matcha-soft)',
+            caption: 'steam holds near 1 bar' },
+};
+
+const SHOT_WINDOW = [25, 30];   // seconds: a well-paced double
+const SHOT_SCALE = 40;          // seconds shown by the shot progress track
+
+const STATE_STYLE = {
+  good:   ['var(--matcha)', 'var(--matcha-soft)'],
+  warn:   ['var(--crema)', 'var(--crema-soft)'],
+  active: ['var(--crema)', 'var(--crema-soft)'],
+  alert:  ['var(--clay)', 'var(--clay-soft)'],
+  idle:   ['var(--ink-faint)', 'var(--card)'],
+};
+
+// Open ring: 240 degrees, gap at the bottom.
+const SWEEP = 240, START = -120, CX = 60, CY = 58, R = 44;
+
+function guideFor(name) {
+  const key = name.toLowerCase();
+  return GUIDES[Object.keys(GUIDES).find(k => key.includes(k))] || {};
+}
+
+function polar(radius, degrees) {
+  const rad = (degrees - 90) * Math.PI / 180;
+  return [CX + radius * Math.cos(rad), CY + radius * Math.sin(rad)];
+}
+
+function angleFor(ratio) {
+  return START + SWEEP * Math.max(0, Math.min(1, ratio));
+}
+
+function arcPath(radius, fromDeg, toDeg) {
+  const [x1, y1] = polar(radius, fromDeg);
+  const [x2, y2] = polar(radius, toDeg);
+  const large = Math.abs(toDeg - fromDeg) > 180 ? 1 : 0;
+  return `M ${x1.toFixed(2)} ${y1.toFixed(2)} A ${radius} ${radius} 0 ${large} 1 ${x2.toFixed(2)} ${y2.toFixed(2)}`;
+}
+
+function ring(sensor) {
+  const max = sensor.max_bar || 1;
+  const guide = guideFor(sensor.name);
+  const accent = guide.accent || 'var(--water)';
+  const soft = guide.soft || 'var(--water-soft)';
+  const ratio = Math.max(0, Math.min(1, sensor.bar / max));
+
+  // The target band rides on the same track as the reading, drawn thin and
+  // dark so it reads as a marked-off stretch rather than a second ring.
+  let band = '';
+  if (guide.band) {
+    const [from, to] = guide.band;
+    band = `<path d="${arcPath(R - 7, angleFor(from / max), angleFor(to / max))}" fill="none"
+                  stroke="var(--ink-soft)" stroke-width="2.5" opacity=".45" stroke-linecap="round"/>`;
+  }
+
+  return `
+  <div class="card">
+    <div class="card-head" style="justify-content:center;margin-bottom:2px">
+      <span class="title">${sensor.name}</span>
+    </div>
+    <svg class="ring" viewBox="0 0 120 100" role="img" aria-label="${sensor.name} ${sensor.bar} bar">
+      <path d="${arcPath(R - 7, angleFor(0), angleFor(1))}" fill="none" stroke="${soft}"
+            stroke-width="9" stroke-linecap="round"/>
+      <path d="${arcPath(R - 7, angleFor(0), angleFor(ratio))}" fill="none" stroke="${accent}"
+            stroke-width="9" stroke-linecap="round"
+            style="transition:d .3s ease"/>
+      ${band}
+    </svg>
+    <div class="ring-read"><b>${sensor.bar.toFixed(1)}</b><span>BAR</span></div>
+    <div class="ring-foot">${guide.caption || `up to ${max} bar`}</div>
+  </div>`;
+}
+
+function renderState(machine) {
+  const [color, soft] = STATE_STYLE[machine.severity] || STATE_STYLE.idle;
+  const card = document.getElementById('state');
+  card.style.setProperty('--state-color', color);
+  card.style.setProperty('--state-soft', soft);
+
+  document.getElementById('state-label').textContent = machine.label;
+
+  const shot = document.getElementById('shot');
+  shot.hidden = !machine.shot;
+  if (machine.shot) {
+    document.getElementById('shot-seconds').textContent = `${machine.shot.seconds.toFixed(0)}s`;
+    document.getElementById('shot-ml').textContent = `${machine.shot.ml.toFixed(0)} ml in the cup`;
+    document.getElementById('shot-progress').style.width =
+      `${Math.min(100, machine.shot.seconds / SHOT_SCALE * 100)}%`;
+    const track = document.getElementById('shot-window');
+    track.style.left = `${SHOT_WINDOW[0] / SHOT_SCALE * 100}%`;
+    track.style.width = `${(SHOT_WINDOW[1] - SHOT_WINDOW[0]) / SHOT_SCALE * 100}%`;
+  }
+
+  let detail = `${formatDuration(machine.since_seconds)} in this state`;
+  if (machine.shot) {
+    detail = machine.shot.seconds < SHOT_WINDOW[0]
+      ? `aiming for ${SHOT_WINDOW[0]}-${SHOT_WINDOW[1]}s`
+      : (machine.shot.seconds <= SHOT_WINDOW[1] ? 'in the window' : 'running long');
+  } else if (machine.last_shot) {
+    detail += ` · last pull ${machine.last_shot.seconds.toFixed(0)}s, ${machine.last_shot.ml.toFixed(0)} ml`;
+  }
+  document.getElementById('state-detail').textContent = detail;
+}
+
+function renderTank(tank) {
+  document.getElementById('tank-remaining').textContent = tank.remaining_ml.toFixed(0);
+  document.getElementById('tank-capacity').textContent = `ml of ${tank.capacity_ml.toFixed(0)} left`;
+  document.getElementById('tank-used').textContent = `${tank.used_ml.toFixed(0)} ml`;
+  document.getElementById('tank-shots').textContent = tank.shots_left;
+  document.getElementById('tank-note').textContent =
+    tank.refills ? `${tank.refills} refill${tank.refills === 1 ? '' : 's'}` : '';
+
+  const fill = document.getElementById('tank-fill');
+  fill.style.width = `${tank.percent}%`;
+  fill.classList.toggle('low', tank.low);
+
+  const warn = document.getElementById('tank-warn');
+  warn.hidden = !tank.low;
+  warn.textContent = tank.empty ? 'Tank is empty' : 'Time to refill';
+}
+
+function renderFlow(sensor) {
+  const minutes = Math.round(sensor.window_seconds / 60);
+  document.getElementById('flow-title').textContent = `${sensor.name} water`;
+  document.getElementById('flow-window').textContent = `last ${minutes} min`;
+  document.getElementById('flow-recent').textContent = sensor.recent_ml.toFixed(0);
+  document.getElementById('flow-rate').textContent = `${sensor.flow_rate_mls.toFixed(1)} ml/s`;
+  document.getElementById('flow-total').textContent = `${sensor.total_ml.toFixed(0)} ml`;
+  document.getElementById('flow-axis-start').textContent = `-${minutes}:00`;
+
+  const peak = Math.max(...sensor.chart, 0.001);
+  const lastActive = sensor.chart.reduce((acc, ml, i) => (ml > 0 ? i : acc), -1);
+  document.getElementById('flow-chart').innerHTML = sensor.chart.map((ml, i) => {
+    const height = ml > 0 ? Math.max(5, Math.round((ml / peak) * 60)) : 3;
+    const cls = ml > 0 ? (i === lastActive ? 'bar on now' : 'bar on') : 'bar';
+    return `<div class="${cls}" style="height:${height}px"></div>`;
+  }).join('');
+}
+
+function formatDuration(seconds) {
+  const h = Math.floor(seconds / 3600), m = Math.floor(seconds / 60) % 60;
+  if (h) return `${h}h ${m}m`;
+  if (m) return `${m}m`;
+  return `${Math.floor(seconds)}s`;
+}
+
+function render(data) {
+  renderState(data.machine);
+  document.getElementById('rings').innerHTML = data.pressure.map(ring).join('');
+
+  const flowCard = document.getElementById('flow-card');
+  flowCard.hidden = !data.flow.length;
+  if (data.flow.length) renderFlow(data.flow[0]);
+
+  const tankCard = document.getElementById('tank-card');
+  tankCard.hidden = !data.tank;
+  if (data.tank) renderTank(data.tank);
+
+  const otherCard = document.getElementById('other-card');
+  otherCard.hidden = !data.other.length;
+  if (data.other.length) {
+    document.getElementById('other-rows').innerHTML = data.other
+      .map(s => `<div class="row"><span>${s.name}</span><span class="v">${s.message}</span></div>`)
+      .join('');
+  }
+
+  document.getElementById('footer').textContent = `machine on for ${formatDuration(data.uptime)}`;
+}
+
+function setConnected(ok) {
+  document.getElementById('dot').classList.toggle('off', !ok);
+  document.getElementById('conn').textContent = ok ? 'live' : 'offline';
+  document.body.classList.toggle('stale', !ok);
+}
+
+// Two taps to reset: a stray tap must not wipe the tank count.
+const resetButton = document.getElementById('tank-reset');
+let armedTimer = null;
+
+resetButton.addEventListener('click', async () => {
+  if (!resetButton.classList.contains('armed')) {
+    resetButton.classList.add('armed');
+    resetButton.textContent = 'Tap to confirm';
+    armedTimer = setTimeout(disarmReset, 5000);
+    return;
+  }
+
+  clearTimeout(armedTimer);
+  disarmReset();
+  try {
+    const res = await fetch('/api/tank/reset', { method: 'POST' });
+    if (!res.ok) throw new Error(res.status);
+    renderTank(await res.json());
+  } catch (err) {
+    resetButton.textContent = 'Reset failed';
+    setTimeout(disarmReset, 2500);
+  }
+});
+
+function disarmReset() {
+  resetButton.classList.remove('armed');
+  resetButton.textContent = 'Tank filled';
+}
+
+let missed = 0;
+
+async function poll() {
+  try {
+    const res = await fetch('/api/status', { cache: 'no-store' });
+    if (!res.ok) throw new Error(res.status);
+    render(await res.json());
+    missed = 0;
+    setConnected(true);
+  } catch (err) {
+    if (++missed >= 3) setConnected(false);
+  }
+}
+
+poll();
+setInterval(poll, 1000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) poll(); });
+</script>
+</body>
+</html>

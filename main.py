@@ -10,6 +10,8 @@ from smart_espresso.analog_sensor.pressure_analog_sensor import PressureAnalogSe
 from smart_espresso.analog_sensor.water_flow_sensor import WaterFlowAnalogSensor
 from smart_espresso.smart_espresso import SmartEspresso
 from smart_espresso.utils import strtobool
+from smart_espresso.water_tank import DEFAULT_STATE_PATH, WaterTank
+from smart_espresso.web.status_server import StatusServer
 
 HA_ENABLE = strtobool(os.environ.get("HA_ENABLE") or False)
 client_ha = None
@@ -32,6 +34,20 @@ DISPLAY_ENABLE = strtobool(os.environ.get("DISPLAY_ENABLE") or False)
 display = None
 if DISPLAY_ENABLE:
     display = sh1106(i2c(port=1, address=0x3C), width=128, height=64, rotate=0)
+
+
+# Mobile status dashboard, served on the local network.
+WEB_ENABLE = strtobool(os.environ.get("WEB_ENABLE") or True)
+web_server = None
+if WEB_ENABLE:
+    web_server = StatusServer(
+        host=os.environ.get("WEB_HOST", "0.0.0.0"),
+        port=int(os.environ.get("WEB_PORT", 8080)),
+        tank=WaterTank(
+            capacity_ml=float(os.environ.get("WATER_TANK_ML", 2000)),
+            state_path=os.environ.get("WATER_TANK_STATE", DEFAULT_STATE_PATH),
+        ),
+    )
 
 
 if __name__ == "__main__":
@@ -79,7 +95,10 @@ if __name__ == "__main__":
         ]
 
     se = SmartEspresso(
-        analog_devices=analog_devices, client_ha=client_ha, display=display
+        analog_devices=analog_devices,
+        client_ha=client_ha,
+        display=display,
+        web_server=web_server,
     )
     se.run()
 # sudo ip route add 192.168.68.56 via 192.168.68.1 dev wlan0

@@ -1,0 +1,8 @@
+{
+  "name": "Espresso Bar Status",
+  "short_name": "Espresso",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#EFF1EC",
+  "theme_color": "#EFF1EC"
+}

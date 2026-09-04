@@ -53,7 +53,14 @@ build-backend = "setuptools.build_meta"
 [tool.setuptools]
 zip-safe = false
 platforms = ["any"]
-packages=["smart_espresso"]
+packages=[
+  "smart_espresso",
+  "smart_espresso.analog_sensor",
+  "smart_espresso.web",
+]
+
+[tool.setuptools.package-data]
+"smart_espresso.web" = ["static/*"]
 
 [tool.setuptools.dynamic]
 version = {attr = "smart_espresso._version.version"}
