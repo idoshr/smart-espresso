@@ -6,3 +6,4 @@ Pillow==10.3.0
 adafruit-circuitpython-ads1x15==2.2.24
 adafruit-blinka==8.47.0
 Adafruit_DHT==1.4.0
+Flask==3.0.3

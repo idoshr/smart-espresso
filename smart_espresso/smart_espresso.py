@@ -7,6 +7,7 @@ from luma.oled.device import sh1106
 
 from smart_espresso.analog_sensor.analog_sensor import AnalogSensor
 from smart_espresso.utils import font
+from smart_espresso.web.status_server import StatusServer
 
 
 class SmartEspresso:
@@ -16,6 +17,7 @@ class SmartEspresso:
         digital_sensors: list = None,
         client_ha: Client = None,
         display: sh1106 = None,
+        web_server: StatusServer = None,
         render_interval: float = 0.1,
         ha_update_interval: float = 1.0,
     ):
@@ -27,6 +29,7 @@ class SmartEspresso:
             digital_sensors: List of digital sensors (DHT22, etc.)
             client_ha: Home Assistant API client
             display: OLED display device
+            web_server: StatusServer serving the web dashboard (optional)
             render_interval: Update interval in seconds (default: 0.1)
             ha_update_interval: Minimum seconds between Home Assistant pushes
                 (default: 1.0). Kept separate from render_interval so the
@@ -38,6 +41,7 @@ class SmartEspresso:
         self.all_sensors = self.analog_devices + self.digital_sensors
         self.client_ha: Client = client_ha
         self.display: sh1106 = display
+        self.web_server: StatusServer = web_server
         self.render_interval: float = render_interval
         self.ha_update_interval: float = ha_update_interval
         self._last_ha_update: float = 0.0
@@ -46,12 +50,20 @@ class SmartEspresso:
         if not self.all_sensors:
             raise ValueError("No sensors to read (provide analog_devices or digital_sensors)")
 
+        if self.web_server:
+            self.web_server.start()
+
         while True:
             loop_start = monotonic()
 
             # Read all sensors
             for sensor in self.all_sensors:
                 sensor.read()
+
+            # Snapshot readings for the web dashboard. Cheap in-memory copy,
+            # so it runs every tick and HTTP handlers never touch the ADCs.
+            if self.web_server:
+                self.web_server.update(self.all_sensors)
 
             # Update Home Assistant, throttled independently of render_interval
             # so a slow/unreachable HA instance can't stall sensor sampling or
