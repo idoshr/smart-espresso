@@ -1,4 +1,5 @@
 """Classify what the espresso machine is doing from its live sensor readings."""
+import threading
 from time import monotonic
 from typing import Optional
 
@@ -53,6 +54,11 @@ class MachineStateClassifier:
 
     A state must persist for ``dwell_seconds`` before it is published, so a
     single noisy ADC sample cannot make the dashboard flicker between states.
+
+    The render loop updates this from its own thread while Flask worker threads
+    read :meth:`snapshot`, so both are guarded by a lock: a reader must never
+    catch a half-applied state change, such as a new state carrying the
+    previous state's start time.
     """
 
     # Below this the boiler is not being held at all: the machine is off.
@@ -97,6 +103,7 @@ class MachineStateClassifier:
         self.steam_drop_bar_per_s = steam_drop_bar_per_s
         self.dwell_seconds = dwell_seconds
 
+        self._lock = threading.Lock()
         self.state: str = MachineState.UNKNOWN
         self._state_since: float = monotonic()
         self._candidate: Optional[str] = None
@@ -129,27 +136,31 @@ class MachineStateClassifier:
             total_ml: Lifetime volume in millilitres, used for the shot timer.
         """
         now = monotonic()
-        self._update_boiler_rate(boiler_bar, now)
-        candidate = self._classify(head_bar, boiler_bar, flow_mls)
+        with self._lock:
+            self._update_boiler_rate(boiler_bar, now)
+            candidate = self._classify(head_bar, boiler_bar, flow_mls)
 
-        if candidate != self._candidate:
-            self._candidate = candidate
-            self._candidate_since = now
+            if candidate != self._candidate:
+                self._candidate = candidate
+                self._candidate_since = now
 
-        # Publish a new state only once the candidate has held long enough.
-        # Brewing is published immediately: a shot timer that starts a second
-        # late is worse than an occasional false start.
-        promote = candidate == MachineState.BREWING or (
-            now - self._candidate_since >= self.dwell_seconds
-        )
-        if promote and candidate != self.state:
-            self._on_state_change(candidate, now, total_ml)
+            # Publish a new state only once the candidate has held long enough.
+            # Brewing is published immediately: a shot timer that starts a
+            # second late is worse than an occasional false start.
+            promote = candidate == MachineState.BREWING or (
+                now - self._candidate_since >= self.dwell_seconds
+            )
+            if promote and candidate != self.state:
+                self._on_state_change(candidate, now, total_ml)
 
-        if self.state == MachineState.BREWING and self._shot_start is not None:
-            self._shot_seconds = now - self._shot_start
-            self._shot_ml = max(total_ml - self._shot_start_ml, 0.0)
+            # Tracked against the candidate, not the published state: once the
+            # pump stops, BREWING is still published for dwell_seconds, and
+            # counting through that window would inflate every recorded shot.
+            if candidate == MachineState.BREWING and self._shot_start is not None:
+                self._shot_seconds = now - self._shot_start
+                self._shot_ml = max(total_ml - self._shot_start_ml, 0.0)
 
-        return self.state
+            return self.state
 
     def _update_boiler_rate(self, boiler_bar: Optional[float], now: float) -> None:
         """Track the boiler's rate of change (bar/s) with light smoothing."""
@@ -232,19 +243,26 @@ class MachineStateClassifier:
         return self._boiler_rate
 
     def snapshot(self) -> dict:
-        """Serialisable view of the current state for the web API."""
-        shot = None
-        if self.state == MachineState.BREWING and self._shot_start is not None:
-            shot = {
-                "seconds": round(self._shot_seconds, 1),
-                "ml": round(self._shot_ml, 1),
+        """
+        Serialisable view of the current state for the web API.
+
+        Built under the lock and from a single read of each field, so the
+        state, its age and the shot always describe the same moment.
+        """
+        with self._lock:
+            state = self.state
+            shot = None
+            if state == MachineState.BREWING and self._shot_start is not None:
+                shot = {
+                    "seconds": round(self._shot_seconds, 1),
+                    "ml": round(self._shot_ml, 1),
+                }
+            return {
+                "state": state,
+                "label": MachineState.LABELS[state],
+                "severity": MachineState.SEVERITY[state],
+                "since_seconds": round(monotonic() - self._state_since, 1),
+                "boiler_rate": round(self._boiler_rate, 3),
+                "shot": shot,
+                "last_shot": self._last_shot,
             }
-        return {
-            "state": self.state,
-            "label": self.label,
-            "severity": self.severity,
-            "since_seconds": round(self.since_seconds, 1),
-            "boiler_rate": round(self._boiler_rate, 3),
-            "shot": shot,
-            "last_shot": self._last_shot,
-        }

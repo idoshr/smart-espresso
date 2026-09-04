@@ -86,8 +86,11 @@ class TestMachineStateClassifier(unittest.TestCase):
 
         # Pump off: the shot closes and is kept as the last shot.
         self.settle(0.0, 1.2, total_ml=total)
+        # The recorded duration must be the pull itself, not the pull plus the
+        # dwell window that keeps BREWING published after the pump stops.
         snapshot = self.classifier.snapshot()
         self.assertIsNone(snapshot["shot"])
+        self.assertAlmostEqual(snapshot["last_shot"]["seconds"], 26.0, places=1)
         self.assertAlmostEqual(snapshot["last_shot"]["ml"], 36.4, places=1)
 
     def test_short_blip_is_not_recorded_as_a_shot(self):

@@ -502,6 +502,14 @@ const STATE_STYLE = {
 // Open ring: 240 degrees, gap at the bottom.
 const SWEEP = 240, START = -120, CX = 60, CY = 58, R = 44;
 
+// Sensor names and messages come from the machine's own configuration today,
+// but escaping keeps a name pulled from elsewhere (a Home Assistant entity,
+// say) from turning into markup on the dashboard.
+const escapeHtml = value => String(value).replace(
+  /[&<>"']/g,
+  c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]),
+);
+
 function guideFor(name) {
   const key = name.toLowerCase();
   return GUIDES[Object.keys(GUIDES).find(k => key.includes(k))] || {};
@@ -539,12 +547,13 @@ function ring(sensor) {
                   stroke="var(--ink-soft)" stroke-width="2.5" opacity=".45" stroke-linecap="round"/>`;
   }
 
+  const label = escapeHtml(sensor.name);
   return `
   <div class="card">
     <div class="card-head" style="justify-content:center;margin-bottom:2px">
-      <span class="title">${sensor.name}</span>
+      <span class="title">${label}</span>
     </div>
-    <svg class="ring" viewBox="0 0 120 100" role="img" aria-label="${sensor.name} ${sensor.bar} bar">
+    <svg class="ring" viewBox="0 0 120 100" role="img" aria-label="${label} ${sensor.bar} bar">
       <path d="${arcPath(R - 7, angleFor(0), angleFor(1))}" fill="none" stroke="${soft}"
             stroke-width="9" stroke-linecap="round"/>
       <path d="${arcPath(R - 7, angleFor(0), angleFor(ratio))}" fill="none" stroke="${accent}"
@@ -646,7 +655,7 @@ function render(data) {
   otherCard.hidden = !data.other.length;
   if (data.other.length) {
     document.getElementById('other-rows').innerHTML = data.other
-      .map(s => `<div class="row"><span>${s.name}</span><span class="v">${s.message}</span></div>`)
+      .map(s => `<div class="row"><span>${escapeHtml(s.name)}</span><span class="v">${escapeHtml(s.message)}</span></div>`)
       .join('');
   }
 
@@ -674,7 +683,10 @@ resetButton.addEventListener('click', async () => {
   clearTimeout(armedTimer);
   disarmReset();
   try {
-    const res = await fetch('/api/tank/reset', { method: 'POST' });
+    const res = await fetch('/api/tank/reset', {
+      method: 'POST',
+      headers: { 'X-Espresso-Dashboard': '1' },
+    });
     if (!res.ok) throw new Error(res.status);
     renderTank(await res.json());
   } catch (err) {

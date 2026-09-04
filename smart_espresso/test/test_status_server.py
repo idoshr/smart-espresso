@@ -160,7 +160,15 @@ class TestStatusServer(unittest.TestCase):
         pulse(self.flow, self.flow_adc, self.clock, 20, server=self.server)
         self.assertAlmostEqual(self.server.tank.used_ml, 190.0, places=1)
 
-        response = self.server.app.test_client().post("/api/tank/reset")
+        client = self.server.app.test_client()
+
+        # A cross-site post cannot set the dashboard header, so it is refused.
+        self.assertEqual(client.post("/api/tank/reset").status_code, 403)
+        self.assertAlmostEqual(self.server.tank.used_ml, 190.0, places=1)
+
+        response = client.post(
+            "/api/tank/reset", headers={"X-Espresso-Dashboard": "1"}
+        )
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.get_json()["used_ml"], 0.0)
         self.assertEqual(response.get_json()["refills"], 1)

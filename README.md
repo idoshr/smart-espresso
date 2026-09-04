@@ -243,7 +243,10 @@ The page polls `GET /api/status` once per second:
 ```
 
 `POST /api/tank/reset` marks the tank as refilled and returns the new tank
-block.
+block. It requires the header `X-Espresso-Dashboard: 1`, which the dashboard
+sends: a page on some other site that your phone happens to have open cannot
+set a custom header without a CORS preflight this server never grants, so it
+cannot zero your tank count behind your back.
 
 The HTTP handlers only read an in-memory snapshot taken by the render loop, so
 opening the page never triggers extra I2C/SPI traffic. The recent-water figure

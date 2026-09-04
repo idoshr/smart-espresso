@@ -2,6 +2,7 @@
 import json
 import os
 import tempfile
+import threading
 from time import monotonic
 from typing import Optional
 
@@ -20,8 +21,13 @@ class WaterTank:
 
     The baseline is persisted to disk, because the counter is only useful if it
     survives a reboot of the Pi — otherwise every restart would claim a full
-    tank. Writes are throttled (``save_interval``) so a 10 Hz render loop does
-    not wear out the SD card.
+    tank. Writes are throttled (``save_interval``) and skipped entirely while
+    nothing has changed, so an idle machine does not wear out the SD card.
+
+    The render loop feeds this from its own thread while Flask worker threads
+    read snapshots and reset it, so all state changes are guarded by a lock.
+    Disk writes happen outside that lock: a slow SD card must not stall a
+    dashboard request.
     """
 
     # Typical espresso volume, used for the "shots left" estimate.
@@ -49,11 +55,15 @@ class WaterTank:
         self.state_path = os.path.expanduser(state_path) if state_path else None
         self.save_interval = save_interval
 
+        self._lock = threading.Lock()
         self._used_ml = 0.0
         self._baseline_ml: Optional[float] = None
         self._last_total_ml = 0.0
         self._refills = 0
         self._last_save = monotonic()
+        # What is currently on disk, so an unchanged counter is not rewritten.
+        self._saved_used_ml: Optional[float] = None
+        self._saved_refills: Optional[int] = None
 
         self._load()
 
@@ -64,26 +74,30 @@ class WaterTank:
         Args:
             total_ml: Lifetime volume measured by the flow sensor, in ml.
         """
-        if self._baseline_ml is None:
-            self._baseline_ml = total_ml
+        with self._lock:
+            if self._baseline_ml is None:
+                self._baseline_ml = total_ml
 
-        # The lifetime counter only ever grows; if it went backwards the
-        # sensor was reset or the process restarted. Everything it reports from
-        # here on is new water, so offset the baseline by what was already
-        # counted rather than discarding it.
-        if total_ml < self._last_total_ml:
-            self._baseline_ml = -self._used_ml
+            # The lifetime counter only ever grows; if it went backwards the
+            # sensor was reset or the process restarted. Everything it reports
+            # from here on is new water, so offset the baseline by what was
+            # already counted rather than discarding it.
+            if total_ml < self._last_total_ml:
+                self._baseline_ml = -self._used_ml
 
-        self._last_total_ml = total_ml
-        self._used_ml = max(total_ml - self._baseline_ml, 0.0)
+            self._last_total_ml = total_ml
+            self._used_ml = max(total_ml - self._baseline_ml, 0.0)
+            used = self._used_ml
+
         self._maybe_save()
-        return self._used_ml
+        return used
 
     def reset(self) -> None:
         """Mark the tank as refilled: zero the used volume from now on."""
-        self._baseline_ml = self._last_total_ml
-        self._used_ml = 0.0
-        self._refills += 1
+        with self._lock:
+            self._baseline_ml = self._last_total_ml
+            self._used_ml = 0.0
+            self._refills += 1
         self._save()
 
     @property
@@ -118,43 +132,84 @@ class WaterTank:
         return self._refills
 
     def snapshot(self) -> dict:
-        """Serialisable view of the tank for the web API."""
+        """
+        Serialisable view of the tank for the web API.
+
+        Taken under the lock so a reader can never see a half-updated tank —
+        for instance a used volume from before a refill next to a percentage
+        from after it.
+        """
+        with self._lock:
+            used = self._used_ml
+            refills = self._refills
+
+        remaining = max(self.capacity_ml - used, 0.0)
+        percent = 0.0
+        if self.capacity_ml > 0:
+            percent = max(0.0, min(100.0, remaining / self.capacity_ml * 100.0))
+
         return {
             "capacity_ml": round(self.capacity_ml, 1),
-            "used_ml": round(self._used_ml, 1),
-            "remaining_ml": round(self.remaining_ml, 1),
-            "percent": round(self.percent, 1),
-            "low": self.is_low,
-            "empty": self.is_empty,
-            "shots_left": self.shots_left,
-            "refills": self._refills,
+            "used_ml": round(used, 1),
+            "remaining_ml": round(remaining, 1),
+            "percent": round(percent, 1),
+            "low": remaining <= self.capacity_ml * self.low_fraction,
+            "empty": remaining <= 0.0,
+            "shots_left": int(remaining // self.SHOT_ML),
+            "refills": refills,
         }
 
     def _maybe_save(self) -> None:
-        now = monotonic()
-        if now - self._last_save >= self.save_interval:
-            self._save()
+        """Persist at most every save_interval, and only when something moved."""
+        with self._lock:
+            unchanged = (
+                self._used_ml == self._saved_used_ml
+                and self._refills == self._saved_refills
+            )
+            if unchanged or monotonic() - self._last_save < self.save_interval:
+                return
+        self._save()
 
     def _save(self) -> None:
         """Persist the counter, writing atomically so a power cut can't corrupt it."""
-        self._last_save = monotonic()
-        if not self.state_path:
-            return
+        with self._lock:
+            self._last_save = monotonic()
+            if not self.state_path:
+                return
+            used, refills = self._used_ml, self._refills
+            payload = {
+                "used_ml": round(used, 3),
+                "refills": refills,
+                "capacity_ml": self.capacity_ml,
+            }
 
-        payload = {
-            "used_ml": round(self._used_ml, 3),
-            "refills": self._refills,
-            "capacity_ml": self.capacity_ml,
-        }
+        # Written outside the lock: a slow SD card must not block the render
+        # loop or a dashboard request.
         try:
             directory = os.path.dirname(self.state_path) or "."
             os.makedirs(directory, exist_ok=True)
             handle, temp_path = tempfile.mkstemp(dir=directory)
+        except OSError as error:
+            print(f"Could not save water tank state to {self.state_path}: {error}")
+            return
+
+        try:
             with os.fdopen(handle, "w") as file:
                 json.dump(payload, file)
             os.replace(temp_path, self.state_path)
         except OSError as error:
             print(f"Could not save water tank state to {self.state_path}: {error}")
+            # Leaving the temp file behind would litter the directory with one
+            # more on every retry.
+            try:
+                os.unlink(temp_path)
+            except OSError:
+                pass
+            return
+
+        with self._lock:
+            self._saved_used_ml = used
+            self._saved_refills = refills
 
     def _load(self) -> None:
         """Restore the used volume from disk; a missing or bad file starts fresh."""
@@ -164,11 +219,18 @@ class WaterTank:
         try:
             with open(self.state_path) as file:
                 payload = json.load(file)
+            if not isinstance(payload, dict):
+                raise ValueError(f"expected an object, got {type(payload).__name__}")
             self._used_ml = float(payload.get("used_ml", 0.0))
             self._refills = int(payload.get("refills", 0))
         except (OSError, ValueError, TypeError) as error:
             print(f"Ignoring unreadable water tank state {self.state_path}: {error}")
+            self._used_ml = 0.0
+            self._refills = 0
             return
+
+        self._saved_used_ml = self._used_ml
+        self._saved_refills = self._refills
 
         # The flow sensor restarts at zero, so the restored volume becomes the
         # starting offset rather than a baseline against a lifetime total.

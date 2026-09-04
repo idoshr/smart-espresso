@@ -85,13 +85,67 @@ class TestWaterTank(unittest.TestCase):
             self.assertAlmostEqual(restored.used_ml, 650.0)
 
     def test_unreadable_state_file_starts_fresh(self):
+        # Both a file that is not JSON at all and one holding valid JSON of the
+        # wrong shape must leave the tank at zero rather than crash on boot.
+        for content in ("not json", "null", "[]", '{"used_ml": "many"}'):
+            with self.subTest(content=content):
+                with tempfile.TemporaryDirectory() as directory:
+                    path = os.path.join(directory, "tank.json")
+                    with open(path, "w") as file:
+                        file.write(content)
+
+                    tank = WaterTank(state_path=path)
+                    self.assertEqual(tank.used_ml, 0.0)
+                    self.assertEqual(tank.refills, 0)
+
+    def test_unchanged_counter_is_not_rewritten(self):
         with tempfile.TemporaryDirectory() as directory:
             path = os.path.join(directory, "tank.json")
-            with open(path, "w") as file:
-                file.write("not json")
+            tank = WaterTank(state_path=path, save_interval=0.0)
+            tank.update(0.0)
+            tank.update(120.0)
 
-            tank = WaterTank(state_path=path)
-            self.assertEqual(tank.used_ml, 0.0)
+            written_at = os.stat(path).st_mtime_ns
+            for _ in range(50):  # an idle machine: same total, every tick
+                tank.update(120.0)
+
+            self.assertEqual(os.stat(path).st_mtime_ns, written_at)
+            self.assertEqual(len(os.listdir(directory)), 1)  # no leftover temp files
+
+            tank.update(130.0)
+            self.assertNotEqual(os.stat(path).st_mtime_ns, written_at)
+
+    def test_concurrent_reset_and_updates_stay_consistent(self):
+        import threading
+
+        tank = self.tank()
+        tank.update(0.0)
+        stop = threading.Event()
+
+        def feed():
+            total = 0.0
+            while not stop.is_set():
+                total += 1.0
+                tank.update(total)
+
+        writer = threading.Thread(target=feed, daemon=True)
+        writer.start()
+        try:
+            for _ in range(200):
+                tank.reset()
+                snapshot = tank.snapshot()
+                # A snapshot must always describe one moment: the remaining
+                # volume and the percentage cannot disagree.
+                self.assertAlmostEqual(
+                    snapshot["remaining_ml"],
+                    round(snapshot["capacity_ml"] - snapshot["used_ml"], 1),
+                    places=1,
+                )
+        finally:
+            stop.set()
+            writer.join(timeout=2)
+
+        self.assertEqual(tank.refills, 200)
 
     def test_snapshot_shape(self):
         tank = self.tank()

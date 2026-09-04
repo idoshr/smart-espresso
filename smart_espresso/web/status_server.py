@@ -4,7 +4,7 @@ import threading
 from time import monotonic
 from typing import Optional
 
-from flask import Flask, jsonify, send_from_directory
+from flask import Flask, jsonify, request, send_from_directory
 
 from smart_espresso.analog_sensor.pressure_analog_sensor import PressureAnalogSensor
 from smart_espresso.analog_sensor.water_flow_sensor import WaterFlowAnalogSensor
@@ -69,8 +69,6 @@ class StatusServer:
             "pressure": [],
             "flow": [],
             "other": [],
-            "machine": self.classifier.snapshot(),
-            "tank": self.tank.snapshot(),
             "uptime": 0.0,
         }
         # name -> list[(monotonic_time, cumulative_liters)], oldest first
@@ -96,7 +94,17 @@ class StatusServer:
 
         @self.app.route("/api/tank/reset", methods=["POST"])
         def reset_tank():
-            """Called by the dashboard's Filled button after a refill."""
+            """
+            Called by the dashboard's Tank filled button after a refill.
+
+            The dashboard sends X-Espresso-Dashboard; a form or image posted by
+            some other site a phone happens to be visiting cannot set a custom
+            header without a CORS preflight, which this server never grants.
+            That keeps a stray page on the network from zeroing the count.
+            """
+            if request.headers.get("X-Espresso-Dashboard") != "1":
+                return jsonify({"error": "missing dashboard header"}), 403
+
             self.tank.reset()
             return jsonify(self.tank.snapshot())
 
@@ -150,6 +158,8 @@ class StatusServer:
             else:
                 other.append({"name": name, "message": str(sensor.message)})
 
+        # Both keep their own lock, so they are updated outside self._lock:
+        # nesting would drag the tank's disk write into every reader's path.
         self.classifier.update(head_bar, boiler_bar, flow_rate_mls, total_ml)
         self.tank.update(total_ml)
 
@@ -158,8 +168,6 @@ class StatusServer:
                 "pressure": pressure,
                 "flow": flow,
                 "other": other,
-                "machine": self.classifier.snapshot(),
-                "tank": self.tank.snapshot(),
                 "uptime": round(now - self._started_at, 1),
             }
 
@@ -176,8 +184,6 @@ class StatusServer:
                 if sample_time >= cutoff:
                     keep_from = index
                     break
-            else:
-                keep_from = len(history) - 1
             if keep_from > 0:
                 del history[:keep_from]
 
