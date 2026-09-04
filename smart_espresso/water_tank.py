@@ -1,5 +1,6 @@
 """Track how much water was drawn from the tank since it was last filled."""
 import json
+import math
 import os
 import tempfile
 import threading
@@ -56,6 +57,9 @@ class WaterTank:
         self.save_interval = save_interval
 
         self._lock = threading.Lock()
+        # Held for a whole save (read state, write file, mark it saved) so two
+        # savers cannot interleave and let a stale payload land last.
+        self._write_lock = threading.Lock()
         self._used_ml = 0.0
         self._baseline_ml: Optional[float] = None
         self._last_total_ml = 0.0
@@ -74,6 +78,10 @@ class WaterTank:
         Args:
             total_ml: Lifetime volume measured by the flow sensor, in ml.
         """
+        if not math.isfinite(total_ml):
+            print(f"Ignoring non-finite flow total for the water tank: {total_ml}")
+            return self._used_ml
+
         with self._lock:
             if self._baseline_ml is None:
                 self._baseline_ml = total_ml
@@ -100,32 +108,44 @@ class WaterTank:
             self._refills += 1
         self._save()
 
+    def _remaining_ml(self, used: float) -> float:
+        return max(self.capacity_ml - used, 0.0)
+
+    def _percent(self, used: float) -> float:
+        if self.capacity_ml <= 0:
+            return 0.0
+        return max(0.0, min(100.0, self._remaining_ml(used) / self.capacity_ml * 100.0))
+
+    def _is_low(self, used: float) -> bool:
+        return self._remaining_ml(used) <= self.capacity_ml * self.low_fraction
+
+    def _shots_left(self, used: float) -> int:
+        return int(self._remaining_ml(used) // self.SHOT_ML)
+
     @property
     def used_ml(self) -> float:
         return self._used_ml
 
     @property
     def remaining_ml(self) -> float:
-        return max(self.capacity_ml - self._used_ml, 0.0)
+        return self._remaining_ml(self._used_ml)
 
     @property
     def percent(self) -> float:
         """Percentage of the tank still available (0-100)."""
-        if self.capacity_ml <= 0:
-            return 0.0
-        return max(0.0, min(100.0, self.remaining_ml / self.capacity_ml * 100.0))
+        return self._percent(self._used_ml)
 
     @property
     def is_low(self) -> bool:
-        return self.remaining_ml <= self.capacity_ml * self.low_fraction
+        return self._is_low(self._used_ml)
 
     @property
     def is_empty(self) -> bool:
-        return self.remaining_ml <= 0.0
+        return self._remaining_ml(self._used_ml) <= 0.0
 
     @property
     def shots_left(self) -> int:
-        return int(self.remaining_ml // self.SHOT_ML)
+        return self._shots_left(self._used_ml)
 
     @property
     def refills(self) -> int:
@@ -143,19 +163,16 @@ class WaterTank:
             used = self._used_ml
             refills = self._refills
 
-        remaining = max(self.capacity_ml - used, 0.0)
-        percent = 0.0
-        if self.capacity_ml > 0:
-            percent = max(0.0, min(100.0, remaining / self.capacity_ml * 100.0))
-
+        # Everything below is derived from that one reading, so the figures in
+        # a payload always agree with each other.
         return {
             "capacity_ml": round(self.capacity_ml, 1),
             "used_ml": round(used, 1),
-            "remaining_ml": round(remaining, 1),
-            "percent": round(percent, 1),
-            "low": remaining <= self.capacity_ml * self.low_fraction,
-            "empty": remaining <= 0.0,
-            "shots_left": int(remaining // self.SHOT_ML),
+            "remaining_ml": round(self._remaining_ml(used), 1),
+            "percent": round(self._percent(used), 1),
+            "low": self._is_low(used),
+            "empty": self._remaining_ml(used) <= 0.0,
+            "shots_left": self._shots_left(used),
             "refills": refills,
         }
 
@@ -171,45 +188,53 @@ class WaterTank:
         self._save()
 
     def _save(self) -> None:
-        """Persist the counter, writing atomically so a power cut can't corrupt it."""
-        with self._lock:
-            self._last_save = monotonic()
-            if not self.state_path:
-                return
-            used, refills = self._used_ml, self._refills
+        """
+        Persist the counter, writing atomically so a power cut can't corrupt it.
+
+        Savers queue on ``_write_lock`` rather than racing: without it the
+        render loop and a refill on a Flask thread can interleave so the older
+        payload lands last, and a later power cut restores a count from before
+        the refill. The file write still happens outside ``_lock``, so SD card
+        latency cannot stall the render loop or a dashboard request.
+        """
+        with self._write_lock:
+            with self._lock:
+                self._last_save = monotonic()
+                if not self.state_path:
+                    return
+                used, refills = self._used_ml, self._refills
+
             payload = {
                 "used_ml": round(used, 3),
                 "refills": refills,
                 "capacity_ml": self.capacity_ml,
             }
 
-        # Written outside the lock: a slow SD card must not block the render
-        # loop or a dashboard request.
-        try:
-            directory = os.path.dirname(self.state_path) or "."
-            os.makedirs(directory, exist_ok=True)
-            handle, temp_path = tempfile.mkstemp(dir=directory)
-        except OSError as error:
-            print(f"Could not save water tank state to {self.state_path}: {error}")
-            return
-
-        try:
-            with os.fdopen(handle, "w") as file:
-                json.dump(payload, file)
-            os.replace(temp_path, self.state_path)
-        except OSError as error:
-            print(f"Could not save water tank state to {self.state_path}: {error}")
-            # Leaving the temp file behind would litter the directory with one
-            # more on every retry.
             try:
-                os.unlink(temp_path)
-            except OSError:
-                pass
-            return
+                directory = os.path.dirname(self.state_path) or "."
+                os.makedirs(directory, exist_ok=True)
+                handle, temp_path = tempfile.mkstemp(dir=directory)
+            except OSError as error:
+                print(f"Could not save water tank state to {self.state_path}: {error}")
+                return
 
-        with self._lock:
-            self._saved_used_ml = used
-            self._saved_refills = refills
+            try:
+                with os.fdopen(handle, "w") as file:
+                    json.dump(payload, file)
+                os.replace(temp_path, self.state_path)
+            except OSError as error:
+                print(f"Could not save water tank state to {self.state_path}: {error}")
+                # Leaving the temp file behind would litter the directory with
+                # one more on every retry.
+                try:
+                    os.unlink(temp_path)
+                except OSError:
+                    pass
+                return
+
+            with self._lock:
+                self._saved_used_ml = used
+                self._saved_refills = refills
 
     def _load(self) -> None:
         """Restore the used volume from disk; a missing or bad file starts fresh."""
@@ -221,7 +246,12 @@ class WaterTank:
                 payload = json.load(file)
             if not isinstance(payload, dict):
                 raise ValueError(f"expected an object, got {type(payload).__name__}")
-            self._used_ml = float(payload.get("used_ml", 0.0))
+            used = float(payload.get("used_ml", 0.0))
+            # json accepts NaN and Infinity; either would poison every later
+            # calculation, so treat them like any other unreadable file.
+            if not math.isfinite(used):
+                raise ValueError(f"used_ml is not a finite number: {used}")
+            self._used_ml = used
             self._refills = int(payload.get("refills", 0))
         except (OSError, ValueError, TypeError) as error:
             print(f"Ignoring unreadable water tank state {self.state_path}: {error}")

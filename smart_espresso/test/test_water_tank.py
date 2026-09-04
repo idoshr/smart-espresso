@@ -61,6 +61,17 @@ class TestWaterTank(unittest.TestCase):
 
         self.assertAlmostEqual(tank.used_ml, 405.0)
 
+    def test_non_finite_reading_is_ignored(self):
+        tank = self.tank()
+        tank.update(0.0)
+        tank.update(300.0)
+
+        tank.update(float("nan"))
+        tank.update(float("inf"))
+
+        self.assertAlmostEqual(tank.used_ml, 300.0)
+        self.assertEqual(tank.snapshot()["shots_left"], int(1700 // WaterTank.SHOT_ML))
+
     def test_shots_left_estimate(self):
         tank = self.tank()
         tank.update(0.0)
@@ -87,7 +98,14 @@ class TestWaterTank(unittest.TestCase):
     def test_unreadable_state_file_starts_fresh(self):
         # Both a file that is not JSON at all and one holding valid JSON of the
         # wrong shape must leave the tank at zero rather than crash on boot.
-        for content in ("not json", "null", "[]", '{"used_ml": "many"}'):
+        for content in (
+            "not json",
+            "null",
+            "[]",
+            '{"used_ml": "many"}',
+            '{"used_ml": NaN}',       # json writes and reads these by default
+            '{"used_ml": Infinity}',
+        ):
             with self.subTest(content=content):
                 with tempfile.TemporaryDirectory() as directory:
                     path = os.path.join(directory, "tank.json")
@@ -105,15 +123,17 @@ class TestWaterTank(unittest.TestCase):
             tank.update(0.0)
             tank.update(120.0)
 
-            written_at = os.stat(path).st_mtime_ns
+            # Pin the timestamp: file mtimes are too coarse to tell two
+            # writes microseconds apart from one another.
+            os.utime(path, (0, 0))
             for _ in range(50):  # an idle machine: same total, every tick
                 tank.update(120.0)
 
-            self.assertEqual(os.stat(path).st_mtime_ns, written_at)
+            self.assertEqual(os.stat(path).st_mtime_ns, 0)
             self.assertEqual(len(os.listdir(directory)), 1)  # no leftover temp files
 
             tank.update(130.0)
-            self.assertNotEqual(os.stat(path).st_mtime_ns, written_at)
+            self.assertNotEqual(os.stat(path).st_mtime_ns, 0)
 
     def test_concurrent_reset_and_updates_stay_consistent(self):
         import threading

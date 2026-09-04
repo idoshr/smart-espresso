@@ -226,21 +226,25 @@ class MachineStateClassifier:
 
     @property
     def label(self) -> str:
-        return MachineState.LABELS[self.state]
+        with self._lock:
+            return MachineState.LABELS[self.state]
 
     @property
     def severity(self) -> str:
-        return MachineState.SEVERITY[self.state]
+        with self._lock:
+            return MachineState.SEVERITY[self.state]
 
     @property
     def since_seconds(self) -> float:
         """Seconds the machine has been in the current state."""
-        return monotonic() - self._state_since
+        with self._lock:
+            return monotonic() - self._state_since
 
     @property
     def boiler_rate(self) -> float:
         """Smoothed boiler pressure change in bar per second."""
-        return self._boiler_rate
+        with self._lock:
+            return self._boiler_rate
 
     def snapshot(self) -> dict:
         """
