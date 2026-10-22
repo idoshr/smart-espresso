@@ -1,6 +1,8 @@
+import threading
+
+import adafruit_ads1x15.ads1115 as ADS
 import board
 import busio
-import adafruit_ads1x15.ads1115 as ADS
 from adafruit_ads1x15.analog_in import AnalogIn
 
 from smart_espresso.analog_sensor.analog_sensor import ADCInterface
@@ -22,6 +24,12 @@ class ADS1115ADC(ADCInterface):
         i2c_address: I2C address of the ADS1115 (default=0x48)
     """
 
+    # One ADS1115 per address is shared by every channel; this lock
+    # serialises conversions across threads (the flow sensor samples on a
+    # background thread) because the I2C device and its scratch buffer
+    # are not safe to use concurrently.
+    _bus_lock = threading.Lock()
+
     # Class-level I2C and ADS1115 instances to share across sensors
     _i2c = None
     _ads_instances = {}
@@ -41,20 +49,13 @@ class ADS1115ADC(ADCInterface):
         # Get or create ADS1115 instance for this address
         if i2c_address not in ADS1115ADC._ads_instances:
             ADS1115ADC._ads_instances[i2c_address] = ADS.ADS1115(
-                ADS1115ADC._i2c,
-                address=i2c_address,
-                gain=gain
+                ADS1115ADC._i2c, address=i2c_address, gain=gain
             )
 
         self.ads = ADS1115ADC._ads_instances[i2c_address]
 
         # Map pin number to ADS1115 channel
-        channel_map = {
-            0: ADS.P0,
-            1: ADS.P1,
-            2: ADS.P2,
-            3: ADS.P3
-        }
+        channel_map = {0: ADS.P0, 1: ADS.P1, 2: ADS.P2, 3: ADS.P3}
 
         # Create analog input channel
         self.channel = AnalogIn(self.ads, channel_map[pin])
@@ -69,23 +70,38 @@ class ADS1115ADC(ADCInterface):
         # conversion (each ADS1115 conversion takes ~8ms).
         self._cached_voltage = None
 
+    def _locked_voltage(self) -> float:
+        """Read the channel voltage, applying this channel's gain first.
+
+        The ADS1115 instance is shared per I2C address, so without this the
+        first channel's gain would silently win for every channel on the
+        device: the driver builds its conversion config from the current
+        ``gain`` attribute at read time.
+        """
+        self.ads.gain = self.gain
+        return self.channel.voltage
+
     def read(self):
         """
         Read the normalized value from the ADS1115.
         Returns a value between 0.0 and 1.0 normalized to the voltage range.
         For gain=1 (±4.096V range), 5V sensor will read close to 1.0 at max.
         """
-        self._cached_voltage = self.channel.voltage
+        with ADS1115ADC._bus_lock:
+            self._cached_voltage = self._locked_voltage()
         return min(self._cached_voltage / self.max_voltage, 1.0)  # Cap at 1.0
 
     @property
     def voltage(self):
         """Get the voltage from the most recent read(); triggers a hardware read on first use."""
         if self._cached_voltage is None:
-            self._cached_voltage = self.channel.voltage
+            with ADS1115ADC._bus_lock:
+                self._cached_voltage = self._locked_voltage()
         return self._cached_voltage
 
     @property
     def raw_value(self):
         """Get the raw ADC value (16-bit)."""
-        return self.channel.value
+        with ADS1115ADC._bus_lock:
+            self.ads.gain = self.gain
+            return self.channel.value

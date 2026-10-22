@@ -4,8 +4,8 @@ from homeassistant_api import Client
 from luma.core.interface.serial import i2c
 from luma.oled.device import sh1106
 
-from smart_espresso.analog_sensor.mcp3008_analog_sensor import MCP3008ADC
 from smart_espresso.analog_sensor.ads1115_analog_sensor import ADS1115ADC
+from smart_espresso.analog_sensor.mcp3008_analog_sensor import MCP3008ADC
 from smart_espresso.analog_sensor.pressure_analog_sensor import PressureAnalogSensor
 from smart_espresso.analog_sensor.water_flow_sensor import WaterFlowAnalogSensor
 from smart_espresso.smart_espresso import SmartEspresso
@@ -50,10 +50,28 @@ if WEB_ENABLE:
     )
 
 
+# Optional DHT22 / AM2302 ambient temperature & humidity sensor (GPIO).
+# Skipped gracefully when the library is missing so the machine keeps running.
+DHT_ENABLE = strtobool(os.environ.get("DHT_ENABLE") or True)
+DHT_PIN = int(os.environ.get("DHT_PIN") or 4)
+digital_sensors = []
+if DHT_ENABLE:
+    try:
+        from smart_espresso.analog_sensor.dht22_sensor import DHT22Sensor
+
+        digital_sensors.append(DHT22Sensor(pin=DHT_PIN, name="Environment"))
+    except ImportError as error:
+        print(f"DHT22 disabled: {error}")
+
+
 if __name__ == "__main__":
     # Choose your ADC type: "MCP3008" or "ADS1115"
     # Set via environment variable or change here
     ADC_TYPE = os.environ.get("ADC_TYPE", "ADS1115")
+
+    # How often the flow sensor's background thread samples the ADC. The
+    # render loop alone (10 Hz) misses espresso-rate pulses (~20-30 Hz).
+    FLOW_SAMPLE_INTERVAL = float(os.environ.get("FLOW_SAMPLE_INTERVAL") or 0.01)
 
     if ADC_TYPE == "ADS1115":
         # ADS1115 configuration (16-bit ADC, I2C interface)
@@ -61,18 +79,19 @@ if __name__ == "__main__":
         # or gain=1 (±4.096V range)
         analog_devices = [
             PressureAnalogSensor(
-                adc=ADS1115ADC(pin=0, gain=2/3),
+                adc=ADS1115ADC(pin=0, gain=2 / 3),
                 name="Head",
-                max_pressure_mpa=2.0  # 0-2MPa sensor for brew head (0-20 bar)
+                max_pressure_mpa=2.0,  # 0-2MPa sensor for brew head (0-20 bar)
             ),  # Head Pressure on ADS1115 channel A0
             PressureAnalogSensor(
-                adc=ADS1115ADC(pin=1, gain=2/3),
+                adc=ADS1115ADC(pin=1, gain=2 / 3),
                 name="Boiler",
-                max_pressure_mpa=0.5  # 0-0.5MPa sensor for boiler (0-5 bar)
+                max_pressure_mpa=0.5,  # 0-0.5MPa sensor for boiler (0-5 bar)
             ),  # Boiler Pressure on ADS1115 channel A1
             WaterFlowAnalogSensor(
                 adc=ADS1115ADC(pin=2, gain=1),
                 name="Brew",
+                sample_interval=FLOW_SAMPLE_INTERVAL,
             ),  # Water flow (hall-effect pulse) on ADS1115 channel A2 (3rd port)
         ]
     else:
@@ -81,21 +100,23 @@ if __name__ == "__main__":
             PressureAnalogSensor(
                 adc=MCP3008ADC(pin=0),
                 name="Head",
-                max_pressure_mpa=2.0  # 0-2MPa sensor for brew head (0-20 bar)
+                max_pressure_mpa=2.0,  # 0-2MPa sensor for brew head (0-20 bar)
             ),  # Head Pressure
             PressureAnalogSensor(
                 adc=MCP3008ADC(pin=1),
                 name="Boiler",
-                max_pressure_mpa=0.5  # 0-0.5MPa sensor for boiler (0-5 bar)
+                max_pressure_mpa=0.5,  # 0-0.5MPa sensor for boiler (0-5 bar)
             ),  # Boiler Pressure
             WaterFlowAnalogSensor(
                 adc=MCP3008ADC(pin=2),
                 name="Brew",
+                sample_interval=FLOW_SAMPLE_INTERVAL,
             ),  # Water flow (hall-effect pulse) on MCP3008 channel CH2
         ]
 
     se = SmartEspresso(
         analog_devices=analog_devices,
+        digital_sensors=digital_sensors,
         client_ha=client_ha,
         display=display,
         web_server=web_server,

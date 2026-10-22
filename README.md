@@ -119,7 +119,18 @@ export WEB_PORT="8080"
 
 export WATER_TANK_ML="2000"        # Tank size, default 2 L
 export WATER_TANK_STATE="~/.smart_espresso/water_tank.json"
+
+export DHT_ENABLE="True"          # Ambient DHT22/AM2302 sensor (GPIO)
+export DHT_PIN="4"                # BCM pin number for the DHT22
+
+export FLOW_SAMPLE_INTERVAL="0.01"  # Flow pulse sampling period, seconds
 ```
+
+The flow sensor's pulse polarity is detected automatically: sensors that
+idle low (pulses rise) and open-collector sensors that idle high (pulses
+drop) are both counted. The default `FLOW_SAMPLE_INTERVAL` samples at
+~100 Hz on a background thread, which captures espresso-rate pulse trains
+(~20-30 Hz); the render loop's 10 Hz alone would undersample them.
 
 ### Generating Home Assistant API Token
 

@@ -1,3 +1,4 @@
+import time
 import unittest
 
 from smart_espresso.analog_sensor.analog_sensor import ADCInterface
@@ -47,6 +48,68 @@ class TestWaterFlowAnalogSensor(unittest.TestCase):
 
         # Only two genuine low->high crossings, despite the mid-band wobble.
         self.assertEqual(sensor.pulses, 2)
+
+    def test_inverted_sensor_counts_falling_edges(self):
+        # An idle-high (open-collector + pull-up) sensor pulses low.
+        voltages = [3.0, 0.0, 3.0, 0.0, 3.0]
+        sensor = WaterFlowAnalogSensor(
+            adc=FakeADC(voltages), name="Brew", pulses_per_liter=100
+        )
+        for _ in voltages:
+            sensor.read()
+
+        self.assertEqual(sensor.pulses, 2)
+        self.assertAlmostEqual(sensor.liter, 0.02)
+
+    def test_idle_high_startup_counts_no_phantom_pulse(self):
+        # Latching the idle level must not count as a pulse.
+        sensor = WaterFlowAnalogSensor(
+            adc=FakeADC([3.0, 3.0, 3.0, 3.0]), name="Brew", pulses_per_liter=100
+        )
+        for _ in range(4):
+            sensor.read()
+
+        self.assertEqual(sensor.pulses, 0)
+
+    def test_reset_keeps_the_polarity_latch(self):
+        # Re-syncing after a reset would count the idle level as a pulse.
+        sensor = WaterFlowAnalogSensor(
+            adc=FakeADC([3.0, 0.0, 3.0]), name="Brew", pulses_per_liter=100
+        )
+        for _ in range(3):
+            sensor.read()
+        self.assertEqual(sensor.pulses, 1)
+
+        sensor.reset()
+        sensor.read()  # idle-high again: must not count
+        self.assertEqual(sensor.pulses, 0)
+
+    def test_threaded_read_returns_a_float_immediately(self):
+        # The warm-up sample in __init__ fills the cache, so even with a long
+        # interval (thread never fires during the test) read() is never None.
+        sensor = WaterFlowAnalogSensor(
+            adc=FakeADC([1.5]),
+            name="Brew",
+            pulses_per_liter=100,
+            sample_interval=60.0,
+        )
+        self.addCleanup(sensor.stop)
+
+        self.assertAlmostEqual(sensor.read(), 1.5 / 3.3)
+
+    def test_background_sampler_counts_pulses(self):
+        sensor = WaterFlowAnalogSensor(
+            adc=FakeADC([0.0, 3.0, 0.0, 3.0, 0.0, 3.0, 0.0]),
+            name="Brew",
+            pulses_per_liter=100,
+            sample_interval=0.001,
+        )
+        self.addCleanup(sensor.stop)
+
+        deadline = time.monotonic() + 5.0
+        while sensor.pulses < 3 and time.monotonic() < deadline:
+            time.sleep(0.01)
+        self.assertEqual(sensor.pulses, 3)
 
     def test_reset_zeroes_volume(self):
         sensor = WaterFlowAnalogSensor(
