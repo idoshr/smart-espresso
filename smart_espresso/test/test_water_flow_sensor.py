@@ -84,6 +84,19 @@ class TestWaterFlowAnalogSensor(unittest.TestCase):
         sensor.read()  # idle-high again: must not count
         self.assertEqual(sensor.pulses, 0)
 
+    def test_threaded_read_returns_a_float_immediately(self):
+        # The warm-up sample in __init__ fills the cache, so even with a long
+        # interval (thread never fires during the test) read() is never None.
+        sensor = WaterFlowAnalogSensor(
+            adc=FakeADC([1.5]),
+            name="Brew",
+            pulses_per_liter=100,
+            sample_interval=60.0,
+        )
+        self.addCleanup(sensor.stop)
+
+        self.assertAlmostEqual(sensor.read(), 1.5 / 3.3)
+
     def test_background_sampler_counts_pulses(self):
         sensor = WaterFlowAnalogSensor(
             adc=FakeADC([0.0, 3.0, 0.0, 3.0, 0.0, 3.0, 0.0]),

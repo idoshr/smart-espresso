@@ -98,6 +98,13 @@ class WaterFlowAnalogSensor(AnalogSensor):
         self._stop_event = Event()
         self._thread = None
         if sample_interval is not None:
+            # Warm the cache so the first read() returns a float; a
+            # disconnected harness must not break construction — the
+            # sampler thread keeps retrying and reports failures itself.
+            try:
+                self._sample()
+            except Exception:
+                pass
             self._thread = Thread(target=self._sample_loop, daemon=True)
             self._thread.start()
 
