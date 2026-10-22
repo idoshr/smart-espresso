@@ -62,7 +62,9 @@ class TestStatusServer(unittest.TestCase):
         # module-level `monotonic` import.
         self.patchers = [
             mock.patch("smart_espresso.web.status_server.monotonic", self.clock),
-            mock.patch("smart_espresso.analog_sensor.water_flow_sensor.monotonic", self.clock),
+            mock.patch(
+                "smart_espresso.analog_sensor.water_flow_sensor.monotonic", self.clock
+            ),
         ]
         for patcher in self.patchers:
             patcher.start()
@@ -79,9 +81,7 @@ class TestStatusServer(unittest.TestCase):
         self.server.update([self.flow])
 
     def test_pressure_snapshot_exposes_bar_and_range(self):
-        head = PressureAnalogSensor(
-            adc=FakeADC(2.5), name="Head", max_pressure_mpa=2.0
-        )
+        head = PressureAnalogSensor(adc=FakeADC(2.5), name="Head", max_pressure_mpa=2.0)
         self.server.update([head])
 
         entry = self.server.status_payload()["pressure"][0]
@@ -145,30 +145,30 @@ class TestStatusServer(unittest.TestCase):
 
     def test_payload_carries_machine_state_and_tank(self):
         head = PressureAnalogSensor(adc=FakeADC(2.5), name="Head", max_pressure_mpa=2.0)
-        boiler = PressureAnalogSensor(adc=FakeADC(1.46), name="Boiler", max_pressure_mpa=0.5)
+        boiler = PressureAnalogSensor(
+            adc=FakeADC(1.46), name="Boiler", max_pressure_mpa=0.5
+        )
         pulse(self.flow, self.flow_adc, self.clock, 20, server=self.server)
         self.server.update([head, boiler, self.flow])
 
-        # The tank counts from the first sample it saw, so the pulse already
-        # banked when the baseline was taken is not charged to the tank.
+        # The idle level is latched without counting a pulse, so the tank's
+        # baseline lands before the first pulse and every pulse is charged.
         payload = self.server.status_payload()
         self.assertEqual(payload["machine"]["state"], "brewing")
-        self.assertAlmostEqual(payload["tank"]["used_ml"], 190.0, places=1)
-        self.assertAlmostEqual(payload["tank"]["remaining_ml"], 1810.0, places=1)
+        self.assertAlmostEqual(payload["tank"]["used_ml"], 200.0, places=1)
+        self.assertAlmostEqual(payload["tank"]["remaining_ml"], 1800.0, places=1)
 
     def test_tank_reset_endpoint_zeroes_the_count(self):
         pulse(self.flow, self.flow_adc, self.clock, 20, server=self.server)
-        self.assertAlmostEqual(self.server.tank.used_ml, 190.0, places=1)
+        self.assertAlmostEqual(self.server.tank.used_ml, 200.0, places=1)
 
         client = self.server.app.test_client()
 
         # A cross-site post cannot set the dashboard header, so it is refused.
         self.assertEqual(client.post("/api/tank/reset").status_code, 403)
-        self.assertAlmostEqual(self.server.tank.used_ml, 190.0, places=1)
+        self.assertAlmostEqual(self.server.tank.used_ml, 200.0, places=1)
 
-        response = client.post(
-            "/api/tank/reset", headers={"X-Espresso-Dashboard": "1"}
-        )
+        response = client.post("/api/tank/reset", headers={"X-Espresso-Dashboard": "1"})
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.get_json()["used_ml"], 0.0)
         self.assertEqual(response.get_json()["refills"], 1)

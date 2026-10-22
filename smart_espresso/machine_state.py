@@ -47,6 +47,8 @@ class MachineStateClassifier:
 
     * water moving through the group (flow above ``brew_flow_mls``) or the head
       under pressure (above ``brew_head_bar``) means a shot is being pulled;
+    * head pressure *without any flow* for ``max_flowless_brew_seconds`` is a
+      stuck or disconnected sensor, not a shot, and falls back to UNKNOWN;
     * a boiler that is not just low but *dropping fast* means steam is being
       drawn, which is what separates steaming from a cold-start heat-up;
     * boiler below ``ready_min_bar`` is heating, above ``ready_max_bar`` is an
@@ -69,8 +71,12 @@ class MachineStateClassifier:
     # Steam boiler idle band for a heat-exchanger machine.
     READY_MIN_BAR = 0.8
     READY_MAX_BAR = 1.6
-    # Boiler pressure falling this fast (bar/second) means steam is being used.
+    # Steam boiler pressure falling this fast (bar/second) means steam is
+    # being drawn.
     STEAM_DROP_BAR_PER_S = 0.02
+    # Head pressure alone, with no flow for this long, is a stuck or
+    # disconnected sensor, not a shot: no real pull lasts 5 minutes.
+    MAX_FLOWLESS_BREW_SECONDS = 300.0
 
     def __init__(
         self,
@@ -81,6 +87,7 @@ class MachineStateClassifier:
         ready_max_bar: float = READY_MAX_BAR,
         steam_drop_bar_per_s: float = STEAM_DROP_BAR_PER_S,
         dwell_seconds: float = 0.8,
+        max_flowless_brew_seconds: float = MAX_FLOWLESS_BREW_SECONDS,
     ):
         """
         Initialize the classifier.
@@ -94,6 +101,9 @@ class MachineStateClassifier:
             steam_drop_bar_per_s: Boiler fall rate that indicates steam use.
             dwell_seconds: How long a candidate state must hold before it is
                 published, to suppress flicker from noisy samples.
+            max_flowless_brew_seconds: How long head pressure alone (no
+                flow) may read as brewing before it is treated as a sensor
+                fault and the state falls back to UNKNOWN.
         """
         self.off_bar = off_bar
         self.brew_head_bar = brew_head_bar
@@ -102,6 +112,7 @@ class MachineStateClassifier:
         self.ready_max_bar = ready_max_bar
         self.steam_drop_bar_per_s = steam_drop_bar_per_s
         self.dwell_seconds = dwell_seconds
+        self.max_flowless_brew_seconds = max_flowless_brew_seconds
 
         self._lock = threading.Lock()
         self.state: str = MachineState.UNKNOWN
@@ -112,6 +123,9 @@ class MachineStateClassifier:
         self._last_boiler: Optional[float] = None
         self._last_boiler_time: Optional[float] = None
         self._boiler_rate: float = 0.0
+
+        # When head-only brewing started, to detect a stuck sensor.
+        self._flowless_since: Optional[float] = None
 
         self._shot_start: Optional[float] = None
         self._shot_start_ml: float = 0.0
@@ -138,7 +152,7 @@ class MachineStateClassifier:
         now = monotonic()
         with self._lock:
             self._update_boiler_rate(boiler_bar, now)
-            candidate = self._classify(head_bar, boiler_bar, flow_mls)
+            candidate = self._classify(head_bar, boiler_bar, flow_mls, now)
 
             if candidate != self._candidate:
                 self._candidate = candidate
@@ -178,15 +192,30 @@ class MachineStateClassifier:
             self._last_boiler_time = now
 
     def _classify(
-        self, head_bar: Optional[float], boiler_bar: Optional[float], flow_mls: float
+        self,
+        head_bar: Optional[float],
+        boiler_bar: Optional[float],
+        flow_mls: float,
+        now: float,
     ) -> str:
         if head_bar is None and boiler_bar is None:
             return MachineState.UNKNOWN
 
-        if flow_mls >= self.brew_flow_mls or (
-            head_bar is not None and head_bar >= self.brew_head_bar
-        ):
+        if flow_mls >= self.brew_flow_mls:
+            self._flowless_since = None
             return MachineState.BREWING
+
+        if head_bar is not None and head_bar >= self.brew_head_bar:
+            # Water is blocked by the puck, so head pressure alone still
+            # means a shot — but only for so long: a stuck or disconnected
+            # sensor would hold this branch forever with no water moving.
+            if self._flowless_since is None:
+                self._flowless_since = now
+            elif now - self._flowless_since >= self.max_flowless_brew_seconds:
+                return MachineState.UNKNOWN
+            return MachineState.BREWING
+
+        self._flowless_since = None
 
         if boiler_bar is None:
             return MachineState.READY

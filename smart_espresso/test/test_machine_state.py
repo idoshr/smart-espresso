@@ -48,6 +48,35 @@ class TestMachineStateClassifier(unittest.TestCase):
         self.settle(0.0, 1.2)
         self.assertEqual(self.classifier.update(9.1, 1.2), MachineState.BREWING)
 
+    def test_flowless_head_pressure_falls_back_to_unknown(self):
+        # A stuck sensor holds head pressure forever; no real shot does.
+        self.settle(0.0, 1.2)
+        self.assertEqual(self.classifier.update(9.1, 1.2), MachineState.BREWING)
+
+        self.clock.advance(301.0)
+        self.classifier.update(9.1, 1.2)  # candidate flips to UNKNOWN
+        self.clock.advance(2.0)  # dwell so UNKNOWN is published
+        self.assertEqual(self.classifier.update(9.1, 1.2), MachineState.UNKNOWN)
+
+    def test_classifier_recovers_after_the_sensor_fault_clears(self):
+        self.settle(0.0, 1.2)
+        self.classifier.update(9.1, 1.2)
+        self.clock.advance(301.0)
+        self.classifier.update(9.1, 1.2)
+        self.clock.advance(2.0)
+        self.assertEqual(self.classifier.update(9.1, 1.2), MachineState.UNKNOWN)
+
+        # Sensor unplugged / pressure released: back to the ready band.
+        self.clock.advance(1.0)
+        self.assertEqual(self.settle(0.0, 1.2), MachineState.READY)
+
+    def test_brewing_with_flow_never_falls_back_to_unknown(self):
+        self.settle(0.0, 1.2)
+        for _ in range(320):
+            self.clock.advance(1.0)
+            self.classifier.update(9.0, 1.2, flow_mls=1.4, total_ml=0.0)
+        self.assertEqual(self.classifier.state, MachineState.BREWING)
+
     def test_brewing_on_flow_alone(self):
         self.settle(0.0, 1.2)
         self.assertEqual(
