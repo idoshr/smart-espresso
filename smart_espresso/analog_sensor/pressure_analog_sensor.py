@@ -21,7 +21,18 @@ class PressureAnalogSensor(AnalogSensor):
     SENSOR_MAX_VOLTAGE = 4.5
     SENSOR_VOLTAGE_RANGE = SENSOR_MAX_VOLTAGE - SENSOR_MIN_VOLTAGE  # 4.0V
 
-    def __init__(self, adc: ADCInterface, name: str, max_pressure_mpa: float):
+    # How many consecutive below-zero samples must be seen before the
+    # auto-calibration moves the offset. A single noise glitch must not
+    # count, otherwise one spike permanently skews every later reading.
+    CALIBRATION_CONFIRM_SAMPLES = 5
+
+    def __init__(
+        self,
+        adc: ADCInterface,
+        name: str,
+        max_pressure_mpa: float,
+        calibration_samples: int = CALIBRATION_CONFIRM_SAMPLES,
+    ):
         """
         Initialize pressure sensor.
 
@@ -30,10 +41,42 @@ class PressureAnalogSensor(AnalogSensor):
             name: Name of the sensor (e.g., "Head", "Boiler")
             max_pressure_mpa: Maximum pressure rating of the sensor in MPa
                             (e.g., 2.0 for 0-2MPa sensor, 0.5 for 0-0.5MPa sensor)
+            calibration_samples: Consecutive low samples required before the
+                                 zero offset is re-calibrated.
         """
         super().__init__(adc, name)
         self.max_pressure_mpa = max_pressure_mpa
         self.offset_voltage = 0.0  # Auto-calibrated offset for fine-tuning
+        self.calibration_samples = calibration_samples
+        self._low_streak = 0
+
+    def read(self):
+        """Read the ADC and update the zero offset from confirmed samples only."""
+        value = super().read()
+        self._auto_calibrate(self.adc.voltage)
+        return value
+
+    def _auto_calibrate(self, voltage: float) -> None:
+        """Track the zero-pressure offset, ignoring noise glitches.
+
+        The offset may only move after ``calibration_samples`` consecutive
+        below-zero readings — a sustained drift, not a spike. Moving it on a
+        single glitched sample would add a phantom baseline (with the -0.1V
+        cap, up to +0.5 Bar on a 0-2MPa sensor) to every later reading.
+        """
+        if voltage < self.SENSOR_MIN_VOLTAGE + self.offset_voltage:
+            self._low_streak += 1
+            if self._low_streak >= self.calibration_samples:
+                new_offset = max(voltage - self.SENSOR_MIN_VOLTAGE, -0.1)
+                if new_offset < self.offset_voltage:
+                    self.offset_voltage = new_offset
+                    print(
+                        f"{self.name} - Calibrating offset: "
+                        f"{self.offset_voltage:.4f}V (voltage: {voltage:.4f}V)"
+                    )
+                self._low_streak = 0
+        else:
+            self._low_streak = 0
 
     @property
     def mpa(self):
@@ -50,13 +93,6 @@ class PressureAnalogSensor(AnalogSensor):
         4. Multiply by sensor's max pressure rating
         """
         voltage = self.adc.voltage
-
-        # Auto-calibrate offset: track lowest voltage reading for fine-tuning
-        if voltage < (self.SENSOR_MIN_VOLTAGE + self.offset_voltage):
-            self.offset_voltage = voltage - self.SENSOR_MIN_VOLTAGE
-            if self.offset_voltage < -0.1:  # Cap at -0.1V to prevent bad calibration
-                self.offset_voltage = -0.1
-            print(f"{self.name} - Calibrating offset: {self.offset_voltage:.4f}V (voltage: {voltage:.4f}V)")
 
         # Calculate pressure from voltage
         # voltage_adjusted = actual voltage - sensor's zero voltage - calibration offset

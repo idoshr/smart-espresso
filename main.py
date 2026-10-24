@@ -5,6 +5,7 @@ from luma.core.interface.serial import i2c
 from luma.oled.device import sh1106
 
 from smart_espresso.analog_sensor.ads1115_analog_sensor import ADS1115ADC
+from smart_espresso.analog_sensor.analog_sensor import MedianFilterADC
 from smart_espresso.analog_sensor.mcp3008_analog_sensor import MCP3008ADC
 from smart_espresso.analog_sensor.pressure_analog_sensor import PressureAnalogSensor
 from smart_espresso.analog_sensor.water_flow_sensor import WaterFlowAnalogSensor
@@ -79,17 +80,17 @@ if __name__ == "__main__":
         # or gain=1 (±4.096V range)
         analog_devices = [
             PressureAnalogSensor(
-                adc=ADS1115ADC(pin=0, gain=2 / 3),
+                adc=MedianFilterADC(ADS1115ADC(pin=0, gain=2 / 3)),
                 name="Head",
                 max_pressure_mpa=2.0,  # 0-2MPa sensor for brew head (0-20 bar)
             ),  # Head Pressure on ADS1115 channel A0
             PressureAnalogSensor(
-                adc=ADS1115ADC(pin=1, gain=2 / 3),
+                adc=MedianFilterADC(ADS1115ADC(pin=1, gain=2 / 3)),
                 name="Boiler",
                 max_pressure_mpa=0.5,  # 0-0.5MPa sensor for boiler (0-5 bar)
             ),  # Boiler Pressure on ADS1115 channel A1
             WaterFlowAnalogSensor(
-                adc=ADS1115ADC(pin=2, gain=1),
+                adc=MedianFilterADC(ADS1115ADC(pin=2, gain=1)),
                 name="Brew",
                 sample_interval=FLOW_SAMPLE_INTERVAL,
             ),  # Water flow (hall-effect pulse) on ADS1115 channel A2 (3rd port)
@@ -98,17 +99,17 @@ if __name__ == "__main__":
         # MCP3008 configuration (10-bit ADC, SPI interface)
         analog_devices = [
             PressureAnalogSensor(
-                adc=MCP3008ADC(pin=0),
+                adc=MedianFilterADC(MCP3008ADC(pin=0)),
                 name="Head",
                 max_pressure_mpa=2.0,  # 0-2MPa sensor for brew head (0-20 bar)
             ),  # Head Pressure
             PressureAnalogSensor(
-                adc=MCP3008ADC(pin=1),
+                adc=MedianFilterADC(MCP3008ADC(pin=1)),
                 name="Boiler",
                 max_pressure_mpa=0.5,  # 0-0.5MPa sensor for boiler (0-5 bar)
             ),  # Boiler Pressure
             WaterFlowAnalogSensor(
-                adc=MCP3008ADC(pin=2),
+                adc=MedianFilterADC(MCP3008ADC(pin=2)),
                 name="Brew",
                 sample_interval=FLOW_SAMPLE_INTERVAL,
             ),  # Water flow (hall-effect pulse) on MCP3008 channel CH2
