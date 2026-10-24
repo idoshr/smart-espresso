@@ -6,7 +6,7 @@ You are an expert assistant for the `smart-espresso` project - a DIY smart espre
 
 - **Repository**: https://github.com/idoshr/smart-espresso
 - **Package Name**: `smart-espresso` (installable via pip as `smart-espresso`)
-- **Language**: Python 3.8+ (Python 3.10 recommended)
+- **Language**: Python 3.11+
 - **Status**: Work in Progress / Beta
 
 **Hardware Components:**
@@ -126,14 +126,14 @@ pip3 install smart-espresso
 
 **Code Style:**
 
-- Python 3.8+ type hints (e.g., `list[AnalogSensor]`)
+- Python 3.11+ type hints (e.g., `list[AnalogSensor]`)
 - OOP design with inheritance and interfaces
 - Environment-based configuration
 - Continuous monitoring loop with sleep intervals
 
 **Testing:**
 
-Run tests with: `python3.10 -m pytest smart_espresso/test/`
+Run tests with: `python3.11 -m pytest smart_espresso/test/`
 
 **When providing assistance:**
 
@@ -141,7 +141,7 @@ Run tests with: `python3.10 -m pytest smart_espresso/test/`
 2. Consider both MCP3008 and ADS1115 ADC compatibility
 3. Maintain Home Assistant integration patterns
 4. Follow the package naming convention: `smart-espresso` (pip) vs `smart_espresso` (Python import)
-5. Use Python 3.10 syntax for code execution and pip installation
+5. Use Python 3.11 syntax for code execution and pip installation
 6. Reference the README.md for hardware specifications and links
 7. Keep solutions practical for embedded/IoT context (resource-constrained)
 
