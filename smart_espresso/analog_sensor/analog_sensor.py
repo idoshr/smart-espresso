@@ -19,7 +19,13 @@ class ADCInterface(ABC):
     @property
     @abstractmethod
     def voltage(self):
-        """Get the actual voltage reading."""
+        """Get the actual voltage reading.
+
+        Implementations must return the voltage of the sample produced by the
+        most recent ``read()`` (i.e. cache it), not trigger a second hardware
+        read: callers such as ``MedianFilterADC`` pair the two and assume they
+        describe the same sample.
+        """
         raise NotImplementedError
 
 
@@ -37,9 +43,15 @@ class MedianFilterADC(ADCInterface):
     pressure changes (which span many consecutive samples) pass through. It
     costs no extra hardware reads — the window is filled by the samples
     ``read()`` already performs.
+
+    Note on ``window``: use an odd size — an even-sized window has no single
+    middle sample, so its median averages a spike in instead of rejecting it.
+    ``window=1`` disables filtering entirely.
     """
 
     def __init__(self, adc: ADCInterface, window: int = 3):
+        if window < 1:
+            raise ValueError(f"window must be >= 1 (got {window})")
         self.adc = adc
         self.window = window
         self._values: deque = deque(maxlen=window)

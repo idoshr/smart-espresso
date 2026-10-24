@@ -68,6 +68,12 @@ class TestMedianFilterADC(unittest.TestCase):
 
         self.assertEqual(adc.voltage, 1.0)
 
+    def test_window_must_be_positive(self):
+        # window=0 would silently disable the filter and double every
+        # hardware read (deque(maxlen=0) discards all samples).
+        with self.assertRaises(ValueError):
+            MedianFilterADC(SequenceADC([0.5]), window=0)
+
 
 class TestPressureAutoCalibration(unittest.TestCase):
     def _sensor(self, voltages, **kwargs):
