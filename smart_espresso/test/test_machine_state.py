@@ -44,27 +44,108 @@ class TestMachineStateClassifier(unittest.TestCase):
     def test_overpressure_above_the_band(self):
         self.assertEqual(self.settle(0.0, 1.9), MachineState.OVERPRESSURE)
 
-    def test_brewing_on_head_pressure(self):
+    def test_brewing_starts_on_flow_and_holds_on_head_pressure(self):
         self.settle(0.0, 1.2)
+        self.assertEqual(
+            self.classifier.update(9.1, 1.2, flow_mls=1.4), MachineState.BREWING
+        )
+        # Pump off: the puck blocks up, the line stays charged — still a shot.
         self.assertEqual(self.classifier.update(9.1, 1.2), MachineState.BREWING)
 
-    def test_flowless_head_pressure_falls_back_to_unknown(self):
-        # A stuck sensor holds head pressure forever; no real shot does.
+    def test_static_brew_band_pressure_is_not_a_shot(self):
+        # An idle heat-exchanger machine sits just above the brew band on
+        # static pressure (HX thermal expansion, sensor zero offset) with
+        # zero flow. This used to read "Pulling shot" around the clock and
+        # record 0 ml "shots".
+        self.assertEqual(self.settle(2.06, 1.05), MachineState.READY)
+        snapshot = self.classifier.snapshot()
+        self.assertIsNone(snapshot["last_shot"])
+        self.assertIsNone(snapshot["shot"])
+
+    def test_brew_band_pressure_expires_after_the_hold_window(self):
+        self.settle(0.0, 1.2)
+        self.classifier.update(9.1, 1.2, flow_mls=1.4)
+        # Right after the water stops, brew-band pressure still reads brewing...
+        self.clock.advance(5.0)
+        self.assertEqual(self.classifier.update(2.2, 1.2), MachineState.BREWING)
+        # ...but past the hold window it is only static pressure again.
+        self.clock.advance(30.0)
+        self.classifier.update(2.2, 1.2)  # candidate flips to the boiler state
+        self.clock.advance(2.0)  # dwell so it is published
+        self.assertEqual(self.classifier.update(2.2, 1.2), MachineState.READY)
+        # No water moved, so nothing is recorded as a shot either.
+        self.assertIsNone(self.classifier.snapshot()["last_shot"])
+
+    def test_pump_pressure_without_flow_falls_back_to_the_boiler(self):
+        # A pump working against a fully blocked puck builds pump-level
+        # pressure with the flow meter seeing nothing — even started from
+        # idle, that is a shot...
         self.settle(0.0, 1.2)
         self.assertEqual(self.classifier.update(9.1, 1.2), MachineState.BREWING)
-
+        # ...but a sensor holding pump-level pressure for 5 minutes with no
+        # water moving is stuck, and the state falls back to the boiler's.
         self.clock.advance(301.0)
-        self.classifier.update(9.1, 1.2)  # candidate flips to UNKNOWN
-        self.clock.advance(2.0)  # dwell so UNKNOWN is published
-        self.assertEqual(self.classifier.update(9.1, 1.2), MachineState.UNKNOWN)
+        self.classifier.update(9.1, 1.2)  # candidate flips to the boiler state
+        self.clock.advance(2.0)  # dwell so it is published
+        self.assertEqual(self.classifier.update(9.1, 1.2), MachineState.READY)
+        self.assertIsNone(self.classifier.snapshot()["last_shot"])
 
-    def test_classifier_recovers_after_the_sensor_fault_clears(self):
-        self.settle(0.0, 1.2)
+    def test_stuck_sensor_fault_clears_when_pressure_drops(self):
         self.classifier.update(9.1, 1.2)
         self.clock.advance(301.0)
         self.classifier.update(9.1, 1.2)
         self.clock.advance(2.0)
-        self.assertEqual(self.classifier.update(9.1, 1.2), MachineState.UNKNOWN)
+        self.assertEqual(self.classifier.update(9.1, 1.2), MachineState.READY)
+
+        # The latch only releases when the pressure itself drops below pump
+        # level; a fresh pump-level episode is trusted again for a full
+        # window after that.
+        self.clock.advance(1.0)
+        self.assertEqual(self.classifier.update(2.2, 1.2), MachineState.READY)
+        self.clock.advance(1.0)
+        self.assertEqual(self.classifier.update(9.1, 1.2), MachineState.BREWING)
+
+    def test_stuck_head_sensor_without_a_boiler_reads_unknown(self):
+        # Head-only setup: with no boiler to fall back on, a sensor holding
+        # pump-level pressure for 5 minutes with no water is reported as
+        # no reading, not as a confident ready.
+        self.classifier.update(9.1, None)
+        self.clock.advance(301.0)
+        self.classifier.update(9.1, None)  # candidate flips to UNKNOWN
+        self.clock.advance(2.0)  # dwell so it is published
+        self.assertEqual(self.classifier.update(9.1, None), MachineState.UNKNOWN)
+
+    def test_shot_timer_excludes_a_pause_with_the_line_charged(self):
+        self.settle(0.0, 1.2)
+
+        total = 0.0
+        for _ in range(10):  # 10 s pull at 1.4 ml/s
+            total += 1.4
+            self.clock.advance(1.0)
+            self.classifier.update(9.0, 1.2, flow_mls=1.4, total_ml=total)
+
+        for _ in range(8):  # 8 s no-flow pause, pump pressure still up
+            self.clock.advance(1.0)
+            self.classifier.update(9.0, 1.2, total_ml=total)
+
+        for _ in range(10):  # 10 more seconds of flow
+            total += 1.4
+            self.clock.advance(1.0)
+            self.classifier.update(9.0, 1.2, flow_mls=1.4, total_ml=total)
+
+        # The recorded pull is the flowing time only (20 s of samples minus
+        # the opening tick), not 20 s plus the 8 s pause.
+        shot = self.classifier.snapshot()["shot"]
+        self.assertEqual(self.classifier.state, MachineState.BREWING)
+        self.assertAlmostEqual(shot["seconds"], 19.0, places=1)
+        self.assertAlmostEqual(shot["ml"], 26.6, places=1)
+
+    def test_classifier_recovers_after_the_sensor_fault_clears(self):
+        self.classifier.update(9.1, 1.2)
+        self.clock.advance(301.0)
+        self.classifier.update(9.1, 1.2)
+        self.clock.advance(2.0)
+        self.assertEqual(self.classifier.update(9.1, 1.2), MachineState.READY)
 
         # Sensor unplugged / pressure released: back to the ready band.
         self.clock.advance(1.0)
