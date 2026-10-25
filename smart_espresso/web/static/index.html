@@ -3,16 +3,22 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#EFF1EC">
+<!-- Two theme colors so the browser chrome follows the scheme; the second
+     only applies when the system is dark. -->
+<meta name="theme-color" content="#EFF1EC" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#232724" media="(prefers-color-scheme: dark)">
+<meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" type="image/svg+xml" href="/icon.svg">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <title>Espresso Bar Status</title>
 <!-- Webfonts are a progressive enhancement: the page falls back to system
      faces when the machine's network has no internet access. -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@500;600&family=Karla:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@500;600&family=Karla:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" crossorigin>
 <style>
   :root {
     /* Milk, matcha and a soft crema — pastels taken from the bar, not a
@@ -32,6 +38,12 @@
     --water-soft: #E1EDF4;
     --clay: #D08A78;       /* something needs attention */
     --clay-soft: #F7E1DB;
+
+    /* The same hues, darkened until they survive as text on a pastel card
+       (a shot timer sitting on the crema-soft brewing state, say). */
+    --crema-ink: #B06A42;
+    --matcha-ink: #47704F;
+    --clay-ink: #B25B4C;
 
     --display: "Familjen Grotesk", ui-rounded, system-ui, sans-serif;
     --body: "Karla", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -53,6 +65,9 @@
       --matcha-soft: #2B3B2F;
       --water-soft: #263640;
       --clay-soft: #402A26;
+      --crema-ink: #E8B392;
+      --matcha-ink: #A5CBAE;
+      --clay-ink: #E0917F;
       --shadow: 0 3px 14px rgba(0, 0, 0, .3);
     }
   }
@@ -68,15 +83,25 @@
     --matcha-soft: #2B3B2F;
     --water-soft: #263640;
     --clay-soft: #402A26;
+    --crema-ink: #E8B392;
+    --matcha-ink: #A5CBAE;
+    --clay-ink: #E0917F;
     --shadow: 0 3px 14px rgba(0, 0, 0, .3);
   }
 
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 
+  /* Author display rules (a flex pill, an inline-block chip) would
+     otherwise beat the user agent's [hidden] style. Hidden must win
+     everywhere, or stale text outlives the data behind it. */
+  [hidden] { display: none !important; }
+
   body {
     margin: 0 auto;
     max-width: 460px;
-    padding: 22px 16px calc(30px + env(safe-area-inset-bottom));
+    /* Top inset keeps the header clear of the notch in standalone mode. */
+    padding: calc(22px + env(safe-area-inset-top)) 16px
+             calc(30px + env(safe-area-inset-bottom));
     background: var(--bg);
     color: var(--ink);
     font-family: var(--body);
@@ -126,6 +151,13 @@
   .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--matcha); }
   .dot.off { background: var(--ink-faint); }
 
+  /* The wake-screen toggle wears the same pill as the connection lamp. */
+  button.live { cursor: pointer; }
+  button.live .dot { background: var(--ink-faint); }
+  button.live.on { color: var(--ink); }
+  button.live.on .dot { background: var(--matcha); }
+  button.live:focus-visible { outline: 2px solid var(--ink-soft); outline-offset: 2px; }
+
   .stack { display: flex; flex-direction: column; gap: 12px; }
 
   .card {
@@ -169,6 +201,11 @@
 
   .state-text { flex: 1; min-width: 0; }
 
+  .state-head { display: flex; align-items: center; gap: 9px; }
+
+  .glyph { display: inline-flex; flex: none; }
+  .glyph svg { width: 19px; height: 19px; display: block; }
+
   .state-label {
     font-family: var(--display);
     font-size: 25px;
@@ -183,6 +220,19 @@
     margin-top: 5px;
   }
 
+  /* The reference pull, kept as a chip: dialing in means comparing. */
+  .last-pull {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: .06em;
+    color: var(--ink-soft);
+    border: 1px solid var(--edge);
+    border-radius: 999px;
+    padding: 4px 10px;
+    margin-top: 10px;
+  }
+
   .lamp {
     width: 10px; height: 10px;
     flex: none;
@@ -191,6 +241,15 @@
     box-shadow: 0 0 0 5px color-mix(in srgb, var(--state-color, #999) 20%, transparent);
   }
 
+  /* Overpressure breathes; everything else sits still. */
+  .lamp.pulse { animation: lamp-pulse 1.6s ease-in-out infinite; }
+
+  @keyframes lamp-pulse {
+    50% { box-shadow: 0 0 0 9px color-mix(in srgb, var(--state-color, #999) 12%, transparent); }
+  }
+
+  /* The shot timer is the figure the eye is here for, so it out-sizes the
+     tank and flow numbers below. */
   .shot {
     text-align: right;
     flex: none;
@@ -198,12 +257,17 @@
 
   .shot b {
     font-family: var(--display);
-    font-size: 30px;
+    font-size: 40px;
     font-weight: 600;
     letter-spacing: -.02em;
     font-variant-numeric: tabular-nums;
     line-height: 1;
+    transition: color .3s ease;
   }
+
+  .shot b.good { color: var(--matcha-ink); }
+  .shot b.warn { color: var(--crema-ink); }
+  .shot b.clay { color: var(--clay-ink); }
 
   .shot small {
     display: block;
@@ -241,8 +305,8 @@
   }
 
   /* ---- pressure rings ---- */
-  .rings { display: flex; gap: 12px; }
-  .rings > * { flex: 1 1 0; min-width: 0; padding: 14px 12px 12px; }
+  .rings { display: flex; flex-wrap: wrap; gap: 12px; }
+  .rings > * { flex: 1 1 45%; min-width: 45%; padding: 14px 12px 12px; }
 
   .ring { width: 100%; height: auto; display: block; }
 
@@ -280,7 +344,7 @@
 
   .figure b {
     font-family: var(--display);
-    font-size: 40px;
+    font-size: 30px;
     font-weight: 600;
     letter-spacing: -.03em;
     line-height: 1;
@@ -291,7 +355,8 @@
 
   .meta {
     display: flex;
-    gap: 16px;
+    flex-wrap: wrap;
+    gap: 6px 16px;
     font-size: 12.5px;
     color: var(--ink-soft);
     margin-top: 9px;
@@ -332,7 +397,7 @@
 
   .refill-hint {
     font-size: 12px;
-    color: var(--clay);
+    color: var(--clay-ink);
   }
 
   button.reset {
@@ -343,7 +408,9 @@
     background: var(--matcha-soft);
     border: 1px solid transparent;
     border-radius: 999px;
-    padding: 10px 18px;
+    /* Comfortably past the 44 px tap-target floor. */
+    min-height: 44px;
+    padding: 10px 20px;
     cursor: pointer;
     transition: background .2s, color .2s;
   }
@@ -381,6 +448,46 @@
     margin-top: 8px;
   }
 
+  /* ---- recent pulls ---- */
+  .pulls-track {
+    position: relative;
+    height: 18px;
+    margin: 16px 0 2px;
+  }
+
+  .pulls-track::before {
+    content: "";
+    position: absolute;
+    left: 0; right: 0;
+    top: 50%;
+    height: 3px;
+    transform: translateY(-50%);
+    border-radius: 3px;
+    background: var(--edge);
+  }
+
+  .pulls-track u {
+    position: absolute;
+    top: 0; bottom: 0;
+    border-left: 1px solid var(--ink-faint);
+    border-right: 1px solid var(--ink-faint);
+    background: color-mix(in srgb, var(--ink) 4%, transparent);
+    opacity: .7;
+  }
+
+  .pulls-track i {
+    position: absolute;
+    top: 4px; bottom: 4px;
+    width: 3px;
+    margin-left: -1.5px;
+    border-radius: 2px;
+  }
+
+  .pulls-track i.good { background: var(--matcha-ink); }
+  .pulls-track i.warn { background: var(--crema-ink); }
+  .pulls-track i.clay { background: var(--clay-ink); }
+  .pulls-track i.now { top: 1px; bottom: 1px; }
+
   /* ---- sensor rows ---- */
   .rows { display: flex; flex-direction: column; }
 
@@ -409,7 +516,7 @@
   .stack { transition: opacity .3s; }
 
   @media (prefers-reduced-motion: reduce) {
-    * { transition: none !important; }
+    * { transition: none !important; animation: none !important; }
   }
 </style>
 </head>
@@ -420,15 +527,21 @@
     <h1>The bar</h1>
     <div class="tagline" id="tagline">espresso machine</div>
   </div>
-  <div class="live"><span class="dot" id="dot"></span><span id="conn">live</span></div>
+  <button class="live" id="wake" type="button" title="Keep the screen awake"
+          aria-pressed="false" hidden><span class="dot"></span>awake</button>
+  <div class="live" role="status"><span class="dot" id="dot"></span><span id="conn">live</span></div>
 </header>
 
 <div class="stack">
   <div class="card state" id="state">
-    <span class="lamp"></span>
+    <span class="lamp" id="lamp"></span>
     <div class="state-text">
-      <div class="state-label" id="state-label">No reading</div>
+      <div class="state-head">
+        <span class="glyph" id="state-glyph" aria-hidden="true"></span>
+        <div class="state-label" id="state-label" aria-live="polite">No reading</div>
+      </div>
       <div class="state-detail" id="state-detail">waiting for the machine</div>
+      <span class="last-pull" id="last-pull" hidden></span>
     </div>
     <div class="shot" id="shot" hidden>
       <b id="shot-seconds">0s</b>
@@ -438,6 +551,17 @@
   </div>
 
   <div class="rings" id="rings"></div>
+
+  <div class="card" id="pulls-card" hidden>
+    <div class="card-head">
+      <span class="title">Recent pulls</span>
+      <span class="note" id="pulls-note"></span>
+    </div>
+    <div class="pulls-track" id="pulls-track" aria-hidden="true">
+      <u id="pulls-window"></u>
+    </div>
+    <div class="axis"><span>0 s</span><span id="pulls-axis-end">40 s</span></div>
+  </div>
 
   <div class="card" id="tank-card">
     <div class="card-head">
@@ -465,8 +589,9 @@
     <div class="meta">
       <span>now <b id="flow-rate">0.0 ml/s</b></span>
       <span>all time <b id="flow-total">0 ml</b></span>
+      <span>peak <b id="flow-peak">0.0 ml/s</b></span>
     </div>
-    <div class="chart" id="flow-chart"></div>
+    <div class="chart" id="flow-chart" aria-hidden="true"></div>
     <div class="axis"><span id="flow-axis-start">-2:00</span><span>now</span></div>
   </div>
 
@@ -490,6 +615,7 @@ const GUIDES = {
 
 const SHOT_WINDOW = [25, 30];   // seconds: a well-paced double
 const SHOT_SCALE = 40;          // seconds shown by the shot progress track
+const DOSE_G = 18;              // the double basket's dose; ratio is a guide, not a law
 
 const STATE_STYLE = {
   good:   ['var(--matcha)', 'var(--matcha-soft)'],
@@ -497,6 +623,28 @@ const STATE_STYLE = {
   active: ['var(--crema)', 'var(--crema-soft)'],
   alert:  ['var(--clay)', 'var(--clay-soft)'],
   idle:   ['var(--ink-faint)', 'var(--card)'],
+};
+
+// A small line icon per state, so heating and brewing are told apart by
+// shape as well as colour. Stroke inherits the state colour.
+const GLYPHS = {
+  off:          '<circle cx="12" cy="12" r="6.5"/>',
+  heating:      '<path d="M12 20V5.5M6 11.5l6-6 6 6"/>',
+  ready:        '<path d="M4.5 12.5l5 5L19.5 7"/>',
+  brewing:
+    '<path d="M5 8h11v6a5.5 5.5 0 0 1-11 0z"/>' +
+    '<path d="M16 9.5h1.8a2.75 2.75 0 0 1 0 5.5H16"/>',
+  steaming:
+    '<path d="M7.5 5c-1.4 1.8 1.4 2.7 0 4.5"/>' +
+    '<path d="M12 5c-1.4 1.8 1.4 2.7 0 4.5"/>' +
+    '<path d="M16.5 5c-1.4 1.8 1.4 2.7 0 4.5"/>' +
+    '<path d="M6.5 15.5h11M8.5 19h7"/>',
+  overpressure:
+    '<path d="M12 4.5 21 19.5H3z"/>' +
+    '<path d="M12 10.2v4M12 16.8v.4"/>',
+  unknown:
+    '<circle cx="12" cy="12" r="8.5"/>' +
+    '<path d="M9.7 9.8a2.3 2.3 0 1 1 3.1 2.1c-.7.3-.8.9-.8 1.6M12 16.6v.3"/>',
 };
 
 // Open ring: 240 degrees, gap at the bottom.
@@ -531,40 +679,28 @@ function arcPath(radius, fromDeg, toDeg) {
   return `M ${x1.toFixed(2)} ${y1.toFixed(2)} A ${radius} ${radius} 0 ${large} 1 ${x2.toFixed(2)} ${y2.toFixed(2)}`;
 }
 
-function ring(sensor) {
-  const max = sensor.max_bar || 1;
-  const guide = guideFor(sensor.name);
-  const accent = guide.accent || 'var(--water)';
-  const soft = guide.soft || 'var(--water-soft)';
-  const ratio = Math.max(0, Math.min(1, sensor.bar / max));
-
-  // The target band rides on the same track as the reading, drawn thin and
-  // dark so it reads as a marked-off stretch rather than a second ring.
-  let band = '';
-  if (guide.band) {
-    const [from, to] = guide.band;
-    band = `<path d="${arcPath(R - 7, angleFor(from / max), angleFor(to / max))}" fill="none"
-                  stroke="var(--ink-soft)" stroke-width="2.5" opacity=".45" stroke-linecap="round"/>`;
-  }
-
-  const label = escapeHtml(sensor.name);
-  return `
-  <div class="card">
-    <div class="card-head" style="justify-content:center;margin-bottom:2px">
-      <span class="title">${label}</span>
-    </div>
-    <svg class="ring" viewBox="0 0 120 100" role="img" aria-label="${label} ${sensor.bar} bar">
-      <path d="${arcPath(R - 7, angleFor(0), angleFor(1))}" fill="none" stroke="${soft}"
-            stroke-width="9" stroke-linecap="round"/>
-      <path d="${arcPath(R - 7, angleFor(0), angleFor(ratio))}" fill="none" stroke="${accent}"
-            stroke-width="9" stroke-linecap="round"
-            style="transition:d .3s ease"/>
-      ${band}
-    </svg>
-    <div class="ring-read"><b>${sensor.bar.toFixed(1)}</b><span>BAR</span></div>
-    <div class="ring-foot">${guide.caption || `up to ${max} bar`}</div>
-  </div>`;
+// Brew ratio against the basket's dose: 36 ml from 18 g reads as 1:2.
+function ratioText(ml) {
+  const ratio = ml / DOSE_G;
+  return `1:${ratio % 1 ? ratio.toFixed(1) : ratio.toFixed(0)}`;
 }
+
+// Where a pull of this length lands against the target window.
+function verdictClass(seconds) {
+  if (seconds < SHOT_WINDOW[0]) return 'warn';
+  return seconds <= SHOT_WINDOW[1] ? 'good' : 'clay';
+}
+
+// The target window drawn on both the live shot track and the history
+// strip; one helper keeps them honest when the window or scale moves.
+function windowStyle() {
+  return {
+    left: `${SHOT_WINDOW[0] / SHOT_SCALE * 100}%`,
+    width: `${(SHOT_WINDOW[1] - SHOT_WINDOW[0]) / SHOT_SCALE * 100}%`,
+  };
+}
+
+// ---- state card ----------------------------------------------------------
 
 function renderState(machine) {
   const [color, soft] = STATE_STYLE[machine.severity] || STATE_STYLE.idle;
@@ -572,18 +708,42 @@ function renderState(machine) {
   card.style.setProperty('--state-color', color);
   card.style.setProperty('--state-soft', soft);
 
-  document.getElementById('state-label').textContent = machine.label;
+  const lamp = document.getElementById('lamp');
+  lamp.classList.toggle('pulse', machine.severity === 'alert');
+
+  const glyph = document.getElementById('state-glyph');
+  glyph.innerHTML =
+    `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+          stroke-linecap="round" stroke-linejoin="round">${GLYPHS[machine.state] || GLYPHS.unknown}</svg>`;
+  glyph.style.color = color;
+
+  // Only rewritten when it actually changes: the label carries aria-live,
+  // and a per-second "3s in this state" would talk an ear off.
+  const label = document.getElementById('state-label');
+  if (label.textContent !== machine.label) label.textContent = machine.label;
 
   const shot = document.getElementById('shot');
   shot.hidden = !machine.shot;
+  const shotSeconds = document.getElementById('shot-seconds');
   if (machine.shot) {
-    document.getElementById('shot-seconds').textContent = `${machine.shot.seconds.toFixed(0)}s`;
-    document.getElementById('shot-ml').textContent = `${machine.shot.ml.toFixed(0)} ml in the cup`;
+    shotSeconds.textContent = `${machine.shot.seconds.toFixed(0)}s`;
+    shotSeconds.className = verdictClass(machine.shot.seconds);
+    document.getElementById('shot-ml').textContent =
+      `${machine.shot.ml.toFixed(0)} ml · ${ratioText(machine.shot.ml)} in the cup`;
     document.getElementById('shot-progress').style.width =
       `${Math.min(100, machine.shot.seconds / SHOT_SCALE * 100)}%`;
-    const track = document.getElementById('shot-window');
-    track.style.left = `${SHOT_WINDOW[0] / SHOT_SCALE * 100}%`;
-    track.style.width = `${(SHOT_WINDOW[1] - SHOT_WINDOW[0]) / SHOT_SCALE * 100}%`;
+    Object.assign(document.getElementById('shot-window').style, windowStyle());
+  } else {
+    shotSeconds.className = '';
+  }
+
+  // The last pull stays up as a reference chip, even mid-shot.
+  const chip = document.getElementById('last-pull');
+  const last = machine.last_shot;
+  chip.hidden = !last;
+  if (last) {
+    chip.textContent =
+      `last pull ${last.seconds.toFixed(0)} s · ${last.ml.toFixed(0)} ml · ${ratioText(last.ml)}`;
   }
 
   let detail = `${formatDuration(machine.since_seconds)} in this state`;
@@ -596,6 +756,114 @@ function renderState(machine) {
   }
   document.getElementById('state-detail').textContent = detail;
 }
+
+// ---- pressure rings ------------------------------------------------------
+// Built once per sensor and updated in place: re-creating the SVG every
+// poll would drop the element mid-transition, so the arc would tick in
+// one-second steps instead of gliding. The arc fills via a normalised
+// pathLength (dash = whole arc, offset = the empty part), which animates
+// in every browser, not just the Chromium `d` property.
+
+const ringEls = new Map();
+let ringsKey = '';
+
+function buildRings(pressure) {
+  ringsKey = pressure.map(s => `${s.name}@${s.max_bar}`).join('|');
+  ringEls.clear();
+  document.getElementById('rings').innerHTML = pressure.map(sensor => {
+    const max = sensor.max_bar || 1;
+    const guide = guideFor(sensor.name);
+    const accent = guide.accent || 'var(--water)';
+    const soft = guide.soft || 'var(--water-soft)';
+    const label = escapeHtml(sensor.name);
+
+    // The target band rides on the same track as the reading, drawn thin
+    // and dark so it reads as a marked-off stretch rather than a second ring.
+    let band = '';
+    if (guide.band) {
+      const [from, to] = guide.band;
+      band = `<path d="${arcPath(R - 7, angleFor(from / max), angleFor(to / max))}" fill="none"
+                    stroke="var(--ink-soft)" stroke-width="2.5" opacity=".45" stroke-linecap="round"/>`;
+    }
+
+    return `
+    <div class="card">
+      <div class="card-head" style="justify-content:center;margin-bottom:2px">
+        <span class="title">${label}</span>
+      </div>
+      <svg class="ring" viewBox="0 0 120 100" role="img" aria-label="${label} 0 bar">
+        <path d="${arcPath(R - 7, angleFor(0), angleFor(1))}" fill="none" stroke="${soft}"
+              stroke-width="9" stroke-linecap="round"/>
+        <path class="ring-value" d="${arcPath(R - 7, angleFor(0), angleFor(1))}" fill="none"
+              stroke="${accent}" stroke-width="9" stroke-linecap="round"
+              pathLength="1" stroke-dasharray="1" stroke-dashoffset="1"
+              style="transition:stroke-dashoffset .3s ease"/>
+        ${band}
+      </svg>
+      <div class="ring-read"><b>0.0</b><span>BAR</span></div>
+      <div class="ring-foot">${guide.caption || `up to ${max} bar`}</div>
+    </div>`;
+  }).join('');
+
+  const cards = document.getElementById('rings').children;
+  pressure.forEach((sensor, i) => {
+    ringEls.set(i, {
+      value: cards[i].querySelector('.ring-value'),
+      read: cards[i].querySelector('.ring-read b'),
+      svg: cards[i].querySelector('svg'),
+      max: sensor.max_bar || 1,
+    });
+  });
+}
+
+function renderRings(pressure) {
+  const key = pressure.map(s => `${s.name}@${s.max_bar}`).join('|');
+  if (key !== ringsKey) buildRings(pressure);
+
+  pressure.forEach((sensor, i) => {
+    const el = ringEls.get(i);
+    if (!el) return;
+    const ratio = Math.max(0, Math.min(1, sensor.bar / el.max));
+    el.value.setAttribute('stroke-dashoffset', (1 - ratio).toFixed(4));
+    el.value.style.visibility = ratio > 0 ? 'visible' : 'hidden';
+    el.read.textContent = sensor.bar.toFixed(1);
+    el.svg.setAttribute('aria-label',
+      `${sensor.name} ${sensor.bar.toFixed(1)} bar`);
+  });
+}
+
+// ---- recent pulls --------------------------------------------------------
+
+let pullsSig = '';
+
+function renderPulls(history) {
+  const cardEl = document.getElementById('pulls-card');
+  cardEl.hidden = !history.length;
+  if (!history.length) return;
+
+  // Recorded pulls never change, so the strip is only redrawn when the
+  // sequence itself changes (a new pull, or one aging out of the memory).
+  // The yield rides along in the signature: two pulls of the same length
+  // with different volumes must still redraw the tooltips.
+  const sig = history.map(s => `${s.seconds}:${s.ml}`).join(',');
+  document.getElementById('pulls-note').textContent = `${history.length} pulls`;
+  if (sig === pullsSig) return;
+  pullsSig = sig;
+
+  Object.assign(document.getElementById('pulls-window').style, windowStyle());
+
+  const track = document.getElementById('pulls-track');
+  track.querySelectorAll('i').forEach(tick => tick.remove());
+  history.forEach((shot, i) => {
+    const tick = document.createElement('i');
+    tick.className = `${verdictClass(shot.seconds)}${i === history.length - 1 ? ' now' : ''}`;
+    tick.style.left = `${Math.max(0, Math.min(100, shot.seconds / SHOT_SCALE * 100))}%`;
+    tick.title = `${shot.seconds.toFixed(0)} s · ${shot.ml.toFixed(0)} ml · ${ratioText(shot.ml)}`;
+    track.appendChild(tick);
+  });
+}
+
+// ---- tank ----------------------------------------------------------------
 
 function renderTank(tank) {
   document.getElementById('tank-remaining').textContent = tank.remaining_ml.toFixed(0);
@@ -614,6 +882,12 @@ function renderTank(tank) {
   warn.textContent = tank.empty ? 'Tank is empty' : 'Time to refill';
 }
 
+// ---- pour chart ----------------------------------------------------------
+// Like the rings, the bars are built once and re-measured in place so the
+// height transition survives between polls.
+
+let chartBars = [];
+
 function renderFlow(sensor) {
   const minutes = Math.round(sensor.window_seconds / 60);
   document.getElementById('flow-title').textContent = `${sensor.name} water`;
@@ -625,12 +899,33 @@ function renderFlow(sensor) {
 
   const peak = Math.max(...sensor.chart, 0.001);
   const lastActive = sensor.chart.reduce((acc, ml, i) => (ml > 0 ? i : acc), -1);
-  document.getElementById('flow-chart').innerHTML = sensor.chart.map((ml, i) => {
-    const height = ml > 0 ? Math.max(5, Math.round((ml / peak) * 60)) : 3;
-    const cls = ml > 0 ? (i === lastActive ? 'bar on now' : 'bar on') : 'bar';
-    return `<div class="${cls}" style="height:${height}px"></div>`;
-  }).join('');
+
+  // One bucket spans window/length seconds; its peak is a flow rate too.
+  const bucketSeconds = sensor.window_seconds / sensor.chart.length;
+  document.getElementById('flow-peak').textContent =
+    `${(peak / bucketSeconds).toFixed(1)} ml/s`;
+
+  const chartEl = document.getElementById('flow-chart');
+  if (chartBars.length !== sensor.chart.length) {
+    chartEl.innerHTML = '';
+    chartBars = sensor.chart.map(() => {
+      const bar = document.createElement('div');
+      bar.className = 'bar';
+      chartEl.appendChild(bar);
+      return bar;
+    });
+  }
+
+  sensor.chart.forEach((ml, i) => {
+    const bar = chartBars[i];
+    bar.style.height = `${ml > 0 ? Math.max(5, Math.round((ml / peak) * 60)) : 3}px`;
+    bar.className = ml > 0
+      ? `bar on${i === lastActive ? ' now' : ''}`
+      : 'bar';
+  });
 }
+
+// ---- frame ---------------------------------------------------------------
 
 function formatDuration(seconds) {
   const h = Math.floor(seconds / 3600), m = Math.floor(seconds / 60) % 60;
@@ -641,7 +936,8 @@ function formatDuration(seconds) {
 
 function render(data) {
   renderState(data.machine);
-  document.getElementById('rings').innerHTML = data.pressure.map(ring).join('');
+  renderRings(data.pressure);
+  renderPulls(data.machine.history || []);
 
   const flowCard = document.getElementById('flow-card');
   flowCard.hidden = !data.flow.length;
@@ -659,13 +955,17 @@ function render(data) {
       .join('');
   }
 
-  document.getElementById('footer').textContent = `machine on for ${formatDuration(data.uptime)}`;
+  if (connected) {
+    document.getElementById('footer').textContent = `dashboard up ${formatDuration(data.uptime)}`;
+  }
 }
 
 function setConnected(ok) {
+  connected = ok;
   document.getElementById('dot').classList.toggle('off', !ok);
   document.getElementById('conn').textContent = ok ? 'live' : 'offline';
   document.body.classList.toggle('stale', !ok);
+  if (!ok) document.getElementById('footer').textContent = 'last seen 0 s ago';
 }
 
 // Two taps to reset: a stray tap must not wipe the tank count.
@@ -676,6 +976,7 @@ resetButton.addEventListener('click', async () => {
   if (!resetButton.classList.contains('armed')) {
     resetButton.classList.add('armed');
     resetButton.textContent = 'Tap to confirm';
+    if (navigator.vibrate) navigator.vibrate(10);
     armedTimer = setTimeout(disarmReset, 5000);
     return;
   }
@@ -700,23 +1001,125 @@ function disarmReset() {
   resetButton.textContent = 'Tank filled';
 }
 
+// ---- polling, with a backoff so a down machine is not hammered ----------
+
+let connected = false;
 let missed = 0;
+let lastSeenAt = Date.now();
+let pollTimer = null;
+let pollInFlight = false;
+
+const POLL_FAST = 1000, POLL_SLOW = 10000;
 
 async function poll() {
+  clearTimeout(pollTimer);
+  // One chain only: a tab switch landing mid-request must not fork a
+  // second polling loop that doubles the machine's load forever.
+  if (pollInFlight) return;
+  pollInFlight = true;
   try {
     const res = await fetch('/api/status', { cache: 'no-store' });
     if (!res.ok) throw new Error(res.status);
-    render(await res.json());
-    missed = 0;
-    setConnected(true);
+    const data = await res.json();
+    // A parseable but malformed payload (a stale cached shell meeting a
+    // newer server) is shape skew, not an outage: only transport
+    // failures may count as misses or flip the connection lamp.
+    try {
+      render(data);
+      missed = 0;
+      lastSeenAt = Date.now();
+      setConnected(true);
+    } catch (err) {
+      console.warn('unrenderable status payload:', err);
+    }
   } catch (err) {
     if (++missed >= 3) setConnected(false);
+  } finally {
+    pollInFlight = false;
+  }
+  const delay = missed === 0
+    ? POLL_FAST
+    : Math.min(POLL_FAST * 2 ** (missed - 1), POLL_SLOW);
+  pollTimer = setTimeout(poll, delay);
+}
+
+// The footer keeps ticking even when the network does not.
+setInterval(() => {
+  if (!connected) {
+    const ago = Math.max(0, Math.round((Date.now() - lastSeenAt) / 1000));
+    document.getElementById('footer').textContent = `last seen ${ago} s ago`;
+  }
+}, 1000);
+
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) return;
+  poll();
+  if (wakeWanted && !wakeLock) syncWake();
+});
+
+// ---- keep the screen awake (kitchen-tablet duty) --------------------------
+
+const wakeBtn = document.getElementById('wake');
+let wakeLock = null, wakeWanted = false, wakePending = false;
+
+async function syncWake() {
+  if (!wakeWanted) {
+    if (wakeLock) { wakeLock.release(); wakeLock = null; }
+    return;
+  }
+  // Already held, or a request is in flight: never stack locks.
+  if (wakeLock || wakePending) return;
+  wakePending = true;
+  try {
+    const lock = await navigator.wakeLock.request('screen');
+    // The toggle may have flipped while the request was in flight.
+    if (!wakeWanted) {
+      lock.release();
+      return;
+    }
+    lock.addEventListener('release', () => {
+      // A stale lock releasing must not clear the live one.
+      if (wakeLock !== lock) return;
+      wakeLock = null;
+      wakeBtn.classList.remove('on');
+      wakeBtn.setAttribute('aria-pressed', 'false');
+    });
+    wakeLock = lock;
+    wakeBtn.classList.add('on');
+    wakeBtn.setAttribute('aria-pressed', 'true');
+  } catch (err) {
+    // Transient denials (a hidden document racing a tab switch, OS power
+    // policy) happen on re-request: keep the preference so the
+    // visibilitychange handler below can retry on the next return.
+    wakeBtn.classList.remove('on');
+    wakeBtn.setAttribute('aria-pressed', 'false');
+  } finally {
+    wakePending = false;
   }
 }
 
+wakeBtn.addEventListener('click', () => {
+  wakeWanted = !wakeWanted;
+  syncWake();
+});
+
+if ('wakeLock' in navigator) wakeBtn.hidden = false;
+
+// Axis labels are derived from the scale, never hardcoded, so they follow
+// it when the extraction window moves.
+document.getElementById('pulls-axis-end').textContent = `${SHOT_SCALE} s`;
+
+// The shell lives in the service worker, so the page opens instantly and
+// survives the machine's server blinking.
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker
+      .register('/sw.js')
+      .catch((err) => console.warn('offline shell unavailable:', err));
+  });
+}
+
 poll();
-setInterval(poll, 1000);
-document.addEventListener('visibilitychange', () => { if (!document.hidden) poll(); });
 </script>
 </body>
 </html>

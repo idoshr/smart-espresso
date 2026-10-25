@@ -211,6 +211,36 @@ class TestMachineStateClassifier(unittest.TestCase):
         self.settle(0.0, 1.2)
         self.assertIsNone(self.classifier.snapshot()["last_shot"])
 
+    def pull(self, seconds, rate_mls=1.4):
+        """Run one qualifying pull and close it, from a ready machine."""
+        self.settle(0.0, 1.2)
+        total = 0.0
+        for _ in range(seconds):
+            total += rate_mls
+            self.clock.advance(1.0)
+            self.classifier.update(9.0, 1.2, flow_mls=rate_mls, total_ml=total)
+        self.settle(0.0, 1.2, total_ml=total)
+
+    def test_shot_history_keeps_the_recent_pulls(self):
+        for seconds in (27, 24, 29):
+            self.pull(seconds)
+
+        history = self.classifier.snapshot()["history"]
+        self.assertEqual([shot["seconds"] for shot in history], [26.0, 23.0, 28.0])
+        self.assertEqual(self.classifier.snapshot()["last_shot"], history[-1])
+
+    def test_shot_history_is_capped(self):
+        for _ in range(MachineStateClassifier.SHOT_HISTORY_MAX + 3):
+            self.pull(27)
+
+        history = self.classifier.snapshot()["history"]
+        self.assertEqual(len(history), MachineStateClassifier.SHOT_HISTORY_MAX)
+        # Oldest first, and the cap trims from the front.
+        self.assertEqual(
+            [shot["seconds"] for shot in history],
+            [26.0] * MachineStateClassifier.SHOT_HISTORY_MAX,
+        )
+
     def test_unknown_without_pressure_sensors(self):
         self.assertEqual(self.classifier.update(None, None), MachineState.UNKNOWN)
 

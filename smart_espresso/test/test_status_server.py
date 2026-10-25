@@ -182,6 +182,11 @@ class TestStatusServer(unittest.TestCase):
         self.assertEqual(page.status_code, 200)
         self.assertIn(b"<title>Espresso Bar Status</title>", page.data)
 
+        # The service worker is served from the site root, as its scope needs.
+        worker = client.get("/sw.js")
+        self.assertEqual(worker.status_code, 200)
+        self.assertIn(b"espresso-shell", worker.data)
+
         api = client.get("/api/status")
         self.assertEqual(api.status_code, 200)
         payload = api.get_json()

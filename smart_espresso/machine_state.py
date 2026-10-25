@@ -103,6 +103,8 @@ class MachineStateClassifier:
     # disconnected sensor, not a shot: no real pull does nothing for 5
     # minutes.
     MAX_FLOWLESS_BREW_SECONDS = 300.0
+    # Recent pulls kept for the dashboard's history strip.
+    SHOT_HISTORY_MAX = 12
 
     def __init__(
         self,
@@ -184,6 +186,9 @@ class MachineStateClassifier:
         self._shot_prev: Optional[float] = None
         self._shot_prev_ml: float = 0.0
         self._last_shot: Optional[dict] = None
+        # Newest last; a short memory of recent pulls so the dashboard can
+        # show whether the machine (or the grinder) is drifting.
+        self._shot_history: list[dict] = []
 
     def update(
         self,
@@ -344,6 +349,9 @@ class MachineStateClassifier:
                     "seconds": round(self._shot_seconds, 1),
                     "ml": round(self._shot_ml, 1),
                 }
+                self._shot_history.append(self._last_shot)
+                if len(self._shot_history) > self.SHOT_HISTORY_MAX:
+                    del self._shot_history[: len(self._shot_history) - self.SHOT_HISTORY_MAX]
             self._shot_start = None
             self._shot_prev = None
 
@@ -395,4 +403,5 @@ class MachineStateClassifier:
                 "boiler_rate": round(self._boiler_rate, 3),
                 "shot": shot,
                 "last_shot": self._last_shot,
+                "history": [dict(entry) for entry in self._shot_history],
             }

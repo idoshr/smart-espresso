@@ -88,6 +88,29 @@ class StatusServer:
         def manifest():
             return send_from_directory(STATIC_DIR, "manifest.webmanifest")
 
+        # The service worker must be served from the site root to control
+        # the whole origin; the icons ride along. Explicit per-file rules
+        # keep HTTP semantics for everything else: a GET on the POST-only
+        # reset endpoint still answers 405 with Allow: POST instead of
+        # falling into a catch-all and 404ing as a missing file.
+        def static_rule(filename):
+            def view():
+                return send_from_directory(STATIC_DIR, filename)
+            return view
+
+        for filename in (
+            "sw.js",
+            "icon.svg",
+            "icon-192.png",
+            "icon-512.png",
+            "apple-touch-icon.png",
+        ):
+            self.app.add_url_rule(
+                f"/{filename}",
+                f"static_{filename.replace('.', '_')}",
+                static_rule(filename),
+            )
+
         @self.app.route("/api/status")
         def status():
             return jsonify(self.status_payload())
