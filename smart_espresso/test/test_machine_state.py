@@ -1,4 +1,5 @@
 import unittest
+from time import localtime
 from unittest import mock
 
 from smart_espresso.machine_state import MachineState, MachineStateClassifier
@@ -240,6 +241,33 @@ class TestMachineStateClassifier(unittest.TestCase):
             [shot["seconds"] for shot in history],
             [26.0] * MachineStateClassifier.SHOT_HISTORY_MAX,
         )
+
+    def test_daily_tally_counts_completed_pulls(self):
+        self.pull(27)
+        self.pull(24)
+
+        today = self.classifier.snapshot()["today"]
+        self.assertEqual(today["shots"], 2)
+        # 26 s and 23 s of flowing time at 1.4 ml/s: the pull volumes only.
+        self.assertAlmostEqual(today["ml"], (26.0 + 23.0) * 1.4, places=1)
+
+    def test_daily_tally_resets_at_local_midnight(self):
+        self.pull(27)
+        self.assertEqual(self.classifier.snapshot()["today"]["shots"], 1)
+
+        # The wall clock crosses local midnight between two render ticks;
+        # the next update() starts a fresh day (the stamp is only compared,
+        # so an out-of-range day number is fine for the test).
+        stamp = localtime()[:3]
+        next_day = (stamp[0], stamp[1], stamp[2] + 1)
+        with mock.patch(
+            "smart_espresso.machine_state.localtime", return_value=next_day
+        ):
+            self.classifier.update(0.0, 1.2)
+
+        today = self.classifier.snapshot()["today"]
+        self.assertEqual(today["shots"], 0)
+        self.assertEqual(today["ml"], 0.0)
 
     def test_unknown_without_pressure_sensors(self):
         self.assertEqual(self.classifier.update(None, None), MachineState.UNKNOWN)

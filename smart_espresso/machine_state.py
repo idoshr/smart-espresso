@@ -1,6 +1,6 @@
 """Classify what the espresso machine is doing from its live sensor readings."""
 import threading
-from time import monotonic
+from time import localtime, monotonic
 from typing import Optional
 
 
@@ -190,6 +190,15 @@ class MachineStateClassifier:
         # show whether the machine (or the grinder) is drifting.
         self._shot_history: list[dict] = []
 
+        # Daily tally behind the dashboard's "N pulls · X ml today" line:
+        # pulls completed since local midnight. In-memory on purpose — the
+        # machine's own uptime is the day's honest denominator, and the
+        # flow total it would otherwise need to survive reboots is the
+        # tank counter's job.
+        self._today_stamp = localtime()[:3]
+        self._shots_today = 0
+        self._ml_today = 0.0
+
     def update(
         self,
         head_bar: Optional[float],
@@ -208,6 +217,7 @@ class MachineStateClassifier:
         """
         now = monotonic()
         with self._lock:
+            self._roll_day_if_needed()
             self._update_boiler_rate(boiler_bar, now)
             candidate = self._classify(head_bar, boiler_bar, flow_mls, now)
 
@@ -241,6 +251,14 @@ class MachineStateClassifier:
                 self._shot_prev_ml = total_ml
 
             return self.state
+
+    def _roll_day_if_needed(self) -> None:
+        """Reset the daily tally once the wall clock crosses local midnight."""
+        today = localtime()[:3]
+        if today != self._today_stamp:
+            self._today_stamp = today
+            self._shots_today = 0
+            self._ml_today = 0.0
 
     def _update_boiler_rate(self, boiler_bar: Optional[float], now: float) -> None:
         """Track the boiler's rate of change (bar/s) with light smoothing."""
@@ -352,6 +370,8 @@ class MachineStateClassifier:
                 self._shot_history.append(self._last_shot)
                 if len(self._shot_history) > self.SHOT_HISTORY_MAX:
                     del self._shot_history[: len(self._shot_history) - self.SHOT_HISTORY_MAX]
+                self._shots_today += 1
+                self._ml_today += self._shot_ml
             self._shot_start = None
             self._shot_prev = None
 
@@ -388,6 +408,10 @@ class MachineStateClassifier:
         state, its age and the shot always describe the same moment.
         """
         with self._lock:
+            # The tally rolls in update() while samples flow, but a stalled
+            # render loop (or a quiet machine) must not serve yesterday's
+            # count after midnight — roll on read as well.
+            self._roll_day_if_needed()
             state = self.state
             shot = None
             if state == MachineState.BREWING and self._shot_start is not None:
@@ -404,4 +428,8 @@ class MachineStateClassifier:
                 "shot": shot,
                 "last_shot": self._last_shot,
                 "history": [dict(entry) for entry in self._shot_history],
+                "today": {
+                    "shots": self._shots_today,
+                    "ml": round(self._ml_today, 1),
+                },
             }

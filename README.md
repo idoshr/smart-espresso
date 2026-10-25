@@ -184,19 +184,27 @@ a full-screen view).
 
 It shows:
 
-- **Machine state** (see below) with a live shot timer while a shot is pulled
-- **Head pressure** and **Boiler pressure** on manometer dials, in bar, with
-  the target band in green and the over-pressure zone in red
+- **Machine state** (see below) with a live shot timer while a shot is pulled;
+  while the shot runs and you scroll away, a compact timer pins to the top
+  edge, and a short buzz marks the moment the pull enters its window
+- **Today's pulls** in the header, so a glance answers how many shots the
+  machine has seen today (in memory; resets when the machine restarts)
+- **Head pressure** and **Boiler pressure** on manometer dials, in bar,
+  scaled to the working range with the target band marked and an
+  over-pressure zone in red
+- **Recent pulls** as a tappable history strip — tap a tick to see that
+  pull's time, volume and brew ratio
 - **Water tank level**: how much of the 2 L tank is left, roughly how many
   shots that is, and a *Tank filled* button to reset the count after a refill
 - **Water used in the last 2 minutes**, in millilitres, with a per-3-second
   bar chart and the live flow rate in ml/s
 - Any other sensor (e.g. DHT22) as a plain row
 
-The page is styled as a quiet pastel bar readout: crema for the group, a
-matcha green for the boiler, pale blue for water. To add your own badge, drop
-`logo.svg` into `smart_espresso/web/static/` and put an `<img src="/logo.svg">`
-in the header of
+The page is styled as a quiet pastel bar readout on a near-white ground:
+crema for the group, a matcha green for the boiler, pale blue for water,
+with a dark scheme that follows the system setting. To add your own badge,
+drop `logo.svg` into `smart_espresso/web/static/` and put an
+`<img src="/logo.svg">` in the header of
 [`index.html`](smart_espresso/web/static/index.html).
 
 ### Machine State
@@ -244,7 +252,8 @@ The page polls `GET /api/status` once per second:
             "flow_rate_mls": 1.8, "window_seconds": 120.0, "chart": [0.0, 1.2]}],
   "machine": {"state": "brewing", "label": "Pulling shot", "severity": "active",
               "since_seconds": 12.4, "shot": {"seconds": 12.4, "ml": 22.1},
-              "last_shot": {"seconds": 27.0, "ml": 38.4}},
+              "last_shot": {"seconds": 27.0, "ml": 38.4},
+              "today": {"shots": 5, "ml": 183.4}},
   "tank": {"capacity_ml": 2000.0, "used_ml": 420.0, "remaining_ml": 1580.0,
            "percent": 79.0, "low": false, "empty": false, "shots_left": 43,
            "refills": 3},
