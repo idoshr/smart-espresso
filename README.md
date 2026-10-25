@@ -16,8 +16,10 @@ DIY espresso machine monitoring with Raspberry Pi 4, pressure sensors, OLED disp
 - Dual ADC support: MCP3008 (10-bit SPI) or ADS1115 (16-bit I2C)
 - OLED display (SH1106 128x64)
 - Machine state classification (off / heating / ready / brewing / steaming / over pressure)
+- Shot history with head-pressure and flow curves, kept across reboots
 - Water tank counter with refill reset, so you know before the 2 L tank runs dry
-- Mobile web dashboard: manometers, machine state, tank level, water used in the last 2 minutes
+- Mobile web dashboard: manometers, machine state, tank level, shot history,
+  and water used in the last 2 minutes
 - Home Assistant integration
 - Extensible sensor architecture
 
@@ -47,6 +49,7 @@ DIY espresso machine monitoring with Raspberry Pi 4, pressure sensors, OLED disp
 ## Wiring
 
 ### OLED Display (I2C)
+
 ![Display Wiring](docs/img/display.png)
 
 | Pi Pin | → | Display |
@@ -57,6 +60,7 @@ DIY espresso machine monitoring with Raspberry Pi 4, pressure sensors, OLED disp
 | 6 (GND) | → | GND |
 
 ### MCP3008 (SPI)
+
 ![MCP3008 Wiring](docs/img/analog.png)
 
 | Pi Pin | → | MCP3008 |
@@ -71,6 +75,7 @@ DIY espresso machine monitoring with Raspberry Pi 4, pressure sensors, OLED disp
 Connect sensors: VCC→3.3V, GND→GND, OUT→CH0/CH1
 
 ### ADS1115 (I2C)
+
 | Pi Pin | → | ADS1115 |
 |--------|---|---------|
 | 1 (3.3V) | → | VDD |
@@ -119,6 +124,9 @@ export WEB_PORT="8080"
 
 export WATER_TANK_ML="2000"        # Tank size, default 2 L
 export WATER_TANK_STATE="~/.smart_espresso/water_tank.json"
+
+export SHOT_HISTORY_STATE="~/.smart_espresso/shot_history.json"
+export SHOT_HISTORY_MAX="200"      # Completed shots kept on disk
 
 export DHT_ENABLE="True"          # Ambient DHT22/AM2302 sensor (GPIO)
 export DHT_PIN="4"                # BCM pin number for the DHT22
@@ -194,8 +202,11 @@ It shows:
   over-pressure zone in red
 - **Recent pulls** as a tappable history strip — tap a tick to see that
   pull's time, volume and brew ratio
+- **Shot history**: the pulls saved on the Pi, each with the time of day,
+  the duration and the volume. Tap one to chart its head pressure and flow
+  (and the boiler, when that sensor is fitted)
 - **Water tank level**: how much of the 2 L tank is left, roughly how many
-  shots that is, and a *Tank filled* button to reset the count after a refill
+  shots that is, and a _Tank filled_ button to reset the count after a refill
 - **Water used in the last 2 minutes**, in millilitres, with a per-3-second
   bar chart and the live flow rate in ml/s
 - Any other sensor (e.g. DHT22) as a plain row
@@ -227,14 +238,65 @@ immediately, so the shot timer starts on time. Every threshold is a constructor
 argument on `MachineStateClassifier` if your machine runs different pressures.
 
 While brewing, the classifier times the shot and measures its volume; when the
-pump stops, a pull longer than 2 s is kept as the last shot (shorter blips are
-pump priming, not a shot). The dashboard marks the 25–30 s window on the shot
-timer, so you can see a pull running fast or long while it happens.
+pump stops, a pull longer than 2 s that actually moved water is kept (shorter
+blips are pump priming, not a shot, and a pressure reading with no flow is
+not one either). The dashboard marks the 25–30 s window on the shot timer, so
+you can see a pull running fast or long while it happens. That same pull is
+appended to the shot history below.
+
+### Shot history
+
+[`shot_history.py`](smart_espresso/shot_history.py) keeps every completed
+pull, not just the last one. A pull longer than 2 s that moved water is
+saved; anything shorter is left out. Each record stores:
+
+- when the pull started (`started_at`, local time with its UTC offset)
+- how long water was flowing (`seconds`, the same number as the live timer)
+- the volume in millilitres
+- headline peaks for head pressure, boiler pressure and flow
+- the curves, sampled about four times a second: head pressure, boiler
+  pressure when that sensor is fitted, and flow rate
+
+`samples[].t` is elapsed time from the start of the pull, pauses included,
+so the chart shows the pressure profile as it happened. The duration above
+the chart does not count those pauses. Peaks are taken from every reading,
+including ones that fell between two stored points.
+
+The log is written to `SHOT_HISTORY_STATE` (default
+`~/.smart_espresso/shot_history.json`) once per completed pull, atomically,
+and restored on boot. `SHOT_HISTORY_MAX` (default 200) caps the file; the
+oldest shots fall off. An idle machine does not rewrite it. A missing or
+unreadable file starts the log over instead of stopping the machine.
+
+`GET /api/status` includes a small `shots` block (`count`, and `recent`
+newest first, without curves) so the dashboard list updates on the poll it
+already does. `GET /api/shots` is that list on its own; `?limit=20` returns
+the newest 20 summaries and `count` is still the whole log.
+`GET /api/shots/<id>` returns one shot with its curves. That object is what
+a later shareable shot card would be drawn from — start, duration, volume,
+peaks and curves. This change charts the shot; it does not render the card.
+An unknown id answers `404`.
+
+```json
+{
+  "id": 42,
+  "started_at": "2026-10-25T08:56:12-04:00",
+  "seconds": 27.0,
+  "ml": 36.4,
+  "peak_head_bar": 9.1,
+  "peak_boiler_bar": 1.2,
+  "peak_flow_mls": 1.8,
+  "samples": [
+    {"t": 0.0, "head_bar": 2.1, "boiler_bar": 1.2, "flow_mls": 0.4},
+    {"t": 0.25, "head_bar": 9.1, "boiler_bar": 1.2, "flow_mls": 1.8}
+  ]
+}
+```
 
 ### Water Tank
 
 [`water_tank.py`](smart_espresso/water_tank.py) subtracts the flow sensor's
-lifetime volume from a baseline, so *used* is the water drawn since the tank
+lifetime volume from a baseline, so _used_ is the water drawn since the tank
 was last filled. Pressing **Tank filled** (a two-tap confirm, so a stray tap
 cannot wipe the count) calls `POST /api/tank/reset`, which moves the baseline
 to the current total.
@@ -254,6 +316,10 @@ The page polls `GET /api/status` once per second:
               "since_seconds": 12.4, "shot": {"seconds": 12.4, "ml": 22.1},
               "last_shot": {"seconds": 27.0, "ml": 38.4},
               "today": {"shots": 5, "ml": 183.4}},
+  "shots": {"count": 42, "recent": [
+    {"id": 42, "started_at": "2026-10-25T08:56:12-04:00",
+     "seconds": 27.0, "ml": 36.4, "peak_head_bar": 9.1,
+     "peak_flow_mls": 1.8}]},
   "tank": {"capacity_ml": 2000.0, "used_ml": 420.0, "remaining_ml": 1580.0,
            "percent": 79.0, "low": false, "empty": false, "shots_left": 43,
            "refills": 3},
@@ -285,7 +351,9 @@ default and has no authentication — keep it on a trusted home network, or set
 - **HA errors**: Verify URL includes `http://`, check token validity
 - **Dashboard unreachable**: Check the Pi's IP (`hostname -I`), confirm port 8080 isn't firewalled, and that `WEB_ENABLE` isn't `False`
 - **State stuck on `heating`/`overpressure`**: Your boiler runs outside the default 0.8-1.6 bar band — pass `ready_min_bar` / `ready_max_bar` to `MachineStateClassifier`
-- **Tank count looks wrong**: It counts measured water only; delete `WATER_TANK_STATE` to start over, and press *Tank filled* at every refill
+- **Tank count looks wrong**: It counts measured water only; delete `WATER_TANK_STATE` to start over, and press _Tank filled_ at every refill
+- **Shot history looks wrong**: Only pulls longer than 2 s that moved water
+  are kept. Delete `SHOT_HISTORY_STATE` to start the log over
 - **Permissions**: `sudo usermod -a -G spi,i2c,gpio pi && sudo reboot`
 
 ## Project Structure
@@ -300,6 +368,7 @@ smart_espresso/
 │   ├── water_flow_sensor.py       # Water flow meter (pulse) sensor
 │   └── dht22_sensor.py            # DHT22 temp/humidity sensor
 ├── machine_state.py               # Machine state classifier + shot timer
+├── shot_history.py                # Persisted shot log and curves
 ├── water_tank.py                  # Tank counter (persisted across reboots)
 ├── web/
 │   ├── status_server.py           # Flask status API + dashboard server
@@ -326,4 +395,3 @@ BSD 3-Clause License
 ---
 
 **Made with ☕ by coffee enthusiasts**
-

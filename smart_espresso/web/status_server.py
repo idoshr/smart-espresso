@@ -9,6 +9,7 @@ from flask import Flask, jsonify, request, send_from_directory
 from smart_espresso.analog_sensor.pressure_analog_sensor import PressureAnalogSensor
 from smart_espresso.analog_sensor.water_flow_sensor import WaterFlowAnalogSensor
 from smart_espresso.machine_state import MachineStateClassifier
+from smart_espresso.shot_history import ShotHistory
 from smart_espresso.water_tank import WaterTank
 
 PATH = os.path.dirname(os.path.abspath(__file__))
@@ -36,6 +37,9 @@ class StatusServer:
     # A little slack beyond the window so a bucket edge always has a sample
     # older than it to interpolate from.
     HISTORY_SLACK_SECONDS = 10.0
+    # How many saved shots the status payload carries. Curves stay on
+    # GET /api/shots/<id> so the one-second poll stays small.
+    RECENT_SHOTS = 12
 
     def __init__(
         self,
@@ -44,6 +48,7 @@ class StatusServer:
         window_seconds: float = WINDOW_SECONDS,
         tank: Optional[WaterTank] = None,
         classifier: Optional[MachineStateClassifier] = None,
+        shot_history: Optional[ShotHistory] = None,
     ):
         """
         Initialize the status server.
@@ -54,14 +59,21 @@ class StatusServer:
             window_seconds: Length of the recent-water window, in seconds.
             tank: Water tank counter; a default 2 L tank is created if omitted.
             classifier: Machine state classifier; a default one is created if
-                omitted.
+                omitted, wired to ``shot_history`` so completed pulls are
+                recorded.
+            shot_history: Persisted shot log. A default log (under
+                ``~/.smart_espresso/``) is created if omitted. Pass the same
+                instance the classifier records into when supplying both.
         """
         self.host = host
         self.port = port
         self.window_seconds = window_seconds
         self.tank = tank if tank is not None else WaterTank()
+        self.shot_history = shot_history if shot_history is not None else ShotHistory()
         self.classifier = (
-            classifier if classifier is not None else MachineStateClassifier()
+            classifier
+            if classifier is not None
+            else MachineStateClassifier(shot_history=self.shot_history)
         )
 
         self._lock = threading.Lock()
@@ -96,6 +108,7 @@ class StatusServer:
         def static_rule(filename):
             def view():
                 return send_from_directory(STATIC_DIR, filename)
+
             return view
 
         for filename in (
@@ -114,6 +127,28 @@ class StatusServer:
         @self.app.route("/api/status")
         def status():
             return jsonify(self.status_payload())
+
+        @self.app.route("/api/shots")
+        def shots():
+            """
+            Saved shots, newest first, without curve samples.
+
+            Optional ``limit`` keeps the newest N summaries. ``count`` is
+            always the number of shots on hand. Read from memory: the log
+            was loaded at startup and is appended when a pull finishes.
+            """
+            limit = _parse_limit(request.args.get("limit"))
+            if limit is False:
+                return jsonify({"error": "invalid limit"}), 400
+            return jsonify(self.shot_history.list_payload(limit=limit))
+
+        @self.app.route("/api/shots/<int:shot_id>")
+        def shot_detail(shot_id):
+            """One saved shot, including its pressure and flow curves."""
+            shot = self.shot_history.get(shot_id)
+            if shot is None:
+                return jsonify({"error": "shot not found"}), 404
+            return jsonify(shot)
 
         @self.app.route("/api/tank/reset", methods=["POST"])
         def reset_tank():
@@ -238,6 +273,9 @@ class StatusServer:
         # must show up in the very next response.
         snapshot["machine"] = self.classifier.snapshot()
         snapshot["tank"] = self.tank.snapshot()
+        # In memory, same as the machine and tank blocks. The curves are
+        # not included; a tap on the dashboard fetches those by id.
+        snapshot["shots"] = self.shot_history.status_summary(limit=self.RECENT_SHOTS)
         return snapshot
 
     def _window_stats(
@@ -257,7 +295,9 @@ class StatusServer:
         window_start = now - self.window_seconds
 
         # Cumulative volume at each bucket edge (CHART_BUCKETS + 1 edges).
-        edges = [window_start + i * bucket_seconds for i in range(self.CHART_BUCKETS + 1)]
+        edges = [
+            window_start + i * bucket_seconds for i in range(self.CHART_BUCKETS + 1)
+        ]
         cumulative_at_edge = []
         index = 0
         last_value = samples[0][1]
@@ -271,7 +311,9 @@ class StatusServer:
             delta = cumulative_at_edge[i + 1] - cumulative_at_edge[i]
             buckets[i] = round(max(delta, 0.0) * 1000, 2)
 
-        recent_ml = round(max(cumulative_at_edge[-1] - cumulative_at_edge[0], 0.0) * 1000, 1)
+        recent_ml = round(
+            max(cumulative_at_edge[-1] - cumulative_at_edge[0], 0.0) * 1000, 1
+        )
         return recent_ml, buckets
 
     def start(self) -> None:
@@ -292,3 +334,16 @@ class StatusServer:
         self._thread = threading.Thread(target=_serve, daemon=True)
         self._thread.start()
         print(f"Status web server listening on http://{self.host}:{self.port}")
+
+
+def _parse_limit(raw: Optional[str]):
+    """A non-negative int, None when the query omits it, or False when invalid."""
+    if raw is None:
+        return None
+    try:
+        limit = int(raw)
+    except ValueError:
+        return False
+    if limit < 0:
+        return False
+    return limit
