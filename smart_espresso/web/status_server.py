@@ -113,6 +113,7 @@ class StatusServer:
 
         for filename in (
             "sw.js",
+            "dashboard_logic.js",
             "icon.svg",
             "icon-192.png",
             "icon-512.png",
