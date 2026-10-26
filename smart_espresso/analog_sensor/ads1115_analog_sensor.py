@@ -26,9 +26,9 @@ class ADS1115ADC(ADCInterface):
                    maximum). The driver busy-polls the I2C bus under a global
                    lock for the whole conversion, so at the 128 SPS default
                    each read stalls every other reader for ~8ms; with three
-                   channels read at 10 Hz plus the flow sampler at 100 Hz the
-                   bus is near saturation, which shows up as jittery
-                   readings. 860 SPS cuts that to ~1.2ms per conversion.
+                   channels read at 10 Hz plus the flow sampler at 200 Hz
+                   the bus is busy for roughly a quarter of the time.
+                   860 SPS cuts a conversion to ~1.2ms.
     """
 
     # One ADS1115 per address is shared by every channel; this lock

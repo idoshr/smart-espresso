@@ -2,7 +2,33 @@ from threading import Event, Thread
 from time import monotonic
 from typing import Optional
 
-from smart_espresso.analog_sensor.analog_sensor import ADCInterface, AnalogSensor
+from smart_espresso.analog_sensor.analog_sensor import (
+    ADCInterface,
+    AnalogSensor,
+    MedianFilterADC,
+)
+
+
+def _reject_median_filter(adc) -> None:
+    """Refuse a median filter on the pulse channel.
+
+    A window of 3 drops any high or low phase that lasts only one sample,
+    which is what a flow pulse looks like near the sampling limit. The
+    Schmitt thresholds already reject noise between the two levels.
+    """
+    current = adc
+    seen = set()
+    while current is not None and id(current) not in seen:
+        if isinstance(current, MedianFilterADC):
+            raise ValueError(
+                "WaterFlowAnalogSensor cannot count pulses through a "
+                "MedianFilterADC: a median window drops pulses that are "
+                "high or low for a single sample, so shot volume, live flow "
+                "and the tank counter under-read. Leave this channel "
+                "unfiltered."
+            )
+        seen.add(id(current))
+        current = getattr(current, "adc", None)
 
 
 class WaterFlowAnalogSensor(AnalogSensor):
@@ -31,9 +57,11 @@ class WaterFlowAnalogSensor(AnalogSensor):
     sampling rate must comfortably exceed the sensor's maximum pulse
     frequency. The render loop samples at roughly 10 Hz, which is sufficient
     for slow flows only. Pass ``sample_interval`` to move sampling onto a
-    background thread that runs several times faster; espresso-scale flow
-    rates (~30 pulses/s) need ~100 Hz to be captured reliably. For high-flow
-    applications a GPIO edge-interrupt wiring is still more accurate.
+    background thread. The default period is 5 ms (200 Hz), which keeps a
+    square wave from 0.5 to 6 ml/s inside ±1% at duty cycles of 30–70%.
+    A median filter must not sit on this channel: it deletes pulses that
+    are only one sample wide. For flows above that, a GPIO edge-interrupt
+    wiring is still more accurate.
     """
 
     # Pulses emitted per litre. Typical mini DC3-24V coffee-machine flow
@@ -45,6 +73,21 @@ class WaterFlowAnalogSensor(AnalogSensor):
     # idle level sits below 1.0V.
     DEFAULT_HIGH_THRESHOLD = 2.5
     DEFAULT_LOW_THRESHOLD = 1.0
+
+    # 200 Hz. A 6 ml/s pour at 30% or 70% duty has an 8.5 ms short phase;
+    # a 10 ms period (the old 100 Hz default) misses that phase and the
+    # shot volume under-reads. 5 ms keeps the short phase on the grid.
+    # The sampler folds ADC conversion time into this period, and the
+    # measured rate is what ``sample_hz`` reports.
+    DEFAULT_SAMPLE_INTERVAL = 0.005
+
+    # How long a run of samples is averaged before ``sample_hz`` updates.
+    SAMPLE_RATE_WINDOW_SECONDS = 1.0
+    # pulse_hz > sample_hz / 2.5 means a non-50% duty cycle can hide a
+    # phase between samples. Nyquist (sample_hz / 2) is not enough margin.
+    ALIAS_RATE_FACTOR = 2.5
+    ALIAS_WARN_INTERVAL = 30.0
+    RATE_LOG_INTERVAL = 60.0
 
     def __init__(
         self,
@@ -77,6 +120,7 @@ class WaterFlowAnalogSensor(AnalogSensor):
                 "low_threshold must be below high_threshold "
                 f"(got low={low_threshold}, high={high_threshold})"
             )
+        _reject_median_filter(adc)
 
         super().__init__(adc, name)
         self.pulses_per_liter = pulses_per_liter
@@ -92,6 +136,14 @@ class WaterFlowAnalogSensor(AnalogSensor):
         self._flow_rate_lpm = 0.0
         self._flow_window_start = monotonic()
         self._flow_window_pulses = 0
+
+        self._sample_hz = None
+        self._hz_window_start = None
+        self._hz_window_samples = 0
+        # None, not 0: a test clock (and a monotonic clock) both start near
+        # zero, and "last warned at 0" would swallow the first half minute.
+        self._last_alias_warn = None
+        self._last_rate_log = None
 
         self._stop_event = Event()
         self._thread = None
@@ -145,20 +197,78 @@ class WaterFlowAnalogSensor(AnalogSensor):
         """Take one ADC sample and update counters and cached value."""
         self._value = self.adc.read()
         self._count_edge(self.adc.voltage)
-        self._update_rate(monotonic())
+        now = monotonic()
+        self._update_rate(now)
+        self._observe_sample_clock(now)
+
+    def _observe_sample_clock(self, now: float) -> None:
+        """Update the measured sample rate from the time between samples."""
+        if self._hz_window_start is None:
+            self._hz_window_start = now
+            self._hz_window_samples = 0
+            return
+        self._hz_window_samples += 1
+        elapsed = now - self._hz_window_start
+        if elapsed < self.SAMPLE_RATE_WINDOW_SECONDS:
+            return
+        self._sample_hz = self._hz_window_samples / elapsed
+        self._hz_window_start = now
+        self._hz_window_samples = 0
+        self._log_sample_rate(now)
+        self._warn_if_aliasing(now)
+
+    def _log_sample_rate(self, now: float) -> None:
+        if (
+            self._last_rate_log is not None
+            and now - self._last_rate_log < self.RATE_LOG_INTERVAL
+        ):
+            return
+        self._last_rate_log = now
+        print(f"{self.name} flow sample rate {self._sample_hz:.1f} Hz")
+
+    def _warn_if_aliasing(self, now: float) -> None:
+        """Warn when the pulse rate is too fast for the measured sample rate."""
+        if not self._sample_hz:
+            return
+        pulse_hz = (self._flow_rate_lpm / 60.0) * self.pulses_per_liter
+        limit = self._sample_hz / self.ALIAS_RATE_FACTOR
+        if pulse_hz <= limit:
+            return
+        if (
+            self._last_alias_warn is not None
+            and now - self._last_alias_warn < self.ALIAS_WARN_INTERVAL
+        ):
+            return
+        self._last_alias_warn = now
+        print(
+            f"{self.name} flow pulse rate {pulse_hz:.1f} Hz exceeds "
+            f"{limit:.1f} Hz (sample rate {self._sample_hz:.1f} Hz / "
+            f"{self.ALIAS_RATE_FACTOR}); pulses are being missed"
+        )
 
     def _sample_loop(self) -> None:
-        """Sample the ADC on a background thread, faster than the render loop."""
+        """Sample the ADC on a background thread, faster than the render loop.
+
+        The wait is the remainder of ``sample_interval`` after the conversion,
+        so I2C time does not stretch the period. If a conversion overruns the
+        period the loop runs as fast as the ADC allows and ``sample_hz``
+        shows that slower rate.
+        """
         last_error_log = 0.0
-        while not self._stop_event.wait(self.sample_interval):
+        while not self._stop_event.is_set():
+            started = monotonic()
             try:
                 self._sample()
             except Exception as error:
                 # Sample errors must not kill the thread; log them, throttled,
                 # so a broken bus stays visible without flooding the console.
-                if monotonic() - last_error_log >= 30.0:
-                    last_error_log = monotonic()
+                now = monotonic()
+                if now - last_error_log >= 30.0:
+                    last_error_log = now
                     print(f"{self.name} flow sensor sampling failed: {error}")
+            remaining = self.sample_interval - (monotonic() - started)
+            if remaining > 0 and self._stop_event.wait(remaining):
+                return
 
     def read(self):
         """
@@ -194,6 +304,11 @@ class WaterFlowAnalogSensor(AnalogSensor):
     def pulses(self) -> int:
         """Total pulses counted since the last reset."""
         return self._pulses
+
+    @property
+    def sample_hz(self) -> Optional[float]:
+        """Measured ADC sample rate, or None until one window has elapsed."""
+        return self._sample_hz
 
     @property
     def liter(self) -> float:
