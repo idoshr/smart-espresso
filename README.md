@@ -108,6 +108,17 @@ cd smart-espresso
 pip3 install -e .
 ```
 
+## Running on boot
+
+`deploy/smart-espresso.service` restarts the monitor if it ever exits.
+Copy it to `/etc/systemd/system/`, point `ExecStart` and `WorkingDirectory`
+at this checkout, and put secrets such as `HA_TOKEN` in
+`/etc/smart-espresso.env` (mode `0600`). Then:
+
+```bash
+sudo systemctl enable --now smart-espresso.service
+```
+
 ## Configuration
 
 Set via environment variables:
@@ -347,6 +358,10 @@ block. It requires the header `X-Espresso-Dashboard: 1`, which the dashboard
 sends: a page on some other site that your phone happens to have open cannot
 set a custom header without a CORS preflight this server never grants, so it
 cannot zero your tank count behind your back.
+
+Each pressure, flow and other entry also carries `health` (`ok`,
+`last_error`, `last_ok_age_s`). A failed read is `ok: false` and its
+value is null, so a stale sample is not shown as a live one.
 
 The HTTP handlers only read an in-memory snapshot taken by the render loop, so
 opening the page never triggers extra I2C/SPI traffic. The recent-water figure

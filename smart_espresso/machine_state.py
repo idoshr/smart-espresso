@@ -213,8 +213,8 @@ class MachineStateClassifier:
         self,
         head_bar: Optional[float],
         boiler_bar: Optional[float],
-        flow_mls: float = 0.0,
-        total_ml: float = 0.0,
+        flow_mls: Optional[float] = 0.0,
+        total_ml: Optional[float] = 0.0,
     ) -> str:
         """
         Feed one sample and return the current published state.
@@ -222,14 +222,23 @@ class MachineStateClassifier:
         Args:
             head_bar: Brew head pressure in bar, or None if not fitted.
             boiler_bar: Boiler pressure in bar, or None if not fitted.
-            flow_mls: Current flow rate in millilitres per second.
-            total_ml: Lifetime volume in millilitres, used for the shot timer.
+            flow_mls: Current flow rate in millilitres per second, or None
+                when that read failed.
+            total_ml: Lifetime volume in millilitres, used for the shot timer,
+                or None when that read failed.
         """
         now = monotonic()
         # "commit" / "abandon" once a pull closes, applied after the lock so
         # the history file is not written while readers wait on it.
         outcome = None
+        flow_known = flow_mls is not None and total_ml is not None
         with self._lock:
+            # A failed flow read must not look like a lifetime total of 0:
+            # the next good sample would then count the whole shot again.
+            if flow_mls is None:
+                flow_mls = 0.0
+            if total_ml is None:
+                total_ml = self._shot_prev_ml
             self._roll_day_if_needed()
             self._update_boiler_rate(boiler_bar, now)
             candidate = self._classify(head_bar, boiler_bar, flow_mls, now)
@@ -255,14 +264,25 @@ class MachineStateClassifier:
             # still charged (flow resumes within the hold window) adds no
             # phantom seconds or volume either.
             if candidate == MachineState.BREWING and self._shot_start is not None:
-                if flow_mls >= self.brew_flow_mls and self._shot_prev is not None:
+                if (
+                    flow_known
+                    and flow_mls >= self.brew_flow_mls
+                    and self._shot_prev is not None
+                ):
                     self._shot_seconds += now - self._shot_prev
                     self._shot_ml = max(
                         self._shot_ml + (total_ml - self._shot_prev_ml), 0.0
                     )
-                self._shot_prev = now
-                self._shot_prev_ml = total_ml
-                self._sample_open_shot(now, head_bar, boiler_bar, flow_mls)
+                if flow_known:
+                    self._shot_prev = now
+                    self._shot_prev_ml = total_ml
+                elif self._shot_prev is not None:
+                    # Keep the volume baseline. Advance the clock so the
+                    # outage is not later counted as flowing time.
+                    self._shot_prev = now
+                self._sample_open_shot(
+                    now, head_bar, boiler_bar, flow_mls if flow_known else 0.0
+                )
 
             state = self.state
 

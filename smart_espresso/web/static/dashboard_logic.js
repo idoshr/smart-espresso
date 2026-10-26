@@ -34,9 +34,24 @@
     return !!hasPayload && !!present;
   }
 
+  // A failed sensor publishes null, not the previous number. The page
+  // must show a gap rather than throwing on toFixed.
+  function formatReading(value, digits) {
+    if (typeof value !== "number" || !Number.isFinite(value)) return "—";
+    return value.toFixed(digits);
+  }
+
+  function readingFaulted(sensor, field) {
+    if (!sensor) return true;
+    if (sensor.health && sensor.health.ok === false) return true;
+    return sensor[field] == null;
+  }
+
   return {
     pillText: pillText,
     footerText: footerText,
     sensorCardVisible: sensorCardVisible,
+    formatReading: formatReading,
+    readingFaulted: readingFaulted,
   };
 });

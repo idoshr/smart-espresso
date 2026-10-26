@@ -146,7 +146,17 @@ class TestStatusServer(unittest.TestCase):
         self.server.update([Dummy()])
         self.assertEqual(
             self.server.status_payload()["other"],
-            [{"name": "Room", "message": "Room: 21.0C 40.0%"}],
+            [
+                {
+                    "name": "Room",
+                    "message": "Room: 21.0C 40.0%",
+                    "health": {
+                        "ok": True,
+                        "last_error": None,
+                        "last_ok_age_s": None,
+                    },
+                }
+            ],
         )
 
     def test_payload_carries_machine_state_and_tank(self):
