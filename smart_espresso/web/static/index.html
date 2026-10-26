@@ -762,7 +762,9 @@
   <button class="live" id="wake" type="button" title="Keep the screen awake"
           aria-pressed="false" hidden><span class="dot"></span><span
       id="wake-text">sleep</span></button>
-  <div class="live" role="status"><span class="dot" id="dot"></span><span id="conn">live</span></div>
+  <!-- Connecting, not live: the shell is often cached and painted before
+       /api/status has ever answered. A green "live" here is a lie. -->
+  <div class="live" role="status"><span class="dot off" id="dot"></span><span id="conn">connecting…</span></div>
 </header>
 
 <div class="stack">
@@ -806,7 +808,7 @@
     <div class="history-list" id="history-list"></div>
   </div>
 
-  <div class="card" id="flow-card">
+  <div class="card" id="flow-card" hidden>
     <div class="card-head">
       <span class="title" id="flow-title">Water poured</span>
       <span class="note" id="flow-window"></span>
@@ -821,7 +823,7 @@
     <div class="axis"><span id="flow-axis-start">-2:00</span><span>now</span></div>
   </div>
 
-  <div class="card" id="tank-card">
+  <div class="card" id="tank-card" hidden>
     <div class="card-head">
       <span class="title">Water tank</span>
       <span class="note" id="tank-note"></span>
@@ -844,8 +846,9 @@
   </div>
 </div>
 
-<footer id="footer">checking every second</footer>
+<footer id="footer">never connected</footer>
 
+<script src="/dashboard_logic.js"></script>
 <script>
 // What a barista actually watches for: 9 bar at the group, a boiler sitting
 // around 1 bar, and a double landing in the 25-30 second window.
@@ -1584,11 +1587,12 @@ function render(data) {
   renderToday(data.machine && data.machine.today);
 
   const flowCard = document.getElementById('flow-card');
-  flowCard.hidden = !data.flow.length;
-  if (data.flow.length) renderFlow(data.flow[0]);
+  const flowPresent = data.flow.length > 0;
+  flowCard.hidden = !DashboardLogic.sensorCardVisible(true, flowPresent);
+  if (flowPresent) renderFlow(data.flow[0]);
 
   const tankCard = document.getElementById('tank-card');
-  tankCard.hidden = !data.tank;
+  tankCard.hidden = !DashboardLogic.sensorCardVisible(true, !!data.tank);
   if (data.tank) renderTank(data.tank);
 
   const otherCard = document.getElementById('other-card');
@@ -1599,17 +1603,30 @@ function render(data) {
       .join('');
   }
 
-  if (connected) {
-    document.getElementById('footer').textContent = `dashboard up ${formatDuration(data.uptime)}`;
+  // render() only runs with a payload just applied, so the uptime line is
+  // a real reading. Gating it on `connected` left the first success showing
+  // "never connected" until the following poll.
+  document.getElementById('footer').textContent =
+    `dashboard up ${formatDuration(data.uptime)}`;
+}
+
+function applyConnection() {
+  const text = DashboardLogic.pillText(connected, lastSeenAt);
+  document.getElementById('dot').classList.toggle('off', text !== 'live');
+  document.getElementById('conn').textContent = text;
+  // Dim only once a real reading has gone stale. The connecting screen
+  // has nothing to fade, and fading it used to hide the placeholder zeros.
+  document.body.classList.toggle('stale', text === 'offline');
+  if (!connected) {
+    document.getElementById('footer').textContent = DashboardLogic.footerText(
+      connected, lastSeenAt, Date.now()
+    );
   }
 }
 
 function setConnected(ok) {
   connected = ok;
-  document.getElementById('dot').classList.toggle('off', !ok);
-  document.getElementById('conn').textContent = ok ? 'live' : 'offline';
-  document.body.classList.toggle('stale', !ok);
-  if (!ok) document.getElementById('footer').textContent = 'last seen 0 s ago';
+  applyConnection();
 }
 
 // Two taps to reset: a stray tap must not wipe the tank count.
@@ -1649,7 +1666,9 @@ function disarmReset() {
 
 let connected = false;
 let missed = 0;
-let lastSeenAt = Date.now();
+// Null until a payload is applied. Date.now() here made the footer claim
+// "last seen 1 s ago" for a page that had never seen the machine.
+let lastSeenAt = null;
 let pollTimer = null;
 let pollInFlight = false;
 
@@ -1687,11 +1706,14 @@ async function poll() {
   pollTimer = setTimeout(poll, delay);
 }
 
-// The footer keeps ticking even when the network does not.
+// The footer keeps ticking even when the network does not. With no
+// reading yet, that tick stays on "never connected" instead of counting
+// up from the moment the page opened.
 setInterval(() => {
   if (!connected) {
-    const ago = Math.max(0, Math.round((Date.now() - lastSeenAt) / 1000));
-    document.getElementById('footer').textContent = `last seen ${ago} s ago`;
+    document.getElementById('footer').textContent = DashboardLogic.footerText(
+      false, lastSeenAt, Date.now()
+    );
   }
 }, 1000);
 

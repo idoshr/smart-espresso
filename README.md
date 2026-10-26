@@ -213,7 +213,12 @@ It shows:
 
 The page is styled as a quiet pastel bar readout on a near-white ground:
 crema for the group, a matcha green for the boiler, pale blue for water,
-with a dark scheme that follows the system setting. To add your own badge,
+with a dark scheme that follows the system setting. Before the first
+`/api/status` response the header reads **connecting…** (no green lamp),
+the footer says **never connected**, and the flow and tank cards stay
+hidden — a zero baked into the cached shell is not a reading. After a
+reading has arrived, losing the machine switches the header to
+**offline** and the footer to a last-seen time. To add your own badge,
 drop `logo.svg` into `smart_espresso/web/static/` and put an
 `<img src="/logo.svg">` in the header of
 [`index.html`](smart_espresso/web/static/index.html).

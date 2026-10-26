@@ -2,9 +2,10 @@
 // still opens (slightly stale, clearly marked so by the page itself) when
 // the machine's server hiccups. Sensor data is never cached: /api/* always
 // goes to the network.
-const CACHE = 'espresso-shell-v2';
+const CACHE = 'espresso-shell-v3';
 const SHELL = [
   '/',
+  '/dashboard_logic.js',
   '/manifest.webmanifest',
   '/icon.svg',
   '/icon-192.png',
