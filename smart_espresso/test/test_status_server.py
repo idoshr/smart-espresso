@@ -4,6 +4,7 @@ from unittest import mock
 from smart_espresso.analog_sensor.analog_sensor import ADCInterface
 from smart_espresso.analog_sensor.pressure_analog_sensor import PressureAnalogSensor
 from smart_espresso.analog_sensor.water_flow_sensor import WaterFlowAnalogSensor
+from smart_espresso.shot_history import ShotHistory
 from smart_espresso.water_tank import WaterTank
 from smart_espresso.web.status_server import StatusServer
 
@@ -75,7 +76,12 @@ class TestStatusServer(unittest.TestCase):
             adc=self.flow_adc, name="Brew", pulses_per_liter=100
         )
         # state_path=None keeps the tank counter out of the home directory.
-        self.server = StatusServer(port=8099, tank=WaterTank(state_path=None))
+        # state_path=None keeps both logs out of the home directory.
+        self.server = StatusServer(
+            port=8099,
+            tank=WaterTank(state_path=None),
+            shot_history=ShotHistory(state_path=None),
+        )
 
     def tick(self):
         self.server.update([self.flow])
@@ -192,6 +198,82 @@ class TestStatusServer(unittest.TestCase):
         payload = api.get_json()
         self.assertEqual(payload["window_seconds"], StatusServer.WINDOW_SECONDS)
         self.assertEqual(payload["flow"][0]["name"], "Brew")
+        self.assertEqual(payload["shots"]["count"], 0)
+
+        self.assertIn(b'id="history-card"', page.data)
+        self.assertIn(b"/api/shots/", page.data)
+
+    def test_completed_pull_is_listed_with_curves(self):
+        # The classifier keeps its own clock. Share the test clock so the
+        # shot timer, the flow-rate window and the curve samples agree.
+        with mock.patch("smart_espresso.machine_state.monotonic", self.clock):
+            head_adc = FakeADC(0.5)
+            boiler_adc = FakeADC(1.46)
+            head = PressureAnalogSensor(adc=head_adc, name="Head", max_pressure_mpa=2.0)
+            boiler = PressureAnalogSensor(
+                adc=boiler_adc, name="Boiler", max_pressure_mpa=0.5
+            )
+
+            def tick():
+                head.read()
+                boiler.read()
+                self.flow.read()
+                self.server.update([head, boiler, self.flow])
+
+            for _ in range(8):
+                tick()
+                self.clock.advance(0.5)
+            self.assertEqual(self.server.classifier.state, "ready")
+
+            # 2.3 V on the 0-20 bar head sensor is 9 bar; 1.46 V on the
+            # boiler sensor is 1.2 bar. Pulses make the flow rate.
+            head_adc.set(2.3)
+            for _ in range(25):
+                for voltage in (3.0, 0.0):
+                    self.flow_adc.set(voltage)
+                    tick()
+                    self.clock.advance(0.1)
+
+            head_adc.set(0.5)
+            self.flow_adc.set(0.0)
+            for _ in range(40):
+                tick()
+                self.clock.advance(0.5)
+                if self.server.classifier.state != "brewing":
+                    break
+
+        self.assertNotEqual(self.server.classifier.state, "brewing")
+        client = self.server.app.test_client()
+        listing = client.get("/api/shots")
+        self.assertEqual(listing.status_code, 200)
+        body = listing.get_json()
+        self.assertEqual(body["count"], 1)
+        summary = body["shots"][0]
+        self.assertNotIn("samples", summary)
+        self.assertGreaterEqual(summary["seconds"], 2.0)
+        self.assertGreater(summary["ml"], 0.0)
+        self.assertGreaterEqual(summary["peak_head_bar"], 8.0)
+        self.assertGreater(summary["peak_flow_mls"], 0.0)
+
+        detail = client.get(f"/api/shots/{summary['id']}")
+        self.assertEqual(detail.status_code, 200)
+        shot = detail.get_json()
+        self.assertGreaterEqual(shot["seconds"], 2.0)
+        self.assertGreater(shot["ml"], 0.0)
+        heads = [point["head_bar"] for point in shot["samples"]]
+        flows = [point["flow_mls"] for point in shot["samples"]]
+        self.assertTrue(any(value is not None and value >= 8.0 for value in heads))
+        self.assertTrue(any(value is not None and value > 0.0 for value in flows))
+        self.assertTrue(
+            any(
+                point["boiler_bar"] is not None and point["boiler_bar"] > 0.5
+                for point in shot["samples"]
+            )
+        )
+
+        recent = client.get("/api/status").get_json()["shots"]["recent"]
+        self.assertEqual(recent[0]["id"], summary["id"])
+        self.assertNotIn("samples", recent[0])
 
 
 if __name__ == "__main__":

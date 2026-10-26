@@ -544,6 +544,113 @@
     outline-offset: 2px;
   }
 
+  /* ---- saved shots ---- */
+  /* The strip above is a glance at duration. This list is the log: when
+     the pull happened, and — once opened — the curves. */
+  .history-list { display: flex; flex-direction: column; }
+
+  button.shot-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    min-height: 44px;
+    margin: 0;
+    padding: 8px 6px;
+    background: transparent;
+    border: none;
+    border-radius: 12px;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  button.shot-row + button.shot-row { margin-top: 2px; }
+
+  button.shot-row.sel { background: var(--crema-soft); }
+
+  @media (hover: hover) {
+    button.shot-row:hover { background: var(--crema-soft); }
+  }
+
+  button.shot-row:focus-visible {
+    outline: 2px solid var(--ink-soft);
+    outline-offset: 2px;
+  }
+
+  .shot-dot {
+    width: 8px;
+    height: 8px;
+    flex: none;
+    border-radius: 50%;
+    background: var(--ink-faint);
+  }
+
+  .shot-dot.good { background: var(--matcha-ink); }
+  .shot-dot.warn { background: var(--crema-ink); }
+  .shot-dot.clay { background: var(--clay-ink); }
+
+  .shot-when {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 14.5px;
+    font-weight: 600;
+    letter-spacing: -.01em;
+  }
+
+  .shot-stats {
+    margin-left: auto;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--ink-soft);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  .history-detail { padding: 2px 4px 4px; }
+
+  .history-meta {
+    font-size: 13px;
+    line-height: 1.45;
+    color: var(--ink-soft);
+    margin: 8px 2px 2px;
+  }
+
+  .curve-label {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    margin-top: 14px;
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+  }
+
+  .curve { display: block; width: 100%; height: auto; margin-top: 4px; }
+
+  .curve .head { stroke: var(--crema); fill: var(--crema); }
+  .curve .flow { stroke: var(--water); fill: var(--water); }
+  .curve .boiler { stroke: var(--matcha); fill: var(--matcha); }
+  .curve .fill { fill-opacity: .22; stroke: none; }
+  .curve .line {
+    fill: none;
+    stroke-width: 2.25;
+    stroke-linejoin: round;
+    stroke-linecap: round;
+  }
+  .curve .dot { stroke: none; }
+  .curve .guide {
+    stroke: var(--ink-faint);
+    stroke-width: 1;
+    stroke-dasharray: 3 4;
+  }
+  .curve .base { stroke: var(--edge); stroke-width: 1; }
+
   /* ---- sensor rows ---- */
   .rows { display: flex; flex-direction: column; }
 
@@ -689,6 +796,14 @@
       <u id="pulls-window"></u>
     </div>
     <div class="axis"><span>0 s</span><span id="pulls-axis-end">40 s</span></div>
+  </div>
+
+  <div class="card" id="history-card" hidden>
+    <div class="card-head">
+      <span class="title">Shot history</span>
+      <span class="note" id="history-note"></span>
+    </div>
+    <div class="history-list" id="history-list"></div>
   </div>
 
   <div class="card" id="flow-card">
@@ -1129,6 +1244,243 @@ function selectPull(index) {
   renderPulls(pullHistory);   // same signature: only the note is rewritten
 }
 
+// ---- shot history --------------------------------------------------------
+// The list rides on the status poll (summaries only). The curves are a
+// second, on-demand read of one shot, so opening the page still does not
+// pull a curve for every pull the machine has ever saved.
+
+const CURVE_WIDTH = 320, CURVE_HEIGHT = 96, CURVE_PAD = 6;
+// Fixed floors keep one shot comparable with the next. A peak past the
+// floor scales that chart up; it does not squash the others.
+const CURVE_FLOOR = { head_bar: 12, boiler_bar: 2, flow_mls: 3 };
+
+let historySig = '';
+let historyShots = [];
+let selectedShotId = null;
+const shotCache = new Map();
+let shotLoadToken = 0;
+
+function shotWhen(iso) {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return String(iso || '');
+  const time = date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  const today = new Date();
+  if (date.toDateString() === today.toDateString()) return time;
+  const yesterday = new Date(today);
+  yesterday.setDate(today.getDate() - 1);
+  if (date.toDateString() === yesterday.toDateString()) return `yesterday ${time}`;
+  const day = date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+  return `${day} ${time}`;
+}
+
+function renderHistory(block) {
+  const card = document.getElementById('history-card');
+  const recent = (block && block.recent) || [];
+  if (!recent.length) {
+    card.hidden = true;
+    historySig = '';
+    historyShots = [];
+    selectedShotId = null;
+    return;
+  }
+  card.hidden = false;
+  const count = block.count || recent.length;
+  document.getElementById('history-note').textContent =
+    count === 1 ? '1 saved' : `${count} saved`;
+
+  const sig = recent.map(shot => `${shot.id}:${shot.seconds}:${shot.ml}`).join(',');
+  if (sig === historySig) return;
+  historySig = sig;
+  historyShots = recent;
+  if (!recent.some(shot => shot.id === selectedShotId)) selectedShotId = null;
+  paintHistoryList();
+  if (selectedShotId != null) showShot(selectedShotId, false);
+}
+
+function paintHistoryList() {
+  const list = document.getElementById('history-list');
+  list.innerHTML = '';
+  historyShots.forEach(shot => {
+    const selected = shot.id === selectedShotId;
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = `shot-row${selected ? ' sel' : ''}`;
+    button.setAttribute('aria-pressed', String(selected));
+    button.setAttribute('aria-expanded', String(selected));
+
+    const dot = document.createElement('span');
+    dot.className = `shot-dot ${verdictClass(shot.seconds)}`;
+    dot.setAttribute('aria-hidden', 'true');
+
+    const when = document.createElement('span');
+    when.className = 'shot-when';
+    when.textContent = shotWhen(shot.started_at);
+
+    const stats = document.createElement('span');
+    stats.className = 'shot-stats';
+    stats.textContent =
+      `${Number(shot.seconds).toFixed(0)} s · ${Number(shot.ml).toFixed(0)} ml`;
+
+    button.append(dot, when, stats);
+    button.addEventListener('click', () => toggleShot(shot.id));
+    list.appendChild(button);
+
+    if (selected) {
+      const detail = document.createElement('div');
+      detail.className = 'history-detail';
+      detail.id = 'history-detail';
+      list.appendChild(detail);
+    }
+  });
+}
+
+function toggleShot(id) {
+  selectedShotId = selectedShotId === id ? null : id;
+  paintHistoryList();
+  if (selectedShotId != null) showShot(selectedShotId, true);
+}
+
+async function showShot(id, scroll) {
+  const detail = document.getElementById('history-detail');
+  if (!detail) return;
+  const token = ++shotLoadToken;
+  const cached = shotCache.get(id);
+  if (cached) {
+    paintShot(detail, cached);
+    if (scroll) revealShot(detail);
+    return;
+  }
+  detail.innerHTML = '<div class="history-meta">Reading the curve…</div>';
+  if (scroll) revealShot(detail);
+  try {
+    const res = await fetch(`/api/shots/${encodeURIComponent(id)}`, { cache: 'no-store' });
+    if (!res.ok) throw new Error(res.status);
+    const shot = await res.json();
+    shotCache.set(id, shot);
+    if (token !== shotLoadToken || selectedShotId !== id) return;
+    paintShot(detail, shot);
+    if (scroll) revealShot(detail);
+  } catch (err) {
+    if (token !== shotLoadToken || selectedShotId !== id) return;
+    detail.innerHTML = '<div class="history-meta">Could not load this shot</div>';
+  }
+}
+
+function revealShot(detail) {
+  const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  detail.scrollIntoView({ block: 'nearest', behavior: reduce ? 'auto' : 'smooth' });
+}
+
+function curveMax(samples, key, floor, peak) {
+  let high = typeof peak === 'number' ? peak : 0;
+  samples.forEach(sample => {
+    if (typeof sample[key] === 'number') high = Math.max(high, sample[key]);
+  });
+  return high <= floor ? floor : Math.ceil(high);
+}
+
+function formatScale(value) {
+  return Number.isInteger(value) ? String(value) : value.toFixed(1);
+}
+
+function secondsLabel(value) {
+  const text = Math.abs(value - Math.round(value)) < 0.05
+    ? String(Math.round(value))
+    : value.toFixed(1);
+  return `${text} s`;
+}
+
+function curvePoints(samples, key, yMax) {
+  const tMax = Math.max(...samples.map(sample => Number(sample.t) || 0), 0.001);
+  const innerW = CURVE_WIDTH - CURVE_PAD * 2;
+  const innerH = CURVE_HEIGHT - CURVE_PAD * 2;
+  const points = [];
+  samples.forEach(sample => {
+    const value = sample[key];
+    if (typeof value !== 'number' || Number.isNaN(value)) return;
+    const x = CURVE_PAD + (sample.t / tMax) * innerW;
+    const y = CURVE_PAD + (1 - Math.max(0, Math.min(yMax, value)) / yMax) * innerH;
+    points.push([x, y]);
+  });
+  return points;
+}
+
+function linePath(points) {
+  return points
+    .map((point, index) => `${index ? 'L' : 'M'}${point[0].toFixed(1)} ${point[1].toFixed(1)}`)
+    .join(' ');
+}
+
+function chartBlock(title, samples, key, klass, yMax, unit, guide) {
+  const points = curvePoints(samples, key, yMax);
+  const end = secondsLabel(samples.length ? samples[samples.length - 1].t : 0);
+  const base = (CURVE_HEIGHT - CURVE_PAD).toFixed(1);
+  let guideLine = '';
+  if (guide != null && guide > 0 && guide < yMax) {
+    const y = CURVE_PAD + (1 - guide / yMax) * (CURVE_HEIGHT - CURVE_PAD * 2);
+    guideLine =
+      `<line class="guide" x1="${CURVE_PAD}" y1="${y.toFixed(1)}" ` +
+      `x2="${CURVE_WIDTH - CURVE_PAD}" y2="${y.toFixed(1)}"/>`;
+  }
+  const drawn = linePath(points);
+  const fill = points.length
+    ? `${drawn} L${points[points.length - 1][0].toFixed(1)} ${base} ` +
+      `L${points[0][0].toFixed(1)} ${base} Z`
+    : '';
+  const dot = points.length === 1
+    ? `<circle class="${klass} dot" cx="${points[0][0].toFixed(1)}" cy="${points[0][1].toFixed(1)}" r="3.5"/>`
+    : '';
+  const note = guide != null ? '9 bar guide' : `0–${formatScale(yMax)} ${unit}`;
+  return `
+    <div class="curve-label"><span>${title}</span><span>${note}</span></div>
+    <svg class="curve" viewBox="0 0 ${CURVE_WIDTH} ${CURVE_HEIGHT}" role="img"
+         aria-label="${title}, ${note}">
+      <line class="base" x1="${CURVE_PAD}" y1="${base}" x2="${CURVE_WIDTH - CURVE_PAD}" y2="${base}"/>
+      ${guideLine}
+      ${fill ? `<path class="${klass} fill" d="${fill}"/>` : ''}
+      ${drawn ? `<path class="${klass} line" d="${drawn}"/>` : ''}
+      ${dot}
+    </svg>
+    <div class="axis"><span>0 s</span><span>${end}</span></div>`;
+}
+
+function paintShot(detail, shot) {
+  const samples = Array.isArray(shot.samples) ? shot.samples : [];
+  const seconds = Number(shot.seconds);
+  const ml = Number(shot.ml);
+  const bits = [
+    shotWhen(shot.started_at),
+    `${seconds.toFixed(1)} s`,
+    `${ml.toFixed(1)} ml`,
+    ratioText(ml),
+  ];
+  if (typeof shot.peak_head_bar === 'number') bits.push(`${shot.peak_head_bar.toFixed(1)} bar`);
+  if (typeof shot.peak_flow_mls === 'number') bits.push(`${shot.peak_flow_mls.toFixed(1)} ml/s`);
+  let charts = '';
+  if (samples.length) {
+    charts = chartBlock(
+      'Head pressure', samples, 'head_bar', 'head',
+      curveMax(samples, 'head_bar', CURVE_FLOOR.head_bar, shot.peak_head_bar),
+      'bar', 9,
+    );
+    if (samples.some(sample => typeof sample.boiler_bar === 'number')) {
+      charts += chartBlock(
+        'Boiler', samples, 'boiler_bar', 'boiler',
+        curveMax(samples, 'boiler_bar', CURVE_FLOOR.boiler_bar, shot.peak_boiler_bar),
+        'bar', null,
+      );
+    }
+    charts += chartBlock(
+      'Flow', samples, 'flow_mls', 'flow',
+      curveMax(samples, 'flow_mls', CURVE_FLOOR.flow_mls, shot.peak_flow_mls),
+      'ml/s', null,
+    );
+  } else {
+    charts = '<div class="history-meta">No curve saved for this shot</div>';
+  }
+  detail.innerHTML = `<div class="history-meta">${bits.map(escapeHtml).join(' · ')}</div>${charts}`;
+}
+
 // ---- tank ----------------------------------------------------------------
 
 function renderTank(tank) {
@@ -1228,6 +1580,7 @@ function render(data) {
   renderState(data.machine);
   renderRings(data.pressure);
   renderPulls(data.machine.history || []);
+  renderHistory(data.shots);
   renderToday(data.machine && data.machine.today);
 
   const flowCard = document.getElementById('flow-card');

@@ -9,6 +9,8 @@ from smart_espresso.analog_sensor.analog_sensor import MedianFilterADC
 from smart_espresso.analog_sensor.mcp3008_analog_sensor import MCP3008ADC
 from smart_espresso.analog_sensor.pressure_analog_sensor import PressureAnalogSensor
 from smart_espresso.analog_sensor.water_flow_sensor import WaterFlowAnalogSensor
+from smart_espresso.shot_history import DEFAULT_STATE_PATH as DEFAULT_SHOT_HISTORY_PATH
+from smart_espresso.shot_history import ShotHistory
 from smart_espresso.smart_espresso import SmartEspresso
 from smart_espresso.utils import strtobool
 from smart_espresso.water_tank import DEFAULT_STATE_PATH, WaterTank
@@ -47,6 +49,10 @@ if WEB_ENABLE:
         tank=WaterTank(
             capacity_ml=float(os.environ.get("WATER_TANK_ML", 2000)),
             state_path=os.environ.get("WATER_TANK_STATE", DEFAULT_STATE_PATH),
+        ),
+        shot_history=ShotHistory(
+            state_path=os.environ.get("SHOT_HISTORY_STATE", DEFAULT_SHOT_HISTORY_PATH),
+            max_shots=int(os.environ.get("SHOT_HISTORY_MAX", ShotHistory.MAX_SHOTS)),
         ),
     )
 

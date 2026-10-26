@@ -3,6 +3,8 @@ import threading
 from time import localtime, monotonic
 from typing import Optional
 
+from smart_espresso.shot_history import ShotHistory
+
 
 class MachineState:
     """Machine state identifiers, with the label shown in the UI."""
@@ -103,7 +105,8 @@ class MachineStateClassifier:
     # disconnected sensor, not a shot: no real pull does nothing for 5
     # minutes.
     MAX_FLOWLESS_BREW_SECONDS = 300.0
-    # Recent pulls kept for the dashboard's history strip.
+    # Recent pulls kept for the dashboard's duration strip. The persisted
+    # log (shot_history.ShotHistory) is a separate, longer record.
     SHOT_HISTORY_MAX = 12
 
     def __init__(
@@ -118,6 +121,7 @@ class MachineStateClassifier:
         dwell_seconds: float = 0.8,
         pressure_hold_seconds: float = PRESSURE_HOLD_SECONDS,
         max_flowless_brew_seconds: float = MAX_FLOWLESS_BREW_SECONDS,
+        shot_history: Optional[ShotHistory] = None,
     ):
         """
         Initialize the classifier.
@@ -141,6 +145,11 @@ class MachineStateClassifier:
                 first appears) may read as brewing before it is treated as
                 a sensor fault and the state falls back to the boiler's
                 state, or to UNKNOWN when no boiler is fitted.
+            shot_history: Optional log that receives each completed pull,
+                including the pressure and flow curves sampled while it ran.
+                None keeps the in-memory strip only. The log is updated
+                outside this object's lock so a disk write cannot stall a
+                reader of :meth:`snapshot`.
         """
         if pump_head_bar < brew_head_bar:
             raise ValueError(
@@ -158,6 +167,7 @@ class MachineStateClassifier:
         self.dwell_seconds = dwell_seconds
         self.pressure_hold_seconds = pressure_hold_seconds
         self.max_flowless_brew_seconds = max_flowless_brew_seconds
+        self.shot_history = shot_history
 
         self._lock = threading.Lock()
         self.state: str = MachineState.UNKNOWN
@@ -216,6 +226,9 @@ class MachineStateClassifier:
             total_ml: Lifetime volume in millilitres, used for the shot timer.
         """
         now = monotonic()
+        # "commit" / "abandon" once a pull closes, applied after the lock so
+        # the history file is not written while readers wait on it.
+        outcome = None
         with self._lock:
             self._roll_day_if_needed()
             self._update_boiler_rate(boiler_bar, now)
@@ -232,7 +245,7 @@ class MachineStateClassifier:
                 now - self._candidate_since >= self.dwell_seconds
             )
             if promote and candidate != self.state:
-                self._on_state_change(candidate, now, total_ml)
+                outcome = self._on_state_change(candidate, now, total_ml)
 
             # Tracked against the candidate, not the published state: once the
             # pump stops, BREWING is still published while the line drains,
@@ -249,8 +262,12 @@ class MachineStateClassifier:
                     )
                 self._shot_prev = now
                 self._shot_prev_ml = total_ml
+                self._sample_open_shot(now, head_bar, boiler_bar, flow_mls)
 
-            return self.state
+            state = self.state
+
+        self._close_recorded_shot(outcome)
+        return state
 
     def _roll_day_if_needed(self) -> None:
         """Reset the daily tally once the wall clock crosses local midnight."""
@@ -302,10 +319,7 @@ class MachineStateClassifier:
                 # instead (staying there until the pressure drops).
                 if self._pump_pressure_since is None:
                     self._pump_pressure_since = now
-                elif (
-                    now - self._pump_pressure_since
-                    >= self.max_flowless_brew_seconds
-                ):
+                elif now - self._pump_pressure_since >= self.max_flowless_brew_seconds:
                     return self._thermal(boiler_bar, stuck=True)
                 return MachineState.BREWING
 
@@ -349,14 +363,23 @@ class MachineStateClassifier:
 
         return MachineState.READY
 
-    def _on_state_change(self, new_state: str, now: float, total_ml: float) -> None:
-        """Enter a new state, opening or closing the shot timer as needed."""
+    def _on_state_change(
+        self, new_state: str, now: float, total_ml: float
+    ) -> Optional[tuple]:
+        """Enter a new state, opening or closing the shot timer as needed.
+
+        Returns ``("commit", seconds, ml)`` or ``("abandon",)`` when a pull
+        closes, so the caller can persist it after releasing the lock.
+        """
+        outcome = None
         if new_state == MachineState.BREWING:
             self._shot_start = now
             self._shot_seconds = 0.0
             self._shot_ml = 0.0
             self._shot_prev = now
             self._shot_prev_ml = total_ml
+            if self.shot_history is not None:
+                self.shot_history.open()
         elif self.state == MachineState.BREWING:
             # Very short blips are pump priming or a noisy sample, not a shot,
             # and a pressure-only false positive (stuck sensor, static
@@ -369,14 +392,50 @@ class MachineStateClassifier:
                 }
                 self._shot_history.append(self._last_shot)
                 if len(self._shot_history) > self.SHOT_HISTORY_MAX:
-                    del self._shot_history[: len(self._shot_history) - self.SHOT_HISTORY_MAX]
+                    del self._shot_history[
+                        : len(self._shot_history) - self.SHOT_HISTORY_MAX
+                    ]
                 self._shots_today += 1
                 self._ml_today += self._shot_ml
+                outcome = (
+                    "commit",
+                    self._last_shot["seconds"],
+                    self._last_shot["ml"],
+                )
+            else:
+                outcome = ("abandon",)
             self._shot_start = None
             self._shot_prev = None
 
         self.state = new_state
         self._state_since = now
+        return outcome
+
+    def _sample_open_shot(
+        self,
+        now: float,
+        head_bar: Optional[float],
+        boiler_bar: Optional[float],
+        flow_mls: float,
+    ) -> None:
+        """Hand the current reading to the log, if a pull is open.
+
+        Elapsed time is wall time from the start of the pull, pauses
+        included, so the curve shows a real pressure profile. The recorded
+        duration stays the flowing time only.
+        """
+        if self.shot_history is None or self._shot_start is None:
+            return
+        self.shot_history.sample(now - self._shot_start, head_bar, boiler_bar, flow_mls)
+
+    def _close_recorded_shot(self, outcome: Optional[tuple]) -> None:
+        """Persist or drop the pull that just closed. No-op otherwise."""
+        if self.shot_history is None or not outcome:
+            return
+        if outcome[0] == "commit":
+            self.shot_history.commit(outcome[1], outcome[2])
+        else:
+            self.shot_history.abandon()
 
     @property
     def label(self) -> str:
