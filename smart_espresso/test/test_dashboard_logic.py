@@ -100,6 +100,79 @@ class TestOfflineRules:
         assert call("logic.showSkeletons(true)") is False
 
 
+class TestGlance:
+    def test_ready_and_heating_secondary_lines(self):
+        ready = call(
+            "logic.heroDetail({state:'ready', since_seconds:600, shot:null}, 1.1)"
+        )
+        assert ready == "Ready · 10 min"
+        heating = call(
+            "logic.heroDetail({state:'heating', since_seconds:150, shot:null}, 0.6)"
+        )
+        assert heating.startswith("0.6 / 0.8 bar")
+        assert "min" in heating
+
+    def test_warming_bar_and_eta_need_a_real_slope(self):
+        assert call("logic.warmingProgress(0.4)") == 0.5
+        assert call("logic.warmingProgress(2)") == 1
+        assert call("logic.warmingEtaSeconds(0.2, 3)") is None
+        assert call("logic.warmingEtaSeconds(0.16, 200)") is None
+        eta = call("logic.warmingEtaSeconds(0.6, 150)")
+        assert eta is not None and eta > 0
+
+    def test_glance_follows_the_wake_lock_or_a_pin(self):
+        assert call("logic.glanceOn(true, false)") is True
+        assert call("logic.glanceOn(false, true)") is True
+        assert call("logic.glanceOn(false, false)") is False
+
+    def test_window_cue_matches_the_buzz_and_fires_once(self):
+        first = call(
+            "logic.noteShotWindow({shotSeen:false, buzzedInWindow:false}, true, false)"
+        )
+        assert first == {
+            "shotSeen": True,
+            "buzzedInWindow": True,
+            "buzz": False,
+            "flash": False,
+        }
+        crossed = call(
+            "logic.noteShotWindow({shotSeen:true, buzzedInWindow:false}, true, false)"
+        )
+        assert crossed["buzz"] is True and crossed["flash"] is True
+        again = call(
+            "logic.noteShotWindow(" "{shotSeen:true, buzzedInWindow:true}, true, false)"
+        )
+        assert again["buzz"] is False and again["flash"] is False
+        quiet = call(
+            "logic.noteShotWindow({shotSeen:true, buzzedInWindow:false}, true, true)"
+        )
+        assert quiet["buzz"] is True and quiet["flash"] is False
+        assert call("logic.clearShotWindow()") == {
+            "shotSeen": False,
+            "buzzedInWindow": False,
+        }
+
+    def test_state_bands_are_distinct_colours(self):
+        page = (
+            Path(__file__).resolve().parents[1] / "web" / "static" / "index.html"
+        ).read_text(encoding="utf-8")
+        colors = dict(
+            re.findall(
+                r"--state-(off|heating|ready|brewing|steaming):\s*(#[0-9A-Fa-f]{6})",
+                page,
+            )
+        )
+        assert set(colors) == {"off", "heating", "ready", "brewing", "steaming"}
+        assert len(set(colors.values())) == 5
+        glyphs = re.findall(
+            r"(off|heating|ready|brewing|steaming):\s+'([^']+)'",
+            page,
+        )
+        shapes = {name: shape for name, shape in glyphs}
+        assert len(shapes) == 5
+        assert len(set(shapes.values())) == 5
+
+
 class TestShippedShell:
     """The cached HTML is what a phone paints before the script runs."""
 
