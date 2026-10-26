@@ -81,8 +81,12 @@ if __name__ == "__main__":
     ADC_TYPE = os.environ.get("ADC_TYPE", "ADS1115")
 
     # How often the flow sensor's background thread samples the ADC. The
-    # render loop alone (10 Hz) misses espresso-rate pulses (~20-30 Hz).
-    FLOW_SAMPLE_INTERVAL = float(os.environ.get("FLOW_SAMPLE_INTERVAL") or 0.01)
+    # render loop alone (10 Hz) misses espresso-rate pulses. The default
+    # is 5 ms so a 6 ml/s pour at 30% duty still lands on a sample.
+    FLOW_SAMPLE_INTERVAL = float(
+        os.environ.get("FLOW_SAMPLE_INTERVAL")
+        or WaterFlowAnalogSensor.DEFAULT_SAMPLE_INTERVAL
+    )
 
     if ADC_TYPE == "ADS1115":
         # ADS1115 configuration (16-bit ADC, I2C interface)
@@ -100,7 +104,9 @@ if __name__ == "__main__":
                 max_pressure_mpa=0.5,  # 0-0.5MPa sensor for boiler (0-5 bar)
             ),  # Boiler Pressure on ADS1115 channel A1
             WaterFlowAnalogSensor(
-                adc=MedianFilterADC(ADS1115ADC(pin=2, gain=1)),
+                # No median filter: it deletes one-sample pulses. The
+                # Schmitt thresholds in the sensor reject noise instead.
+                adc=ADS1115ADC(pin=2, gain=1),
                 name="Brew",
                 sample_interval=FLOW_SAMPLE_INTERVAL,
             ),  # Water flow (hall-effect pulse) on ADS1115 channel A2 (3rd port)
@@ -119,7 +125,7 @@ if __name__ == "__main__":
                 max_pressure_mpa=0.5,  # 0-0.5MPa sensor for boiler (0-5 bar)
             ),  # Boiler Pressure
             WaterFlowAnalogSensor(
-                adc=MedianFilterADC(MCP3008ADC(pin=2)),
+                adc=MCP3008ADC(pin=2),
                 name="Brew",
                 sample_interval=FLOW_SAMPLE_INTERVAL,
             ),  # Water flow (hall-effect pulse) on MCP3008 channel CH2

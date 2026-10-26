@@ -212,6 +212,7 @@ class StatusServer:
                         "total_ml": round(sensor_ml, 1),
                         "flow_rate_lpm": round(sensor.flow_rate, 3),
                         "flow_rate_mls": round(sensor_mls, 1),
+                        "sample_hz": _rounded_hz(sensor.sample_hz),
                     }
                 )
             else:
@@ -335,6 +336,13 @@ class StatusServer:
         self._thread = threading.Thread(target=_serve, daemon=True)
         self._thread.start()
         print(f"Status web server listening on http://{self.host}:{self.port}")
+
+
+def _rounded_hz(sample_hz: Optional[float]):
+    """One decimal, or None before the sensor has measured a rate."""
+    if sample_hz is None:
+        return None
+    return round(sample_hz, 1)
 
 
 def _parse_limit(raw: Optional[str]):

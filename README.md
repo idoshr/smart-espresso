@@ -131,14 +131,17 @@ export SHOT_HISTORY_MAX="200"      # Completed shots kept on disk
 export DHT_ENABLE="True"          # Ambient DHT22/AM2302 sensor (GPIO)
 export DHT_PIN="4"                # BCM pin number for the DHT22
 
-export FLOW_SAMPLE_INTERVAL="0.01"  # Flow pulse sampling period, seconds
+export FLOW_SAMPLE_INTERVAL="0.005"  # Flow pulse sampling period, seconds
 ```
 
 The flow sensor's pulse polarity is detected automatically: sensors that
 idle low (pulses rise) and open-collector sensors that idle high (pulses
-drop) are both counted. The default `FLOW_SAMPLE_INTERVAL` samples at
-~100 Hz on a background thread, which captures espresso-rate pulse trains
-(~20-30 Hz); the render loop's 10 Hz alone would undersample them.
+drop) are both counted. The default `FLOW_SAMPLE_INTERVAL` is 5 ms
+(200 Hz) on a background thread. Do not wrap that channel in a median
+filter: a 3-sample median deletes pulses that are only one sample wide,
+and the shot volume under-reads. The render loop's 10 Hz alone would
+undersample an espresso shot. `/api/status` reports the measured
+`sample_hz`.
 
 ### Generating Home Assistant API Token
 
@@ -169,7 +172,12 @@ from smart_espresso.web.status_server import StatusServer
 analog_devices = [
     PressureAnalogSensor(adc=ADS1115ADC(pin=0, gain=2/3), name="Head", max_pressure_mpa=2.0),
     PressureAnalogSensor(adc=ADS1115ADC(pin=1, gain=2/3), name="Boiler", max_pressure_mpa=0.5),
-    WaterFlowAnalogSensor(adc=ADS1115ADC(pin=2, gain=1), name="Brew", pulses_per_liter=5880),
+    WaterFlowAnalogSensor(
+        adc=ADS1115ADC(pin=2, gain=1),
+        name="Brew",
+        pulses_per_liter=5880,
+        sample_interval=0.005,
+    ),
 ]
 
 # Run, serving the mobile dashboard on http://<pi-ip>:8080
@@ -316,7 +324,8 @@ The page polls `GET /api/status` once per second:
 {
   "pressure": [{"name": "Head", "bar": 9.1, "max_bar": 20.0}],
   "flow": [{"name": "Brew", "recent_ml": 36.0, "total_ml": 128.4,
-            "flow_rate_mls": 1.8, "window_seconds": 120.0, "chart": [0.0, 1.2]}],
+            "flow_rate_mls": 1.8, "sample_hz": 200.0,
+            "window_seconds": 120.0, "chart": [0.0, 1.2]}],
   "machine": {"state": "brewing", "label": "Pulling shot", "severity": "active",
               "since_seconds": 12.4, "shot": {"seconds": 12.4, "ml": 22.1},
               "last_shot": {"seconds": 27.0, "ml": 38.4},
