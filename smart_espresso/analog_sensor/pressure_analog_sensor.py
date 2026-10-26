@@ -131,10 +131,10 @@ class PressureAnalogSensor(AnalogSensor):
     def normalized_value(self):
         return self.bar
 
-    def update_home_assistant(self, client):
+    def ha_states(self):
         from smart_espresso.home_assistant import State
 
-        return client.set_state(
+        return [
             State(
                 entity_id=f"sensor.espresso_machine_{self.name.lower()}_pressure",
                 state=str(round(self.bar, 2)),
@@ -143,7 +143,11 @@ class PressureAnalogSensor(AnalogSensor):
                     "friendly_name": f"{self.name} Pressure",
                 },
             )
-        )
+        ]
+
+    def update_home_assistant(self, client):
+        for state in self.ha_states():
+            client.set_state(state)
 
     # value = pot.voltage
     # if value < OFFSET_VOLTAGE:

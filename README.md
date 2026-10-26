@@ -154,6 +154,12 @@ and the shot volume under-reads. The render loop's 10 Hz alone would
 undersample an espresso shot. `/api/status` reports the measured
 `sample_hz`.
 
+Home Assistant publishes run on a background thread with a 2 s connect
+timeout and a 3 s read timeout. A slow or unreachable server backs off
+and cannot freeze the shot timer, the display, or the state classifier.
+The published entities are each live sensor, the machine state, the shot
+timer and the water tank.
+
 ### Generating Home Assistant API Token
 
 To integrate with Home Assistant, you need a long-lived access token:

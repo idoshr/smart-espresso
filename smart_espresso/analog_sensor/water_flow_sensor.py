@@ -336,10 +336,10 @@ class WaterFlowAnalogSensor(AnalogSensor):
     def normalized_value(self):
         return self.liter
 
-    def update_home_assistant(self, client):
+    def ha_states(self):
         from smart_espresso.home_assistant import State
 
-        return client.set_state(
+        return [
             State(
                 entity_id=f"sensor.espresso_machine_{self.name.lower()}_flow",
                 state=str(round(self.liter, 2)),
@@ -351,4 +351,8 @@ class WaterFlowAnalogSensor(AnalogSensor):
                     "flow_rate_unit": "L/min",
                 },
             )
-        )
+        ]
+
+    def update_home_assistant(self, client):
+        for state in self.ha_states():
+            client.set_state(state)
