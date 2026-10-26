@@ -6,7 +6,8 @@
 
 _**WORK IN PROGRESS**_
 
-DIY espresso machine monitoring with Raspberry Pi 4, pressure sensors, OLED display, and optional Home Assistant integration.
+DIY espresso machine monitoring with Raspberry Pi 4, pressure sensors,
+OLED display, and optional Home Assistant integration.
 
 ## Features
 
@@ -95,17 +96,26 @@ output) → A2. See the usage example below.
 
 ## Installation
 
+On a Raspberry Pi, install the hardware extras. The `dht` extra is separate
+because `Adafruit_DHT` builds only on a Pi. A machine that only serves the
+dashboard can install the core package, with no GPIO or ADC libraries.
+
 ```bash
 # Enable interfaces
 sudo raspi-config  # Enable I2C and/or SPI
 
-# Install package
-pip3 install smart-espresso
+# Install package with the Pi and DHT drivers
+pip3 install "smart-espresso[pi,dht]"
 
 # Or from source
 git clone https://github.com/idoshr/smart-espresso.git
 cd smart-espresso
-pip3 install -e .
+pip3 install -e ".[pi,dht]"
+
+# Same pins, including DHT: pip3 install -r requirements.txt
+
+# Web stack only
+pip3 install smart-espresso
 ```
 
 ## Running on boot
@@ -171,7 +181,8 @@ To integrate with Home Assistant, you need a long-lived access token:
 5. Give it a descriptive name (e.g., "Smart Espresso")
 6. Copy the generated token and use it as `HA_TOKEN`
 
-**Important**: Save the token immediately - it won't be shown again. For more details, see the [Home Assistant Authentication documentation](https://developers.home-assistant.io/docs/auth_api/#long-lived-access-token).
+**Important**: Save the token immediately. It is not shown again.
+See the [authentication docs][ha-auth].
 
 ## Usage
 
@@ -207,7 +218,8 @@ se = SmartEspresso(
 se.run()
 ```
 
-**With MCP3008**: Replace `ADS1115ADC(pin=0, gain=2/3)` with `MCP3008ADC(pin=0)` (keep `max_pressure_mpa` parameter)
+**With MCP3008**: Replace `ADS1115ADC(pin=0, gain=2/3)` with
+`MCP3008ADC(pin=0)`. Keep the `max_pressure_mpa` parameter.
 
 ## Web Dashboard
 
@@ -217,19 +229,28 @@ a full-screen view).
 
 It shows:
 
-- **Machine state** (see below) with a live shot timer while a shot is pulled;
-  while the shot runs and you scroll away, a compact timer pins to the top
-  edge, and a short buzz marks the moment the pull enters its window
+- **Machine state** (see below) as a full-width block you can read from
+  across the kitchen: a 44 px label on a solid colour, with one secondary
+  line (how long it has been ready, or boiler pressure against 0.8 bar
+  while it warms, plus a thin progress bar). While a shot is pulled, a
+  live timer shows yield and ratio; if you scroll away, a compact timer
+  pins to the top edge. Entering the 25–30 s window buzzes once and
+  flashes the card (the flash is skipped when the system asks for less
+  motion). Holding **awake** — or long-pressing the state card — switches
+  to glance mode: only that state and, during a shot, the timer.
 - **Today's pulls** in the header, so a glance answers how many shots the
   machine has seen today (in memory; resets when the machine restarts)
 - **Head pressure** and **Boiler pressure** on manometer dials, in bar,
   scaled to the working range with the target band marked and an
   over-pressure zone in red
-- **Recent pulls** as a tappable history strip — tap a tick to see that
-  pull's time, volume and brew ratio
+- **Recent pulls** as a strip. A filled dot is on target, an open left
+  chevron is fast, and a filled right chevron is long — the legend under
+  the strip uses the same shapes. A tap selects the nearest pull, even
+  when the marks sit on top of each other
 - **Shot history**: the pulls saved on the Pi, each with the time of day,
-  the duration and the volume. Tap one to chart its head pressure and flow
-  (and the boiler, when that sensor is fitted)
+  the duration, the volume, and the verdict in words (fast, on target,
+  long). Tap one to chart its head pressure and flow (and the boiler,
+  when that sensor is fitted)
 - **Water tank level**: how much of the 2 L tank is left, roughly how many
   shots that is, and a _Tank filled_ button to reset the count after a refill
 - **Water used in the last 2 minutes**, in millilitres, with a per-3-second
@@ -238,12 +259,25 @@ It shows:
 
 The page is styled as a quiet pastel bar readout on a near-white ground:
 crema for the group, a matcha green for the boiler, pale blue for water,
-with a dark scheme that follows the system setting. Before the first
-`/api/status` response the header reads **connecting…** (no green lamp),
-the footer says **never connected**, and the flow and tank cards stay
-hidden — a zero baked into the cached shell is not a reading. After a
-reading has arrived, losing the machine switches the header to
-**offline** and the footer to a last-seen time. To add your own badge,
+with a dark scheme that follows the system setting. Text clears
+4.5:1 and the small marks (dots, ticks, graph lines) clear 3:1 on
+both schemes. Labels are at least 11 px, and anything carrying a
+number is at least 12 px. A stronger theme follows
+`prefers-contrast: more`. The dial's over-band stays hidden until
+the reading nears that band, so a resting head at 0 bar does not
+look like a warning. Before the first
+`/api/status` response the header and the state card read
+**connecting…** (no green lamp), skeleton placeholders stand in for the
+dials and the flow and tank cards, and the footer says **never
+connected**. No number is shown until a payload arrives.
+
+If three polls in a row fail, a banner says the machine can't be
+reached, how old the last reading is, and offers **Retry now**. Retry
+polls immediately and starts the backoff over; it does not pretend the
+outage is over. Readings already on screen stay at full contrast with a
+**stale** tag, and the shot timer does not keep counting. **Tank
+filled** cannot reset the count while the machine is unreachable, and a
+failed reset explains why in a toast. To add your own badge,
 drop `logo.svg` into `smart_espresso/web/static/` and put an
 `<img src="/logo.svg">` in the header of
 [`index.html`](smart_espresso/web/static/index.html).
@@ -271,7 +305,8 @@ While brewing, the classifier times the shot and measures its volume; when the
 pump stops, a pull longer than 2 s that actually moved water is kept (shorter
 blips are pump priming, not a shot, and a pressure reading with no flow is
 not one either). The dashboard marks the 25–30 s window on the shot timer, so
-you can see a pull running fast or long while it happens. That same pull is
+you can see a pull running fast or long while it happens. Saved rows
+keep that verdict in words, not only in colour. That same pull is
 appended to the shot history below.
 
 ### Shot history
@@ -384,16 +419,20 @@ default and has no authentication — keep it on a trusted home network, or set
 - **Wrong readings**: Verify 3.3V sensors, check wiring, wait for auto-calibration
 - **Display issues**: Check I2C address with `sudo i2cdetect -y 1` (usually 0x3C)
 - **HA errors**: Verify URL includes `http://`, check token validity
-- **Dashboard unreachable**: Check the Pi's IP (`hostname -I`), confirm port 8080 isn't firewalled, and that `WEB_ENABLE` isn't `False`
-- **State stuck on `heating`/`overpressure`**: Your boiler runs outside the default 0.8-1.6 bar band — pass `ready_min_bar` / `ready_max_bar` to `MachineStateClassifier`
-- **Tank count looks wrong**: It counts measured water only; delete `WATER_TANK_STATE` to start over, and press _Tank filled_ at every refill
+- **Dashboard unreachable**: Check the Pi's IP (`hostname -I`), confirm
+  port 8080 is not firewalled, and that `WEB_ENABLE` is not `False`
+- **State stuck on `heating` or `overpressure`**: The boiler is outside
+  the default 0.8-1.6 bar band. Pass `ready_min_bar` and `ready_max_bar`
+  to `MachineStateClassifier`
+- **Tank count looks wrong**: It counts measured water only. Delete
+  `WATER_TANK_STATE` to start over, and press _Tank filled_ at every refill
 - **Shot history looks wrong**: Only pulls longer than 2 s that moved water
   are kept. Delete `SHOT_HISTORY_STATE` to start the log over
 - **Permissions**: `sudo usermod -a -G spi,i2c,gpio pi && sudo reboot`
 
 ## Project Structure
 
-```
+```text
 smart_espresso/
 ├── analog_sensor/
 │   ├── analog_sensor.py           # Base classes (ADCInterface, AnalogSensor)
@@ -429,4 +468,6 @@ BSD 3-Clause License
 
 ---
 
-**Made with ☕ by coffee enthusiasts**
+Made with ☕ by coffee enthusiasts
+
+[ha-auth]: https://developers.home-assistant.io/docs/auth_api/#long-lived-access-token

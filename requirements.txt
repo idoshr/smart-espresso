@@ -1,3 +1,6 @@
+# Pinned device install (core + pi + dht). CI installs the core package
+# and the pi extra from pyproject.toml, and skips dht: Adafruit_DHT builds
+# only on a Raspberry Pi.
 gpiozero==1.6.2
 luma.core==2.4.1
 luma.oled==3.13.0
