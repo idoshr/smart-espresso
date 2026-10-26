@@ -1,7 +1,5 @@
 from time import monotonic, sleep
-from typing import Union
 
-from homeassistant_api import Client
 from luma.core.render import canvas
 from luma.oled.device import sh1106
 
@@ -15,7 +13,7 @@ class SmartEspresso:
         self,
         analog_devices: list[AnalogSensor] = None,
         digital_sensors: list = None,
-        client_ha: Client = None,
+        client_ha=None,
         display: sh1106 = None,
         web_server: StatusServer = None,
         render_interval: float = 0.1,
@@ -39,7 +37,7 @@ class SmartEspresso:
         self.analog_devices: list[AnalogSensor] = analog_devices or []
         self.digital_sensors: list = digital_sensors or []
         self.all_sensors = self.analog_devices + self.digital_sensors
-        self.client_ha: Client = client_ha
+        self.client_ha = client_ha
         self.display: sh1106 = display
         self.web_server: StatusServer = web_server
         self.render_interval: float = render_interval
@@ -48,7 +46,9 @@ class SmartEspresso:
 
     def run(self):
         if not self.all_sensors:
-            raise ValueError("No sensors to read (provide analog_devices or digital_sensors)")
+            raise ValueError(
+                "No sensors to read (provide analog_devices or digital_sensors)"
+            )
 
         if self.web_server:
             self.web_server.start()
@@ -68,7 +68,10 @@ class SmartEspresso:
             # Update Home Assistant, throttled independently of render_interval
             # so a slow/unreachable HA instance can't stall sensor sampling or
             # the display, and so we don't hammer its REST API every tick.
-            if self.client_ha and (loop_start - self._last_ha_update) >= self.ha_update_interval:
+            if (
+                self.client_ha
+                and (loop_start - self._last_ha_update) >= self.ha_update_interval
+            ):
                 for sensor in self.all_sensors:
                     try:
                         sensor.update_home_assistant(self.client_ha)

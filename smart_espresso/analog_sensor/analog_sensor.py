@@ -2,8 +2,6 @@ from abc import ABC, abstractmethod
 from collections import deque
 from statistics import median
 
-from homeassistant_api import Client
-
 
 class ADCInterface(ABC):
     """Abstract interface for Analog-to-Digital Converters."""
@@ -109,7 +107,7 @@ class AnalogSensor(ABC):
             return self.read()
 
     @abstractmethod
-    def update_home_assistant(self, client: Client):
+    def update_home_assistant(self, client):
         raise NotImplementedError
 
     @property
