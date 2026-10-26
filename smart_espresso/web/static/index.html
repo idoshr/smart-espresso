@@ -28,8 +28,11 @@
     --card: #FEFEFD;
     --edge: #E6EAE3;
     --ink: #3D4640;
-    --ink-soft: #89948B;
-    --ink-faint: #B2BCB2;
+    /* Soft and faint still have a job (secondary vs tertiary), but both
+       have to clear 4.5:1 on the card, the page and the pastel tints.
+       The paler greys they replaced did not. */
+    --ink-soft: #546058;
+    --ink-faint: #5C675F;
 
     --crema: #EDBB9B;      /* brew head: crema on a fresh shot */
     --crema-soft: #FBF2EA;
@@ -42,9 +45,9 @@
 
     /* The same hues, darkened until they survive as text on a pastel card
        (a shot timer sitting on the crema-soft brewing state, say). */
-    --crema-ink: #B7744F;
-    --matcha-ink: #4F7A58;
-    --clay-ink: #BC6B59;
+    --crema-ink: #8C4E2A;
+    --matcha-ink: #1F6B34;
+    --clay-ink: #9A4632;
 
     --display: "Familjen Grotesk", ui-rounded, system-ui, sans-serif;
     --body: "Karla", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -60,8 +63,8 @@
       --card: #2C312D;
       --edge: #39403A;
       --ink: #EBEFEA;
-      --ink-soft: #9DA9A1;
-      --ink-faint: #75817A;
+      --ink-soft: #B7C3BB;
+      --ink-faint: #A8B4AC;
       --crema-soft: #423029;
       --matcha-soft: #2B3B2F;
       --water-soft: #263640;
@@ -78,8 +81,8 @@
     --card: #2C312D;
     --edge: #39403A;
     --ink: #EBEFEA;
-    --ink-soft: #9DA9A1;
-    --ink-faint: #75817A;
+    --ink-soft: #B7C3BB;
+    --ink-faint: #A8B4AC;
     --crema-soft: #423029;
     --matcha-soft: #2B3B2F;
     --water-soft: #263640;
@@ -734,14 +737,129 @@
     margin-top: 18px;
   }
 
-  body.stale .stack { opacity: .4; }
-  /* The sticky bar is outside the stack, so it needs the same treatment:
-     a frozen timer must never present itself as live. */
-  body.stale .brewbar { opacity: .4; }
-  .stack { transition: opacity .3s; }
+  /* Offline keeps the last reading at full contrast. A tag does the
+     "this is old" job that dimming used to do, without dropping the
+     type below 4.5:1. */
+  .stale-tag {
+    display: inline-flex;
+    align-items: center;
+    flex: none;
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: var(--ink);
+    background: var(--card);
+    border: 1px solid var(--edge);
+    border-radius: 999px;
+    padding: 3px 8px;
+    line-height: 1.3;
+  }
+
+  .offline-banner {
+    position: sticky;
+    top: calc(8px + env(safe-area-inset-top));
+    z-index: 12;
+    margin: 0 0 14px;
+    padding: 14px 14px 12px;
+    background: var(--card);
+    color: var(--ink);
+    border: 1px solid var(--edge);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+  }
+
+  .offline-title {
+    margin: 0;
+    font-family: var(--display);
+    font-size: 16px;
+    font-weight: 600;
+    letter-spacing: -.015em;
+    line-height: 1.35;
+  }
+
+  .offline-hint {
+    margin: 6px 0 12px;
+    font-size: 14px;
+    line-height: 1.4;
+    color: var(--ink);
+  }
+
+  button.retry {
+    font-family: var(--body);
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--ink);
+    background: var(--matcha-soft);
+    border: 1px solid transparent;
+    border-radius: 999px;
+    min-height: 44px;
+    padding: 10px 18px;
+    cursor: pointer;
+  }
+
+  button.retry:focus-visible { outline: 2px solid var(--ink-soft); outline-offset: 2px; }
+
+  #skeletons { display: flex; flex-direction: column; gap: 12px; }
+  .skeleton-card { display: flex; flex-direction: column; }
+
+  .sk {
+    position: relative;
+    overflow: hidden;
+    border-radius: 8px;
+    background: var(--edge);
+  }
+
+  .sk-title { width: 38%; height: 11px; }
+  .sk-figure { width: 46%; height: 28px; margin-top: 14px; }
+  .sk-bar { width: 100%; height: 12px; margin-top: 16px; border-radius: 999px; }
+  .sk-line { width: 70%; height: 12px; margin-top: 12px; }
+
+  .sk::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    transform: translateX(-100%);
+    background: linear-gradient(
+      90deg,
+      transparent,
+      color-mix(in srgb, var(--card) 75%, transparent),
+      transparent
+    );
+    animation: sk-shimmer 1.3s ease-in-out infinite;
+  }
+
+  @keyframes sk-shimmer {
+    to { transform: translateX(100%); }
+  }
+
+  button.reset[aria-disabled="true"] {
+    cursor: default;
+    border-color: var(--edge);
+  }
+
+  .toast {
+    position: fixed;
+    left: 16px;
+    right: 16px;
+    bottom: calc(16px + env(safe-area-inset-bottom));
+    z-index: 30;
+    max-width: 428px;
+    margin: 0 auto;
+    padding: 12px 14px;
+    border-radius: 14px;
+    background: var(--ink);
+    color: var(--bg);
+    font-size: 14px;
+    line-height: 1.4;
+    box-shadow: var(--shadow);
+  }
 
   @media (prefers-reduced-motion: reduce) {
     * { transition: none !important; animation: none !important; }
+    /* A frozen shimmer stripe reads as a smear. A flat block does not. */
+    .sk::after { display: none; }
   }
 </style>
 </head>
@@ -751,7 +869,14 @@
   <span class="lamp" id="bb-lamp"></span>
   <span class="bb-label" id="bb-label">Pulling shot</span>
   <b class="bb-time" id="bb-time">0s</b>
+  <span class="stale-tag" id="bb-stale" hidden>stale</span>
   <span class="bb-ml" id="bb-ml">0 ml</span>
+</div>
+
+<div class="offline-banner" id="offline-banner" role="status" hidden>
+  <p class="offline-title" id="offline-title">Can't reach the machine</p>
+  <p class="offline-hint">Is the Pi on? Same Wi-Fi?</p>
+  <button class="retry" id="retry" type="button">Retry now</button>
 </div>
 
 <header>
@@ -774,18 +899,35 @@
       <div class="state-text">
         <div class="state-head">
           <span class="glyph" id="state-glyph" aria-hidden="true"></span>
-          <div class="state-label" id="state-label" aria-live="polite">No reading</div>
+          <div class="state-label" id="state-label" aria-live="polite">Connecting…</div>
+          <span class="stale-tag" id="stale-tag" hidden>stale</span>
         </div>
         <div class="state-detail" id="state-detail">waiting for the machine</div>
       </div>
     </div>
     <div class="shot" id="shot" hidden>
       <b id="shot-seconds">0s</b>
+      <span class="stale-tag" id="shot-stale" hidden>stale</span>
       <small id="shot-ml">0 ml</small>
       <div class="shot-track"><u id="shot-window"></u><i id="shot-progress"></i></div>
     </div>
     <span class="last-pull" id="last-pull" hidden></span>
   </div>
+
+  <!-- end state -->
+  <div id="skeletons" aria-hidden="true">
+    <div class="card skeleton-card">
+      <div class="sk sk-title"></div>
+      <div class="sk sk-figure"></div>
+      <div class="sk sk-bar"></div>
+    </div>
+    <div class="card skeleton-card">
+      <div class="sk sk-title"></div>
+      <div class="sk sk-figure"></div>
+      <div class="sk sk-line"></div>
+    </div>
+  </div>
+  <!-- end skeletons -->
 
   <div class="rings" id="rings"></div>
 
@@ -836,7 +978,8 @@
     </div>
     <div class="tank-foot">
       <span class="refill-hint" id="tank-warn" hidden>Time to refill</span>
-      <button class="reset" id="tank-reset" type="button">Tank filled</button>
+      <span class="refill-hint" id="tank-offline-hint" hidden>Reconnect to mark the tank filled</span>
+      <button class="reset" id="tank-reset" type="button" aria-disabled="true">Tank filled</button>
     </div>
   </div>
 
@@ -847,6 +990,8 @@
 </div>
 
 <footer id="footer">never connected</footer>
+
+<div class="toast" id="toast" role="status" hidden></div>
 
 <script src="/dashboard_logic.js"></script>
 <script>
@@ -1014,7 +1159,13 @@ function renderState(machine) {
     }
     shotSeen = true;
 
-    shotSeconds.textContent = `${machine.shot.seconds.toFixed(0)}s`;
+    // Fresh payload: take the machine's number. displayedShotText refuses
+    // to advance a held reading while offline, which is what keeps the
+    // timer from counting up if a late render lands after the lamp flips.
+    const incomingShot = `${machine.shot.seconds.toFixed(0)}s`;
+    const shownShot = DashboardLogic.displayedShotText(true, heldShotText, incomingShot);
+    heldShotText = shownShot;
+    shotSeconds.textContent = shownShot;
     shotSeconds.className = verdictClass(machine.shot.seconds);
     document.getElementById('shot-ml').textContent =
       `${machine.shot.ml.toFixed(0)} ml · ${ratioText(machine.shot.ml)}`;
@@ -1022,13 +1173,13 @@ function renderState(machine) {
       `${Math.min(100, machine.shot.seconds / SHOT_SCALE * 100)}%`;
     Object.assign(document.getElementById('shot-window').style, windowStyle());
 
-    document.getElementById('bb-time').textContent =
-      `${machine.shot.seconds.toFixed(0)}s`;
+    document.getElementById('bb-time').textContent = shownShot;
     document.getElementById('bb-ml').textContent =
       `${machine.shot.ml.toFixed(0)} ml`;
   } else {
     shotSeen = false;
     buzzedInWindow = false;
+    heldShotText = null;
     shotSeconds.className = '';
   }
 
@@ -1603,6 +1754,9 @@ function render(data) {
       .join('');
   }
 
+  hasPayload = true;
+  document.getElementById('skeletons').hidden = true;
+
   // render() only runs with a payload just applied, so the uptime line is
   // a real reading. Gating it on `connected` left the first success showing
   // "never connected" until the following poll.
@@ -1610,23 +1764,57 @@ function render(data) {
     `dashboard up ${formatDuration(data.uptime)}`;
 }
 
-function applyConnection() {
+let toastTimer = null;
+
+function showToast(message) {
+  const toast = document.getElementById('toast');
+  toast.textContent = message;
+  toast.hidden = false;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { toast.hidden = true; }, 4500);
+}
+
+function syncTankControl() {
+  const allowed = DashboardLogic.tankPostAllowed(connected);
+  resetButton.setAttribute('aria-disabled', allowed ? 'false' : 'true');
+  document.getElementById('tank-offline-hint').hidden = allowed;
+  if (!allowed && resetButton.classList.contains('armed')) disarmReset();
+}
+
+// Pill, footer, banner, skeletons and the stale tags. Called the moment
+// the connection changes and once a second while offline, so the banner
+// does not wait for the next footer tick to appear.
+function paintOfflineChrome() {
   const text = DashboardLogic.pillText(connected, lastSeenAt);
   document.getElementById('dot').classList.toggle('off', text !== 'live');
   document.getElementById('conn').textContent = text;
-  // Dim only once a real reading has gone stale. The connecting screen
-  // has nothing to fade, and fading it used to hide the placeholder zeros.
-  document.body.classList.toggle('stale', text === 'offline');
   if (!connected) {
     document.getElementById('footer').textContent = DashboardLogic.footerText(
       connected, lastSeenAt, Date.now()
     );
   }
+
+  const banner = DashboardLogic.offlineBanner(
+    connected, missed, lastSeenAt, Date.now()
+  );
+  const bannerEl = document.getElementById('offline-banner');
+  bannerEl.hidden = !banner.visible;
+  if (banner.visible) {
+    document.getElementById('offline-title').textContent = banner.title;
+  }
+
+  const stale = !connected && hasPayload;
+  document.getElementById('stale-tag').hidden = !stale;
+  const shotLive = !!(lastMachine && lastMachine.shot);
+  document.getElementById('shot-stale').hidden = !(stale && shotLive);
+  document.getElementById('bb-stale').hidden = !(stale && shotLive);
+  document.getElementById('skeletons').hidden = !DashboardLogic.showSkeletons(hasPayload);
+  syncTankControl();
 }
 
 function setConnected(ok) {
   connected = ok;
-  applyConnection();
+  paintOfflineChrome();
 }
 
 // Two taps to reset: a stray tap must not wipe the tank count.
@@ -1634,6 +1822,9 @@ const resetButton = document.getElementById('tank-reset');
 let armedTimer = null;
 
 resetButton.addEventListener('click', async () => {
+  // aria-disabled is not a click barrier. The guard is what stops the POST.
+  if (!DashboardLogic.tankPostAllowed(connected)) return;
+
   if (!resetButton.classList.contains('armed')) {
     resetButton.classList.add('armed');
     resetButton.textContent = 'Tap to confirm';
@@ -1649,11 +1840,22 @@ resetButton.addEventListener('click', async () => {
       method: 'POST',
       headers: { 'X-Espresso-Dashboard': '1' },
     });
-    if (!res.ok) throw new Error(res.status);
+    if (!res.ok) {
+      let error = null;
+      try {
+        const body = await res.json();
+        if (body && body.error) error = String(body.error);
+      } catch (parseErr) {
+        error = null;
+      }
+      showToast(DashboardLogic.resetFailureToast(res.status, error));
+      disarmReset();
+      return;
+    }
     renderTank(await res.json());
   } catch (err) {
-    resetButton.textContent = 'Reset failed';
-    setTimeout(disarmReset, 2500);
+    showToast(DashboardLogic.resetFailureToast(null, null));
+    disarmReset();
   }
 });
 
@@ -1665,14 +1867,18 @@ function disarmReset() {
 // ---- polling, with a backoff so a down machine is not hammered ----------
 
 let connected = false;
+let hasPayload = false;
 let missed = 0;
+// Separate from `missed`: retry zeroes this so the next wait is short,
+// without hiding the offline banner (that watches `missed`).
+let backoff = 0;
+// Last shot-timer text applied from a payload. Offline renders keep it.
+let heldShotText = null;
 // Null until a payload is applied. Date.now() here made the footer claim
 // "last seen 1 s ago" for a page that had never seen the machine.
 let lastSeenAt = null;
 let pollTimer = null;
 let pollInFlight = false;
-
-const POLL_FAST = 1000, POLL_SLOW = 10000;
 
 async function poll() {
   clearTimeout(pollTimer);
@@ -1690,19 +1896,21 @@ async function poll() {
     try {
       render(data);
       missed = 0;
+      backoff = 0;
       lastSeenAt = Date.now();
       setConnected(true);
     } catch (err) {
       console.warn('unrenderable status payload:', err);
     }
   } catch (err) {
-    if (++missed >= 3) setConnected(false);
+    missed += 1;
+    backoff += 1;
+    // The banner is painted in this turn, not on the following tick.
+    if (missed >= DashboardLogic.OFFLINE_AFTER_MISSES) setConnected(false);
   } finally {
     pollInFlight = false;
   }
-  const delay = missed === 0
-    ? POLL_FAST
-    : Math.min(POLL_FAST * 2 ** (missed - 1), POLL_SLOW);
+  const delay = DashboardLogic.nextPollDelay(backoff);
   pollTimer = setTimeout(poll, delay);
 }
 
@@ -1710,12 +1918,13 @@ async function poll() {
 // reading yet, that tick stays on "never connected" instead of counting
 // up from the moment the page opened.
 setInterval(() => {
-  if (!connected) {
-    document.getElementById('footer').textContent = DashboardLogic.footerText(
-      false, lastSeenAt, Date.now()
-    );
-  }
+  if (!connected) paintOfflineChrome();
 }, 1000);
+
+document.getElementById('retry').addEventListener('click', () => {
+  backoff = DashboardLogic.backoffAfterRetry();
+  poll();
+});
 
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) return;

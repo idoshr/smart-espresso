@@ -214,11 +214,18 @@ It shows:
 The page is styled as a quiet pastel bar readout on a near-white ground:
 crema for the group, a matcha green for the boiler, pale blue for water,
 with a dark scheme that follows the system setting. Before the first
-`/api/status` response the header reads **connecting…** (no green lamp),
-the footer says **never connected**, and the flow and tank cards stay
-hidden — a zero baked into the cached shell is not a reading. After a
-reading has arrived, losing the machine switches the header to
-**offline** and the footer to a last-seen time. To add your own badge,
+`/api/status` response the header and the state card read
+**connecting…** (no green lamp), skeleton placeholders stand in for the
+dials and the flow and tank cards, and the footer says **never
+connected**. No number is shown until a payload arrives.
+
+If three polls in a row fail, a banner says the machine can't be
+reached, how old the last reading is, and offers **Retry now**. Retry
+polls immediately and starts the backoff over; it does not pretend the
+outage is over. Readings already on screen stay at full contrast with a
+**stale** tag, and the shot timer does not keep counting. **Tank
+filled** cannot reset the count while the machine is unreachable, and a
+failed reset explains why in a toast. To add your own badge,
 drop `logo.svg` into `smart_espresso/web/static/` and put an
 `<img src="/logo.svg">` in the header of
 [`index.html`](smart_espresso/web/static/index.html).
