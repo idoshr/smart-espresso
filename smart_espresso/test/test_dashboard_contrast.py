@@ -19,6 +19,7 @@ TEXT = (
     "matcha-ink",
     "water-ink",
     "clay-ink",
+    "fast-ink",
 )
 SURFACES = (
     "bg",
@@ -28,7 +29,7 @@ SURFACES = (
     "water-soft",
     "clay-soft",
 )
-MARKS = ("matcha-ink", "crema-ink", "water-ink", "clay-ink", "ink-faint")
+MARKS = ("matcha-ink", "crema-ink", "water-ink", "clay-ink", "fast-ink", "ink-faint")
 STATES = ("off", "heating", "ready", "brewing", "steaming", "overpressure", "unknown")
 
 

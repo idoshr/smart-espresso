@@ -181,6 +181,30 @@ class TestGlance:
         assert len(set(shapes.values())) == 5
 
 
+class TestVerdicts:
+    def test_three_verdicts_have_different_shapes_and_words(self):
+        fast = call("logic.shotVerdict(22, 25, 30)")
+        good = call("logic.shotVerdict(27, 25, 30)")
+        edge = call("logic.shotVerdict(30, 25, 30)")
+        long = call("logic.shotVerdict(33, 25, 30)")
+        assert fast == {"key": "fast", "label": "fast", "shape": "chevron-left"}
+        assert good["label"] == "on target" and good["shape"] == "dot"
+        assert edge["label"] == "on target"
+        assert long == {"key": "long", "label": "long", "shape": "chevron-right"}
+        assert len({fast["shape"], good["shape"], long["shape"]}) == 3
+        assert len({fast["label"], good["label"], long["label"]}) == 3
+
+    def test_nearest_tick_wins_even_when_marks_overlap(self):
+        # 26 s, 27 s and 28 s on a 350 px track (scale 40 s) sit ~9 px apart.
+        centers = [350 * seconds / 40 for seconds in (26, 27, 28)]
+        assert call("logic.nearestTickIndex(%s, %s)" % (centers, centers[1] + 2)) == 1
+        assert call("logic.nearestTickIndex(%s, %s)" % (centers, centers[0] - 3)) == 0
+        # A point exactly between two ticks stays with the earlier one.
+        midway = (centers[0] + centers[1]) / 2
+        assert call("logic.nearestTickIndex(%s, %s)" % (centers, midway)) == 0
+        assert call("logic.nearestTickIndex([], 10)") == -1
+
+
 class TestShippedShell:
     """The cached HTML is what a phone paints before the script runs."""
 
@@ -227,3 +251,14 @@ class TestShippedShell:
         handler = handler.split("function disarmReset", 1)[0]
         assert handler.index("tankPostAllowed") < handler.index("fetch(")
         assert "resetFailureToast" in handler
+
+    def test_verdict_is_written_and_ticks_are_not_buttons(self):
+        assert 'class="pulls-legend"' in self.page
+        assert "> fast<" in self.page
+        assert "> on target<" in self.page
+        assert "> long<" in self.page
+        assert "pointer-events: none" in self.page
+        assert "nearestTickIndex" in self.page
+        assert "verdict.label" in self.page
+        assert "setAttribute('role', 'button')" not in self.page
+        assert 'role="listbox"' in self.page

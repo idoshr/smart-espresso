@@ -50,6 +50,8 @@
     --matcha-ink: #1F6B34;
     --water-ink: #1E6A8A;
     --clay-ink: #9A4632;
+    /* Cool blue for a fast shot, so it does not share a hue with "long". */
+    --fast-ink: #1A4E86;
 
     /* Solid state bands. Light text on each clears 4.5:1, and the five
        kitchen states (off, heating, ready, brewing, steaming) are different
@@ -94,6 +96,7 @@
       --matcha-ink: #A5CBAE;
       --water-ink: #9EC4DC;
       --clay-ink: #E0917F;
+      --fast-ink: #B7D9F2;
       --shadow: 0 3px 14px rgba(0, 0, 0, .3);
     }
   }
@@ -114,6 +117,7 @@
     --matcha-ink: #A5CBAE;
     --water-ink: #9EC4DC;
     --clay-ink: #E0917F;
+    --fast-ink: #B7D9F2;
     --shadow: 0 3px 14px rgba(0, 0, 0, .3);
   }
 
@@ -134,6 +138,7 @@
       --matcha-ink: #145028;
       --water-ink: #154E70;
       --clay-ink: #742E1E;
+      --fast-ink: #123E73;
       --state-off-ink: #FFFFFF;
       --state-heating-ink: #FFFFFF;
       --state-ready-ink: #FFFFFF;
@@ -161,6 +166,7 @@
       --matcha-ink: #C9EDD4;
       --water-ink: #C6E6F8;
       --clay-ink: #FFC9BC;
+      --fast-ink: #D6EEFF;
       --state-off-ink: #FFFFFF;
       --state-heating-ink: #FFFFFF;
       --state-ready-ink: #FFFFFF;
@@ -423,8 +429,8 @@
   }
 
   .shot b.good { color: var(--matcha-ink); }
-  .shot b.warn { color: var(--crema-ink); }
-  .shot b.clay { color: var(--clay-ink); }
+  .shot b.fast { color: var(--fast-ink); }
+  .shot b.long { color: var(--clay-ink); }
 
   .shot small {
     display: block;
@@ -613,11 +619,58 @@
     margin-top: 8px;
   }
 
+  /* ---- verdict marks ---- */
+  /* Three shapes, not three colours: an open left chevron (fast), a
+     filled dot (on target), a filled right chevron (long). Colour is
+     only a second channel, and it still has to clear 3:1. */
+  .mark {
+    position: relative;
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    flex: none;
+    vertical-align: -3px;
+  }
+
+  .mark::before {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 50%;
+  }
+
+  .mark.fast::before {
+    width: 9px;
+    height: 9px;
+    margin: -5px 0 0 -6px;
+    border-left: 2.5px solid var(--fast-ink);
+    border-bottom: 2.5px solid var(--fast-ink);
+    transform: rotate(45deg);
+  }
+
+  .mark.good::before {
+    width: 10px;
+    height: 10px;
+    margin: -5px 0 0 -5px;
+    border-radius: 50%;
+    background: var(--matcha-ink);
+  }
+
+  .mark.long::before {
+    margin: -6px 0 0 -3px;
+    border-top: 6px solid transparent;
+    border-bottom: 6px solid transparent;
+    border-left: 10px solid var(--clay-ink);
+  }
+
   /* ---- recent pulls ---- */
   .pulls-track {
     position: relative;
-    height: 18px;
-    margin: 16px 0 2px;
+    /* The strip is one control. Ticks themselves are not targets, so the
+       track carries the 44 px hit area and a tap snaps to the nearest. */
+    height: 44px;
+    margin: 8px 0 2px;
+    cursor: pointer;
   }
 
   .pulls-track::before {
@@ -633,48 +686,48 @@
 
   .pulls-track u {
     position: absolute;
-    top: 0; bottom: 0;
+    top: 14px; bottom: 14px;
     border-left: 1px solid var(--ink-faint);
     border-right: 1px solid var(--ink-faint);
     background: color-mix(in srgb, var(--ink) 4%, transparent);
   }
 
-  .pulls-track i {
-    position: absolute;
-    top: 4px; bottom: 4px;
-    width: 3px;
-    margin-left: -1.5px;
-    border-radius: 2px;
-    cursor: pointer;
-  }
-
-  /* A 3 px tick is invisible to a thumb: the hit area reaches well past
-     the mark itself. */
-  .pulls-track i::after {
-    content: "";
-    position: absolute;
-    top: -12px; bottom: -12px;
-    left: -9px; right: -9px;
-  }
-
-  .pulls-track i.good { background: var(--matcha-ink); }
-  .pulls-track i.warn { background: var(--crema-ink); }
-  .pulls-track i.clay { background: var(--clay-ink); }
-  .pulls-track i.now { top: 1px; bottom: 1px; }
-
-  /* The tick being inspected: taller, wider, haloed. Defined after .now
-     so a selected live tick keeps the inspected look. */
-  .pulls-track i.sel {
-    top: 0; bottom: 0;
-    width: 5px;
-    margin-left: -2.5px;
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--ink) 12%, transparent);
-  }
-
-  /* Same keyboard courtesy as the buttons: a visible focus ring. */
-  .pulls-track i:focus-visible {
+  .pulls-track:focus-visible {
     outline: 2px solid var(--ink-soft);
-    outline-offset: 2px;
+    outline-offset: 3px;
+    border-radius: 8px;
+  }
+
+  /* Marks are drawn, not pressed. pointer-events stay off so a thumb
+     always hits the track, which then picks the nearest pull. */
+  .pulls-track i.mark {
+    position: absolute;
+    display: block;
+    top: 50%;
+    margin-top: -8px;
+    pointer-events: none;
+  }
+
+  .pulls-track i.now { transform: scale(1.25); }
+
+  .pulls-track i.sel {
+    border-radius: 50%;
+    box-shadow: 0 0 0 2px var(--ink);
+  }
+
+  .pulls-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 14px;
+    margin: 8px 0 0;
+    font-size: 12px;
+    color: var(--ink);
+  }
+
+  .pulls-legend span {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
   }
 
   /* ---- saved shots ---- */
@@ -711,18 +764,6 @@
     outline: 2px solid var(--ink-soft);
     outline-offset: 2px;
   }
-
-  .shot-dot {
-    width: 8px;
-    height: 8px;
-    flex: none;
-    border-radius: 50%;
-    background: var(--ink-faint);
-  }
-
-  .shot-dot.good { background: var(--matcha-ink); }
-  .shot-dot.warn { background: var(--crema-ink); }
-  .shot-dot.clay { background: var(--clay-ink); }
 
   .shot-when {
     min-width: 0;
@@ -863,6 +904,10 @@
     font-variant-numeric: tabular-nums;
     margin-left: auto;
   }
+
+  .bb-time.fast { color: var(--fast-ink); }
+  .bb-time.good { color: var(--matcha-ink); }
+  .bb-time.long { color: var(--clay-ink); }
 
   .bb-ml {
     font-family: var(--mono);
@@ -1131,10 +1176,16 @@
       <span class="title">Recent pulls</span>
       <span class="note" id="pulls-note" role="status"></span>
     </div>
-    <div class="pulls-track" id="pulls-track">
+    <div class="pulls-track" id="pulls-track" role="listbox" tabindex="0"
+         aria-label="Recent pulls" aria-orientation="horizontal">
       <u id="pulls-window"></u>
     </div>
     <div class="axis"><span>0 s</span><span id="pulls-axis-end">40 s</span></div>
+    <p class="pulls-legend">
+      <span><i class="mark fast" aria-hidden="true"></i> fast</span>
+      <span><i class="mark good" aria-hidden="true"></i> on target</span>
+      <span><i class="mark long" aria-hidden="true"></i> long</span>
+    </p>
   </div>
 
   <div class="card" id="history-card" hidden>
@@ -1281,9 +1332,8 @@ function ratioText(ml) {
 }
 
 // Where a pull of this length lands against the target window.
-function verdictClass(seconds) {
-  if (seconds < SHOT_WINDOW[0]) return 'warn';
-  return seconds <= SHOT_WINDOW[1] ? 'good' : 'clay';
+function verdictOf(seconds) {
+  return DashboardLogic.shotVerdict(seconds, SHOT_WINDOW[0], SHOT_WINDOW[1]);
 }
 
 // The target window drawn on both the live shot track and the history
@@ -1353,7 +1403,9 @@ function renderState(machine, pressure) {
     const shownShot = DashboardLogic.displayedShotText(true, heldShotText, incomingShot);
     heldShotText = shownShot;
     shotSeconds.textContent = shownShot;
-    shotSeconds.className = verdictClass(machine.shot.seconds);
+    shotSeconds.className = verdictOf(machine.shot.seconds).key;
+    document.getElementById('bb-time').className =
+      `bb-time ${verdictOf(machine.shot.seconds).key}`;
     document.getElementById('shot-ml').textContent =
       `${machine.shot.ml.toFixed(0)} ml · ${ratioText(machine.shot.ml)}`;
     document.getElementById('shot-progress').style.width =
@@ -1369,6 +1421,7 @@ function renderState(machine, pressure) {
     buzzedInWindow = cleared.buzzedInWindow;
     heldShotText = null;
     shotSeconds.className = '';
+    document.getElementById('bb-time').className = 'bb-time';
   }
 
   // The last pull stays up as a reference chip, even mid-shot — it is the
@@ -1377,8 +1430,9 @@ function renderState(machine, pressure) {
   const last = machine.last_shot;
   chip.hidden = !last;
   if (last) {
+    const lastVerdict = verdictOf(last.seconds);
     chip.textContent =
-      `last pull ${last.seconds.toFixed(0)} s · ${last.ml.toFixed(0)} ml · ${ratioText(last.ml)}`;
+      `last pull ${last.seconds.toFixed(0)} s · ${last.ml.toFixed(0)} ml · ${ratioText(last.ml)} · ${lastVerdict.label}`;
   }
 
   const boilerBar = DashboardLogic.boilerReading(pressure);
@@ -1578,27 +1632,26 @@ function renderPulls(history) {
     pullsSig = sig;
     pullHistory = history;
     selectedPull = -1;   // a rebuilt strip has nothing selected
+    document.getElementById('pulls-track').removeAttribute('aria-activedescendant');
 
     Object.assign(document.getElementById('pulls-window').style, windowStyle());
 
     const track = document.getElementById('pulls-track');
     track.querySelectorAll('i').forEach(tick => tick.remove());
     history.forEach((shot, i) => {
+      const verdict = verdictOf(shot.seconds);
       const tick = document.createElement('i');
-      tick.className = `${verdictClass(shot.seconds)}${i === history.length - 1 ? ' now' : ''}`;
-      tick.style.left = `${Math.max(0, Math.min(100, shot.seconds / SHOT_SCALE * 100))}%`;
-      // Ticks are real buttons: hover does not exist on a phone, so a tap
-      // pulls the numbers into the note. The track keeps its labels for
-      // screen readers too, instead of hiding them.
-      tick.tabIndex = 0;
-      tick.setAttribute('role', 'button');
-      tick.setAttribute('aria-pressed', 'false');
+      tick.className = `mark ${verdict.key}${i === history.length - 1 ? ' now' : ''}`;
+      const along = Math.max(0, Math.min(1, shot.seconds / SHOT_SCALE));
+      tick.style.left = `${along * 100}%`;
+      tick.style.marginLeft = '-8px';
+      // The mark is not a target (overlapping ticks used to steal the tap).
+      // It stays an option so the track can point at it from the keyboard.
+      tick.id = `pull-${i}`;
+      tick.setAttribute('role', 'option');
+      tick.setAttribute('aria-selected', 'false');
       tick.setAttribute('aria-label',
-        `pull ${i + 1}: ${shot.seconds.toFixed(0)} seconds, ${shot.ml.toFixed(0)} ml`);
-      tick.addEventListener('click', () => selectPull(i));
-      tick.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); selectPull(i); }
-      });
+        `pull ${i + 1}: ${shot.seconds.toFixed(0)} seconds, ${shot.ml.toFixed(0)} ml, ${verdict.label}`);
       track.appendChild(tick);
     });
   }
@@ -1608,18 +1661,20 @@ function renderPulls(history) {
   const note = document.getElementById('pulls-note');
   const sel = pullHistory[selectedPull];
   note.textContent = sel
-    ? `${sel.seconds.toFixed(0)} s · ${sel.ml.toFixed(0)} ml · ${ratioText(sel.ml)}`
+    ? `${sel.seconds.toFixed(0)} s · ${sel.ml.toFixed(0)} ml · ${ratioText(sel.ml)} · ${verdictOf(sel.seconds).label}`
     : `${history.length} pulls`;
 }
 
-function selectPull(index) {
-  selectedPull = selectedPull === index ? -1 : index;
-  document.getElementById('pulls-track')
-    .querySelectorAll('i')
-    .forEach((tick, i) => {
-      tick.classList.toggle('sel', i === selectedPull);
-      tick.setAttribute('aria-pressed', String(i === selectedPull));
-    });
+function selectPull(index, toggle) {
+  selectedPull = toggle && selectedPull === index ? -1 : index;
+  const track = document.getElementById('pulls-track');
+  track.querySelectorAll('i').forEach((tick, i) => {
+    const on = i === selectedPull;
+    tick.classList.toggle('sel', on);
+    tick.setAttribute('aria-selected', String(on));
+  });
+  if (selectedPull >= 0) track.setAttribute('aria-activedescendant', `pull-${selectedPull}`);
+  else track.removeAttribute('aria-activedescendant');
   renderPulls(pullHistory);   // same signature: only the note is rewritten
 }
 
@@ -1687,9 +1742,10 @@ function paintHistoryList() {
     button.setAttribute('aria-pressed', String(selected));
     button.setAttribute('aria-expanded', String(selected));
 
-    const dot = document.createElement('span');
-    dot.className = `shot-dot ${verdictClass(shot.seconds)}`;
-    dot.setAttribute('aria-hidden', 'true');
+    const verdict = verdictOf(Number(shot.seconds));
+    const mark = document.createElement('span');
+    mark.className = `mark ${verdict.key}`;
+    mark.setAttribute('aria-hidden', 'true');
 
     const when = document.createElement('span');
     when.className = 'shot-when';
@@ -1698,9 +1754,9 @@ function paintHistoryList() {
     const stats = document.createElement('span');
     stats.className = 'shot-stats';
     stats.textContent =
-      `${Number(shot.seconds).toFixed(0)} s · ${Number(shot.ml).toFixed(0)} ml`;
+      `${Number(shot.seconds).toFixed(0)} s · ${Number(shot.ml).toFixed(0)} ml · ${verdict.label}`;
 
-    button.append(dot, when, stats);
+    button.append(mark, when, stats);
     button.addEventListener('click', () => toggleShot(shot.id));
     list.appendChild(button);
 
@@ -1832,6 +1888,7 @@ function paintShot(detail, shot) {
     `${seconds.toFixed(1)} s`,
     `${ml.toFixed(1)} ml`,
     ratioText(ml),
+    verdictOf(seconds).label,
   ];
   if (typeof shot.peak_head_bar === 'number') bits.push(`${shot.peak_head_bar.toFixed(1)} bar`);
   if (typeof shot.peak_flow_mls === 'number') bits.push(`${shot.peak_flow_mls.toFixed(1)} ml/s`);
@@ -2237,6 +2294,32 @@ if ('wakeLock' in navigator) wakeBtn.hidden = false;
 // Axis labels are derived from the scale, never hardcoded, so they follow
 // it when the extraction window moves.
 document.getElementById('pulls-axis-end').textContent = `${SHOT_SCALE} s`;
+
+// One target for the whole strip. A tap (or the arrow keys) resolves to
+// the nearest pull, including when the marks sit closer than a thumb.
+const pullsTrack = document.getElementById('pulls-track');
+pullsTrack.addEventListener('click', (event) => {
+  if (!pullHistory.length) return;
+  const rect = pullsTrack.getBoundingClientRect();
+  const centers = pullHistory.map(shot => {
+    const along = Math.max(0, Math.min(1, shot.seconds / SHOT_SCALE));
+    return rect.left + along * rect.width;
+  });
+  const index = DashboardLogic.nearestTickIndex(centers, event.clientX);
+  if (index >= 0) selectPull(index, true);
+});
+pullsTrack.addEventListener('keydown', (event) => {
+  if (!pullHistory.length) return;
+  const key = event.key;
+  if (key !== 'ArrowLeft' && key !== 'ArrowRight' && key !== 'Home' && key !== 'End') return;
+  event.preventDefault();
+  let index = selectedPull;
+  if (key === 'Home') index = 0;
+  else if (key === 'End') index = pullHistory.length - 1;
+  else if (key === 'ArrowRight') index = selectedPull < 0 ? 0 : Math.min(pullHistory.length - 1, selectedPull + 1);
+  else index = selectedPull < 0 ? pullHistory.length - 1 : Math.max(0, selectedPull - 1);
+  selectPull(index, false);
+});
 
 // The shell lives in the service worker, so the page opens instantly and
 // survives the machine's server blinking.
