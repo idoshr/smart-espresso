@@ -192,9 +192,15 @@ a full-screen view).
 
 It shows:
 
-- **Machine state** (see below) with a live shot timer while a shot is pulled;
-  while the shot runs and you scroll away, a compact timer pins to the top
-  edge, and a short buzz marks the moment the pull enters its window
+- **Machine state** (see below) as a full-width block you can read from
+  across the kitchen: a 44 px label on a solid colour, with one secondary
+  line (how long it has been ready, or boiler pressure against 0.8 bar
+  while it warms, plus a thin progress bar). While a shot is pulled, a
+  live timer shows yield and ratio; if you scroll away, a compact timer
+  pins to the top edge. Entering the 25–30 s window buzzes once and
+  flashes the card (the flash is skipped when the system asks for less
+  motion). Holding **awake** — or long-pressing the state card — switches
+  to glance mode: only that state and, during a shot, the timer.
 - **Today's pulls** in the header, so a glance answers how many shots the
   machine has seen today (in memory; resets when the machine restarts)
 - **Head pressure** and **Boiler pressure** on manometer dials, in bar,
@@ -213,12 +219,25 @@ It shows:
 
 The page is styled as a quiet pastel bar readout on a near-white ground:
 crema for the group, a matcha green for the boiler, pale blue for water,
-with a dark scheme that follows the system setting. Before the first
-`/api/status` response the header reads **connecting…** (no green lamp),
-the footer says **never connected**, and the flow and tank cards stay
-hidden — a zero baked into the cached shell is not a reading. After a
-reading has arrived, losing the machine switches the header to
-**offline** and the footer to a last-seen time. To add your own badge,
+with a dark scheme that follows the system setting. Text clears
+4.5:1 and the small marks (dots, ticks, graph lines) clear 3:1 on
+both schemes. Labels are at least 11 px, and anything carrying a
+number is at least 12 px. A stronger theme follows
+`prefers-contrast: more`. The dial's over-band stays hidden until
+the reading nears that band, so a resting head at 0 bar does not
+look like a warning. Before the first
+`/api/status` response the header and the state card read
+**connecting…** (no green lamp), skeleton placeholders stand in for the
+dials and the flow and tank cards, and the footer says **never
+connected**. No number is shown until a payload arrives.
+
+If three polls in a row fail, a banner says the machine can't be
+reached, how old the last reading is, and offers **Retry now**. Retry
+polls immediately and starts the backoff over; it does not pretend the
+outage is over. Readings already on screen stay at full contrast with a
+**stale** tag, and the shot timer does not keep counting. **Tank
+filled** cannot reset the count while the machine is unreachable, and a
+failed reset explains why in a toast. To add your own badge,
 drop `logo.svg` into `smart_espresso/web/static/` and put an
 `<img src="/logo.svg">` in the header of
 [`index.html`](smart_espresso/web/static/index.html).
