@@ -75,13 +75,10 @@ class TestMedianFilterRejected(unittest.TestCase):
 
     def test_shipped_wiring_leaves_the_flow_channel_unfiltered(self):
         source = (ROOT / "main.py").read_text(encoding="utf-8")
-        chunks = source.split("WaterFlowAnalogSensor(")
-        # Preamble plus the ADS1115 and MCP3008 constructors.
-        self.assertEqual(len(chunks), 3)
-        for chunk in chunks[1:]:
-            head, separator, _ = chunk.partition("sample_interval=")
-            self.assertTrue(separator)
-            self.assertNotIn("MedianFilterADC", head)
+        start = source.index("WaterFlowAnalogSensor(")
+        head = source[start:].split("sample_interval", 1)[0]
+        self.assertNotIn("MedianFilterADC", head)
+        self.assertIn("sample_interval", source[start : start + 400])
         self.assertIn("WaterFlowAnalogSensor.DEFAULT_SAMPLE_INTERVAL", source)
 
 

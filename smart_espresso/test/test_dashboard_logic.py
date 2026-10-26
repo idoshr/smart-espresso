@@ -44,6 +44,14 @@ class TestConnectionCopy:
     def test_footer_does_not_claim_last_seen_while_connected(self):
         assert call("logic.footerText(true, 1000, 9000)") is None
 
+    def test_a_missing_reading_is_a_gap_not_a_number(self):
+        assert call("logic.formatReading(null, 1)") == "—"
+        assert call("logic.formatReading(9.14, 1)") == "9.1"
+        assert call('logic.readingFaulted({bar: null, health: {ok: false}}, "bar")')
+        assert (
+            call('logic.readingFaulted({bar: 9.1, health: {ok: true}}, "bar")') is False
+        )
+
     def test_sensor_cards_hide_until_a_payload_names_them(self):
         assert call("logic.sensorCardVisible(false, true)") is False
         assert call("logic.sensorCardVisible(true, false)") is False

@@ -37,10 +37,25 @@ if HA_ENABLE:
 # NB ssd1306 devices are monochromatic; a pixel is enabled with
 #    white and disabled with black.
 # NB the ssd1306 class has no way of knowing the display resolution/size.
-DISPLAY_ENABLE = strtobool(os.environ.get("DISPLAY_ENABLE") or False)
-display = None
-if DISPLAY_ENABLE:
-    display = sh1106(i2c(port=1, address=0x3C), width=128, height=64, rotate=0)
+def build_display(enabled=None, factory=None):
+    """Open the OLED, or disable it with a warning if it is missing."""
+    if enabled is None:
+        enabled = strtobool(os.environ.get("DISPLAY_ENABLE") or False)
+    if not enabled:
+        return None
+    if factory is None:
+
+        def factory():
+            return sh1106(i2c(port=1, address=0x3C), width=128, height=64, rotate=0)
+
+    try:
+        return factory()
+    except Exception as error:
+        print(f"WARNING: display disabled: {error}")
+        return None
+
+
+display = build_display()
 
 
 # Mobile status dashboard, served on the local network.
@@ -61,78 +76,104 @@ if WEB_ENABLE:
     )
 
 
-# Optional DHT22 / AM2302 ambient temperature & humidity sensor (GPIO).
-# Skipped gracefully when the library is missing so the machine keeps running.
-DHT_ENABLE = strtobool(os.environ.get("DHT_ENABLE") or True)
-DHT_PIN = int(os.environ.get("DHT_PIN") or 4)
-digital_sensors = []
-if DHT_ENABLE:
+_UNSET = object()
+
+
+def build_digital_sensors(enabled=None, pin=None, factory=None):
+    """Build the DHT22, or disable it with a warning if it is missing."""
+    if enabled is None:
+        enabled = strtobool(os.environ.get("DHT_ENABLE") or True)
+    if not enabled:
+        return []
+    if pin is None:
+        pin = int(os.environ.get("DHT_PIN") or 4)
     try:
+        if factory is not None:
+            return [factory()]
         from smart_espresso.analog_sensor.dht22_sensor import DHT22Sensor
 
-        digital_sensors.append(DHT22Sensor(pin=DHT_PIN, name="Environment"))
-    except ImportError as error:
-        print(f"DHT22 disabled: {error}")
+        return [DHT22Sensor(pin=pin, name="Environment")]
+    except Exception as error:
+        print(f"WARNING: DHT22 disabled: {error}")
+        return []
 
 
-if __name__ == "__main__":
-    # Choose your ADC type: "MCP3008" or "ADS1115"
-    # Set via environment variable or change here
-    ADC_TYPE = os.environ.get("ADC_TYPE", "ADS1115")
-
-    # How often the flow sensor's background thread samples the ADC. The
-    # render loop alone (10 Hz) misses espresso-rate pulses. The default
-    # is 5 ms so a 6 ml/s pour at 30% duty still lands on a sample.
-    FLOW_SAMPLE_INTERVAL = float(
+def _flow_sample_interval(explicit=_UNSET):
+    # The render loop alone (10 Hz) misses espresso-rate pulses. The
+    # default is 5 ms so a 6 ml/s pour at 30% duty still lands on a sample.
+    if explicit is not _UNSET:
+        return explicit
+    return float(
         os.environ.get("FLOW_SAMPLE_INTERVAL")
         or WaterFlowAnalogSensor.DEFAULT_SAMPLE_INTERVAL
     )
 
-    if ADC_TYPE == "ADS1115":
-        # ADS1115 configuration (16-bit ADC, I2C interface)
-        # Suitable for 5V sensors with gain=2/3 (±6.144V range)
-        # or gain=1 (±4.096V range)
-        analog_devices = [
-            PressureAnalogSensor(
-                adc=MedianFilterADC(ADS1115ADC(pin=0, gain=2 / 3)),
-                name="Head",
-                max_pressure_mpa=2.0,  # 0-2MPa sensor for brew head (0-20 bar)
-            ),  # Head Pressure on ADS1115 channel A0
-            PressureAnalogSensor(
-                adc=MedianFilterADC(ADS1115ADC(pin=1, gain=2 / 3)),
-                name="Boiler",
-                max_pressure_mpa=0.5,  # 0-0.5MPa sensor for boiler (0-5 bar)
-            ),  # Boiler Pressure on ADS1115 channel A1
-            WaterFlowAnalogSensor(
-                # No median filter: it deletes one-sample pulses. The
-                # Schmitt thresholds in the sensor reject noise instead.
-                adc=ADS1115ADC(pin=2, gain=1),
-                name="Brew",
-                sample_interval=FLOW_SAMPLE_INTERVAL,
-            ),  # Water flow (hall-effect pulse) on ADS1115 channel A2 (3rd port)
-        ]
-    else:
-        # MCP3008 configuration (10-bit ADC, SPI interface)
-        analog_devices = [
-            PressureAnalogSensor(
-                adc=MedianFilterADC(MCP3008ADC(pin=0)),
-                name="Head",
-                max_pressure_mpa=2.0,  # 0-2MPa sensor for brew head (0-20 bar)
-            ),  # Head Pressure
-            PressureAnalogSensor(
-                adc=MedianFilterADC(MCP3008ADC(pin=1)),
-                name="Boiler",
-                max_pressure_mpa=0.5,  # 0-0.5MPa sensor for boiler (0-5 bar)
-            ),  # Boiler Pressure
-            WaterFlowAnalogSensor(
-                adc=MCP3008ADC(pin=2),
-                name="Brew",
-                sample_interval=FLOW_SAMPLE_INTERVAL,
-            ),  # Water flow (hall-effect pulse) on MCP3008 channel CH2
-        ]
 
+def _default_adc(adc_type, pin, gain):
+    if adc_type == "ADS1115":
+        return ADS1115ADC(pin=pin, gain=gain)
+    return MCP3008ADC(pin=pin)
+
+
+def build_analog_devices(adc_type=None, flow_sample_interval=_UNSET, adc_builder=None):
+    """
+    Build the head, boiler and flow sensors.
+
+    One channel that fails to construct (missing ADC, bad wiring) is skipped
+    with a warning so the others still run. The flow channel is not median
+    filtered: that filter drops one-sample pulses.
+    """
+    if adc_type is None:
+        adc_type = os.environ.get("ADC_TYPE", "ADS1115")
+    interval = _flow_sample_interval(flow_sample_interval)
+    if adc_builder is None:
+
+        def adc_builder(pin, gain):
+            return _default_adc(adc_type, pin, gain)
+
+    sensors = []
+
+    def attempt(name, factory):
+        try:
+            sensors.append(factory())
+        except Exception as error:
+            print(f"WARNING: {name} sensor disabled: {error}")
+
+    pressure_gain = 2 / 3
+    attempt(
+        "Head",
+        lambda: PressureAnalogSensor(
+            adc=MedianFilterADC(adc_builder(0, pressure_gain)),
+            name="Head",
+            max_pressure_mpa=2.0,
+        ),
+    )
+    attempt(
+        "Boiler",
+        lambda: PressureAnalogSensor(
+            adc=MedianFilterADC(adc_builder(1, pressure_gain)),
+            name="Boiler",
+            max_pressure_mpa=0.5,
+        ),
+    )
+    attempt(
+        "Brew",
+        lambda: WaterFlowAnalogSensor(
+            adc=adc_builder(2, 1),
+            name="Brew",
+            sample_interval=interval,
+        ),
+    )
+    return sensors
+
+
+# Optional DHT22 / AM2302 ambient temperature & humidity sensor (GPIO).
+digital_sensors = build_digital_sensors()
+
+
+if __name__ == "__main__":
     se = SmartEspresso(
-        analog_devices=analog_devices,
+        analog_devices=build_analog_devices(),
         digital_sensors=digital_sensors,
         client_ha=client_ha,
         display=display,
