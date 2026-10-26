@@ -167,13 +167,17 @@ class StatusServer:
             self.tank.reset()
             return jsonify(self.tank.snapshot())
 
-    def update(self, sensors: list) -> None:
+    def update(self, sensors: list, health: Optional[dict] = None) -> None:
         """
         Copy the current sensor readings into the snapshot served over HTTP.
 
         Called once per render-loop tick, right after the sensors were read.
         Also feeds the state classifier and the tank counter, so both advance
         at the sampling rate rather than only when someone opens the page.
+
+        ``health`` maps a sensor name to ``ok``, ``last_error`` and
+        ``last_ok_age_s``. A failed read is passed to the classifier as None
+        instead of the previous sample.
         """
         now = monotonic()
         pressure = []
@@ -183,23 +187,46 @@ class StatusServer:
         boiler_bar = None
         total_ml = 0.0
         flow_rate_mls = 0.0
+        saw_flow = False
+        saw_flow_ok = False
 
         for sensor in sensors:
             name = getattr(sensor, "name", "sensor")
+            ok = _reading_ok(health, name)
+            health_fields = _health_fields(health, name)
             if isinstance(sensor, PressureAnalogSensor):
-                bar = sensor.bar
+                bar = sensor.bar if ok else None
                 pressure.append(
                     {
                         "name": name,
-                        "bar": round(bar, 2),
+                        "bar": None if bar is None else round(bar, 2),
                         "max_bar": round(sensor.max_pressure_mpa * 10, 1),
+                        "health": health_fields,
                     }
                 )
+                if not ok:
+                    if "boiler" in name.lower() or "steam" in name.lower():
+                        boiler_bar = None
+                    continue
                 if "boiler" in name.lower() or "steam" in name.lower():
                     boiler_bar = bar
                 elif head_bar is None:
                     head_bar = bar
             elif isinstance(sensor, WaterFlowAnalogSensor):
+                saw_flow = True
+                if not ok:
+                    flow.append(
+                        {
+                            "name": name,
+                            "total_ml": None,
+                            "flow_rate_lpm": None,
+                            "flow_rate_mls": None,
+                            "sample_hz": _rounded_hz(sensor.sample_hz),
+                            "health": health_fields,
+                        }
+                    )
+                    continue
+                saw_flow_ok = True
                 liters = sensor.liter
                 self._record_flow(name, now, liters)
                 sensor_ml = liters * 1000
@@ -212,15 +239,32 @@ class StatusServer:
                         "total_ml": round(sensor_ml, 1),
                         "flow_rate_lpm": round(sensor.flow_rate, 3),
                         "flow_rate_mls": round(sensor_mls, 1),
+                        "sample_hz": _rounded_hz(sensor.sample_hz),
+                        "health": health_fields,
                     }
                 )
             else:
-                other.append({"name": name, "message": str(sensor.message)})
+                message = str(sensor.message) if ok else f"{name}: fault"
+                other.append(
+                    {"name": name, "message": message, "health": health_fields}
+                )
+
+        # A failed flow sensor must not report a lifetime total of 0: the
+        # tank would treat that as a reset and the next good sample as a
+        # full tank of new water.
+        flow_failed = saw_flow and not saw_flow_ok
+        if flow_failed:
+            classifier_flow = None
+            classifier_total = None
+        else:
+            classifier_flow = flow_rate_mls
+            classifier_total = total_ml
 
         # Both keep their own lock, so they are updated outside self._lock:
         # nesting would drag the tank's disk write into every reader's path.
-        self.classifier.update(head_bar, boiler_bar, flow_rate_mls, total_ml)
-        self.tank.update(total_ml)
+        self.classifier.update(head_bar, boiler_bar, classifier_flow, classifier_total)
+        if not flow_failed:
+            self.tank.update(total_ml)
 
         with self._lock:
             self._snapshot = {
@@ -335,6 +379,31 @@ class StatusServer:
         self._thread = threading.Thread(target=_serve, daemon=True)
         self._thread.start()
         print(f"Status web server listening on http://{self.host}:{self.port}")
+
+
+def _reading_ok(health: Optional[dict], name: str) -> bool:
+    if not health or name not in health:
+        return True
+    return bool(health[name].get("ok", True))
+
+
+def _health_fields(health: Optional[dict], name: str) -> dict:
+    """Health block for /api/status. Missing info means no fault yet."""
+    if not health or name not in health:
+        return {"ok": True, "last_error": None, "last_ok_age_s": None}
+    record = health[name]
+    return {
+        "ok": bool(record.get("ok", True)),
+        "last_error": record.get("last_error"),
+        "last_ok_age_s": record.get("last_ok_age_s"),
+    }
+
+
+def _rounded_hz(sample_hz: Optional[float]):
+    """One decimal, or None before the sensor has measured a rate."""
+    if sample_hz is None:
+        return None
+    return round(sample_hz, 1)
 
 
 def _parse_limit(raw: Optional[str]):

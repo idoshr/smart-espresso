@@ -1586,6 +1586,13 @@ function renderRings(pressure) {
   pressure.forEach((sensor, i) => {
     const el = ringEls.get(i);
     if (!el) return;
+    if (DashboardLogic.readingFaulted(sensor, 'bar')) {
+      el.value.style.visibility = 'hidden';
+      el.read.textContent = '—';
+      if (el.over) el.over.style.visibility = 'hidden';
+      el.svg.setAttribute('aria-label', `${sensor.name} no reading`);
+      return;
+    }
     const ratio = Math.max(0, Math.min(1, sensor.bar / el.dial));
     el.value.setAttribute('stroke-dashoffset', (1 - ratio).toFixed(4));
     el.value.style.visibility = ratio > 0 ? 'visible' : 'hidden';
@@ -1599,9 +1606,9 @@ function renderRings(pressure) {
       const show = DashboardLogic.showOverBand(sensor.bar, el.bandFrom);
       el.over.style.visibility = show ? 'visible' : 'hidden';
     }
-    el.read.textContent = sensor.bar.toFixed(1);
+    el.read.textContent = DashboardLogic.formatReading(sensor.bar, 1);
     el.svg.setAttribute('aria-label',
-      `${sensor.name} ${sensor.bar.toFixed(1)} bar`);
+      `${sensor.name} ${DashboardLogic.formatReading(sensor.bar, 1)} bar`);
   });
 }
 
@@ -1949,9 +1956,13 @@ function renderFlow(sensor) {
   const minutes = Math.round(sensor.window_seconds / 60);
   document.getElementById('flow-title').textContent = `${sensor.name} water`;
   document.getElementById('flow-window').textContent = `last ${minutes} min`;
-  document.getElementById('flow-recent').textContent = sensor.recent_ml.toFixed(0);
-  document.getElementById('flow-rate').textContent = `${sensor.flow_rate_mls.toFixed(1)} ml/s`;
-  document.getElementById('flow-total').textContent = volText(sensor.total_ml);
+  document.getElementById('flow-recent').textContent =
+    DashboardLogic.formatReading(sensor.recent_ml, 0);
+  document.getElementById('flow-rate').textContent = sensor.flow_rate_mls == null
+    ? '— ml/s'
+    : `${DashboardLogic.formatReading(sensor.flow_rate_mls, 1)} ml/s`;
+  document.getElementById('flow-total').textContent =
+    sensor.total_ml == null ? '—' : volText(sensor.total_ml);
   document.getElementById('flow-axis-start').textContent = `-${minutes}:00`;
 
   const peak = Math.max(...sensor.chart, 0.001);
