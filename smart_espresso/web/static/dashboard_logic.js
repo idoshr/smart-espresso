@@ -186,6 +186,13 @@
     return { shotSeen: false, buzzedInWindow: false };
   }
 
+  // The over-band arc is a warning mark. At 0 bar it is the loudest thing
+  // on an idle dial, so it stays hidden until the reading nears the band.
+  function showOverBand(bar, bandFrom) {
+    if (typeof bar !== "number" || typeof bandFrom !== "number") return false;
+    return bar >= bandFrom * 0.9;
+  }
+
   return {
     pillText: pillText,
     footerText: footerText,
@@ -206,6 +213,7 @@
     glanceOn: glanceOn,
     noteShotWindow: noteShotWindow,
     clearShotWindow: clearShotWindow,
+    showOverBand: showOverBand,
     READY_MIN_BAR: READY_MIN_BAR,
   };
 });
