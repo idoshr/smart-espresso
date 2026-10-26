@@ -193,6 +193,35 @@
     return bar >= bandFrom * 0.9;
   }
 
+  // fast / on target / long. The shape is what remains when colour is
+  // removed: an open left chevron, a filled dot, a filled right chevron.
+  function shotVerdict(seconds, windowLow, windowHigh) {
+    const low = typeof windowLow === "number" ? windowLow : 25;
+    const high = typeof windowHigh === "number" ? windowHigh : 30;
+    if (typeof seconds !== "number" || Number.isNaN(seconds)) {
+      return { key: "good", label: "on target", shape: "dot" };
+    }
+    if (seconds < low) return { key: "fast", label: "fast", shape: "chevron-left" };
+    if (seconds <= high) return { key: "good", label: "on target", shape: "dot" };
+    return { key: "long", label: "long", shape: "chevron-right" };
+  }
+
+  // Centers and the tap are in the same coordinate space. Equal distances
+  // keep the earlier tick, so a point dead-centre never jumps to the right.
+  function nearestTickIndex(centers, x) {
+    if (!centers || !centers.length || typeof x !== "number") return -1;
+    let best = 0;
+    let bestDist = Infinity;
+    for (let i = 0; i < centers.length; i++) {
+      const dist = Math.abs(centers[i] - x);
+      if (dist < bestDist) {
+        bestDist = dist;
+        best = i;
+      }
+    }
+    return best;
+  }
+
   return {
     pillText: pillText,
     footerText: footerText,
@@ -214,6 +243,8 @@
     noteShotWindow: noteShotWindow,
     clearShotWindow: clearShotWindow,
     showOverBand: showOverBand,
+    shotVerdict: shotVerdict,
+    nearestTickIndex: nearestTickIndex,
     READY_MIN_BAR: READY_MIN_BAR,
   };
 });

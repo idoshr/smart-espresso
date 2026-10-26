@@ -206,11 +206,14 @@ It shows:
 - **Head pressure** and **Boiler pressure** on manometer dials, in bar,
   scaled to the working range with the target band marked and an
   over-pressure zone in red
-- **Recent pulls** as a tappable history strip — tap a tick to see that
-  pull's time, volume and brew ratio
+- **Recent pulls** as a strip. A filled dot is on target, an open left
+  chevron is fast, and a filled right chevron is long — the legend under
+  the strip uses the same shapes. A tap selects the nearest pull, even
+  when the marks sit on top of each other
 - **Shot history**: the pulls saved on the Pi, each with the time of day,
-  the duration and the volume. Tap one to chart its head pressure and flow
-  (and the boiler, when that sensor is fitted)
+  the duration, the volume, and the verdict in words (fast, on target,
+  long). Tap one to chart its head pressure and flow (and the boiler,
+  when that sensor is fitted)
 - **Water tank level**: how much of the 2 L tank is left, roughly how many
   shots that is, and a _Tank filled_ button to reset the count after a refill
 - **Water used in the last 2 minutes**, in millilitres, with a per-3-second
@@ -265,7 +268,8 @@ While brewing, the classifier times the shot and measures its volume; when the
 pump stops, a pull longer than 2 s that actually moved water is kept (shorter
 blips are pump priming, not a shot, and a pressure reading with no flow is
 not one either). The dashboard marks the 25–30 s window on the shot timer, so
-you can see a pull running fast or long while it happens. That same pull is
+you can see a pull running fast or long while it happens. Saved rows
+keep that verdict in words, not only in colour. That same pull is
 appended to the shot history below.
 
 ### Shot history
