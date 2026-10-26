@@ -30,7 +30,7 @@ HA_ENABLE = strtobool(os.environ.get("HA_ENABLE", "False"))
 client_ha = None
 
 if HA_ENABLE:
-    from smart_espresso.home_assistant import Client
+    from smart_espresso.home_assistant import DEFAULT_TIMEOUT, Client
 
     HA_URL = os.environ.get("HA_URL")
     HA_TOKEN = os.environ.get("HA_TOKEN")
@@ -38,7 +38,12 @@ if HA_ENABLE:
 
     if HA_URL and HA_TOKEN:
         print("Connecting to Home Assistant...")
-        client_ha = Client(f"{HA_URL}/api", HA_TOKEN, verify_ssl=HA_VERIFY_SSL)
+        client_ha = Client(
+            f"{HA_URL}/api",
+            HA_TOKEN,
+            verify_ssl=HA_VERIFY_SSL,
+            timeout=DEFAULT_TIMEOUT,
+        )
         print("Connected to Home Assistant")
 
 # Create pressure sensors (existing analog sensors)

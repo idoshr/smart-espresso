@@ -15,23 +15,29 @@ from smart_espresso.utils import strtobool
 from smart_espresso.water_tank import DEFAULT_STATE_PATH, WaterTank
 from smart_espresso.web.status_server import StatusServer
 
-HA_ENABLE = strtobool(os.environ.get("HA_ENABLE") or False)
-client_ha = None
-if HA_ENABLE:
-    HA_URL = os.environ.get("HA_URL")  # e.g. http://192.168.0.123:8123
-    HA_TOKEN = os.environ.get("HA_TOKEN")
-    HA_VERIFY_SSL = strtobool(os.environ.get("HA_VERIFY_SSL") or True)
-    if not HA_URL or not HA_TOKEN:
+
+def build_home_assistant_client(environ=None):
+    """Build the HA client, or return None when Home Assistant is disabled.
+
+    The client module is imported only when publishing is enabled, and the
+    connect/read timeout is always passed through so a black-holed host
+    cannot block the process that constructed the client.
+    """
+    env = os.environ if environ is None else environ
+    if not strtobool(env.get("HA_ENABLE") or False):
+        return None
+    url = env.get("HA_URL")
+    token = env.get("HA_TOKEN")
+    if not url or not token:
         raise ValueError("HA_URL and HA_TOKEN are required")
+    verify = strtobool(env.get("HA_VERIFY_SSL") or True)
+    from smart_espresso.home_assistant import DEFAULT_TIMEOUT, Client
 
-    # Imported lazily: homeassistant-api is not installed, and this client
-    # must not be imported when HA_ENABLE is false (or on a machine that
-    # never publishes to Home Assistant).
-    from smart_espresso.home_assistant import Client
-
-    # Initialize HomeAssistant Client before you use it.
     print("Connecting to Home Assistant")
-    client_ha = Client(f"{HA_URL}/api", HA_TOKEN, verify_ssl=HA_VERIFY_SSL)
+    return Client(f"{url}/api", token, verify_ssl=verify, timeout=DEFAULT_TIMEOUT)
+
+
+client_ha = build_home_assistant_client()
 
 
 # NB ssd1306 devices are monochromatic; a pixel is enabled with
