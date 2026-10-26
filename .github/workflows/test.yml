@@ -9,6 +9,7 @@ on:
 
 jobs:
   test:
+    name: pytest (${{ matrix.python-version }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -17,19 +18,50 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          # setuptools_scm reads the git history to write the package version.
+          fetch-depth: 0
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-      - name: Install dependencies
+      - name: Install core dependencies
         run: |
           python -m pip install --upgrade pip
-          # Adafruit_DHT builds a Raspberry Pi C extension and refuses to
-          # install anywhere else. The app already treats that library as
-          # optional (DHT_ENABLE logs a warning and continues), and the
-          # suite does not import it.
-          grep -v '^Adafruit_DHT==' requirements.txt > /tmp/requirements-ci.txt
-          pip install -r /tmp/requirements-ci.txt
-          pip install pytest
+          pip install -e .
+          python - <<'PY'
+          import importlib.util
+          import sys
+
+          import flask
+          import PIL
+          import requests
+
+          blocked = (
+              "gpiozero",
+              "luma",
+              "adafruit_dht",
+              "Adafruit_DHT",
+              "RPi",
+              "spidev",
+              "adafruit_ads1x15",
+              "board",
+              "busio",
+          )
+          found = []
+          for name in blocked:
+              try:
+                  spec = importlib.util.find_spec(name)
+              except (ModuleNotFoundError, ValueError):
+                  spec = None
+              if spec is not None:
+                  found.append(name)
+          if found:
+              sys.exit("core install includes Pi libraries: " + ", ".join(found))
+          print("core dependencies installed without Pi libraries")
+          print(flask.__name__, PIL.__name__, requests.__name__)
+          PY
+      - name: Install test and device libraries
+        run: pip install -e ".[test,pi]"
       - name: Run tests
         run: pytest
