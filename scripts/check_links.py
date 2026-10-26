@@ -52,9 +52,7 @@ IGNORE_HOST_SUBSTRINGS = (
     "your-",
 )
 # Private (RFC 1918) / link-local address ranges used in docs examples.
-PRIVATE_HOST_RE = re.compile(
-    r"^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|169\.254\.)"
-)
+PRIVATE_HOST_RE = re.compile(r"^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|169\.254\.)")
 
 # When a dead AliExpress listing redirects here, the link is effectively broken.
 SUSPECT_FINAL_PATHS = ("/", "")
@@ -95,7 +93,9 @@ def collect_urls(sources: list[Path]) -> dict[str, list[str]]:
         host = urlparse(url).hostname or ""
         if not host or "." not in host and host != "localhost":
             return  # malformed / not a real hostname
-        if any(s in host for s in IGNORE_HOST_SUBSTRINGS) or PRIVATE_HOST_RE.match(host):
+        if any(s in host for s in IGNORE_HOST_SUBSTRINGS) or PRIVATE_HOST_RE.match(
+            host
+        ):
             return  # example/placeholder host, nothing to verify
         found.setdefault(url, [])
         if label not in found[url]:
@@ -156,7 +156,9 @@ def check_url(url: str) -> tuple[str, str]:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("sources", nargs="*", help="Files to scan (default: manifest + README).")
+    parser.add_argument(
+        "sources", nargs="*", help="Files to scan (default: manifest + README)."
+    )
     parser.add_argument("--json", action="store_true", help="Emit JSON report.")
     parser.add_argument(
         "--lenient",
@@ -179,7 +181,12 @@ def main(argv: list[str] | None = None) -> int:
     suspect = [r for r in results if r["status"] == SUSPECT]
 
     if args.json:
-        print(json.dumps({"results": results, "dead": len(dead), "suspect": len(suspect)}, indent=2))
+        print(
+            json.dumps(
+                {"results": results, "dead": len(dead), "suspect": len(suspect)},
+                indent=2,
+            )
+        )
     else:
         symbol = {OK: "✅", DEAD: "❌", SUSPECT: "⚠️ ", SKIP: "➖"}
         for r in results:

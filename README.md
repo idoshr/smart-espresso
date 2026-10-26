@@ -6,7 +6,8 @@
 
 _**WORK IN PROGRESS**_
 
-DIY espresso machine monitoring with Raspberry Pi 4, pressure sensors, OLED display, and optional Home Assistant integration.
+DIY espresso machine monitoring with Raspberry Pi 4, pressure sensors,
+OLED display, and optional Home Assistant integration.
 
 ## Features
 
@@ -95,17 +96,26 @@ output) → A2. See the usage example below.
 
 ## Installation
 
+On a Raspberry Pi, install the hardware extras. The `dht` extra is separate
+because `Adafruit_DHT` builds only on a Pi. A machine that only serves the
+dashboard can install the core package, with no GPIO or ADC libraries.
+
 ```bash
 # Enable interfaces
 sudo raspi-config  # Enable I2C and/or SPI
 
-# Install package
-pip3 install smart-espresso
+# Install package with the Pi and DHT drivers
+pip3 install "smart-espresso[pi,dht]"
 
 # Or from source
 git clone https://github.com/idoshr/smart-espresso.git
 cd smart-espresso
-pip3 install -e .
+pip3 install -e ".[pi,dht]"
+
+# Same pins, including DHT: pip3 install -r requirements.txt
+
+# Web stack only
+pip3 install smart-espresso
 ```
 
 ## Configuration
@@ -151,7 +161,8 @@ To integrate with Home Assistant, you need a long-lived access token:
 5. Give it a descriptive name (e.g., "Smart Espresso")
 6. Copy the generated token and use it as `HA_TOKEN`
 
-**Important**: Save the token immediately - it won't be shown again. For more details, see the [Home Assistant Authentication documentation](https://developers.home-assistant.io/docs/auth_api/#long-lived-access-token).
+**Important**: Save the token immediately. It is not shown again.
+See the [authentication docs][ha-auth].
 
 ## Usage
 
@@ -182,7 +193,8 @@ se = SmartEspresso(
 se.run()
 ```
 
-**With MCP3008**: Replace `ADS1115ADC(pin=0, gain=2/3)` with `MCP3008ADC(pin=0)` (keep `max_pressure_mpa` parameter)
+**With MCP3008**: Replace `ADS1115ADC(pin=0, gain=2/3)` with
+`MCP3008ADC(pin=0)`. Keep the `max_pressure_mpa` parameter.
 
 ## Web Dashboard
 
@@ -354,16 +366,20 @@ default and has no authentication — keep it on a trusted home network, or set
 - **Wrong readings**: Verify 3.3V sensors, check wiring, wait for auto-calibration
 - **Display issues**: Check I2C address with `sudo i2cdetect -y 1` (usually 0x3C)
 - **HA errors**: Verify URL includes `http://`, check token validity
-- **Dashboard unreachable**: Check the Pi's IP (`hostname -I`), confirm port 8080 isn't firewalled, and that `WEB_ENABLE` isn't `False`
-- **State stuck on `heating`/`overpressure`**: Your boiler runs outside the default 0.8-1.6 bar band — pass `ready_min_bar` / `ready_max_bar` to `MachineStateClassifier`
-- **Tank count looks wrong**: It counts measured water only; delete `WATER_TANK_STATE` to start over, and press _Tank filled_ at every refill
+- **Dashboard unreachable**: Check the Pi's IP (`hostname -I`), confirm
+  port 8080 is not firewalled, and that `WEB_ENABLE` is not `False`
+- **State stuck on `heating` or `overpressure`**: The boiler is outside
+  the default 0.8-1.6 bar band. Pass `ready_min_bar` and `ready_max_bar`
+  to `MachineStateClassifier`
+- **Tank count looks wrong**: It counts measured water only. Delete
+  `WATER_TANK_STATE` to start over, and press _Tank filled_ at every refill
 - **Shot history looks wrong**: Only pulls longer than 2 s that moved water
   are kept. Delete `SHOT_HISTORY_STATE` to start the log over
 - **Permissions**: `sudo usermod -a -G spi,i2c,gpio pi && sudo reboot`
 
 ## Project Structure
 
-```
+```text
 smart_espresso/
 ├── analog_sensor/
 │   ├── analog_sensor.py           # Base classes (ADCInterface, AnalogSensor)
@@ -399,4 +415,6 @@ BSD 3-Clause License
 
 ---
 
-**Made with ☕ by coffee enthusiasts**
+Made with ☕ by coffee enthusiasts
+
+[ha-auth]: https://developers.home-assistant.io/docs/auth_api/#long-lived-access-token
