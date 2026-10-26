@@ -1,6 +1,5 @@
 import os
 
-from homeassistant_api import Client
 from luma.core.interface.serial import i2c
 from luma.oled.device import sh1106
 
@@ -24,6 +23,11 @@ if HA_ENABLE:
     HA_VERIFY_SSL = strtobool(os.environ.get("HA_VERIFY_SSL") or True)
     if not HA_URL or not HA_TOKEN:
         raise ValueError("HA_URL and HA_TOKEN are required")
+
+    # Imported lazily: homeassistant-api is not installed, and this client
+    # must not be imported when HA_ENABLE is false (or on a machine that
+    # never publishes to Home Assistant).
+    from smart_espresso.home_assistant import Client
 
     # Initialize HomeAssistant Client before you use it.
     print("Connecting to Home Assistant")

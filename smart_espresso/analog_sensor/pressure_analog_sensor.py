@@ -1,6 +1,4 @@
-from homeassistant_api import Client, State
-
-from smart_espresso.analog_sensor.analog_sensor import AnalogSensor, ADCInterface
+from smart_espresso.analog_sensor.analog_sensor import ADCInterface, AnalogSensor
 
 
 class PressureAnalogSensor(AnalogSensor):
@@ -103,7 +101,9 @@ class PressureAnalogSensor(AnalogSensor):
             voltage_adjusted = 0
 
         # Convert to MPa: (adjusted_voltage / 4V_range) * max_pressure
-        pressure_mpa = (voltage_adjusted / self.SENSOR_VOLTAGE_RANGE) * self.max_pressure_mpa
+        pressure_mpa = (
+            voltage_adjusted / self.SENSOR_VOLTAGE_RANGE
+        ) * self.max_pressure_mpa
 
         return pressure_mpa
 
@@ -131,7 +131,9 @@ class PressureAnalogSensor(AnalogSensor):
     def normalized_value(self):
         return self.bar
 
-    def update_home_assistant(self, client: Client):
+    def update_home_assistant(self, client):
+        from smart_espresso.home_assistant import State
+
         return client.set_state(
             State(
                 entity_id=f"sensor.espresso_machine_{self.name.lower()}_pressure",

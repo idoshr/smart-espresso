@@ -103,7 +103,7 @@ class TestWaterTank(unittest.TestCase):
             "null",
             "[]",
             '{"used_ml": "many"}',
-            '{"used_ml": NaN}',       # json writes and reads these by default
+            '{"used_ml": NaN}',  # json writes and reads these by default
             '{"used_ml": Infinity}',
         ):
             with self.subTest(content=content):

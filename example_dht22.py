@@ -7,8 +7,9 @@ espresso machine monitoring setup.
 """
 
 import os
-from smart_espresso.analog_sensor.dht22_sensor import DHT22Sensor
+
 from smart_espresso.analog_sensor.ads1115_analog_sensor import ADS1115ADC
+from smart_espresso.analog_sensor.dht22_sensor import DHT22Sensor
 from smart_espresso.analog_sensor.pressure_analog_sensor import PressureAnalogSensor
 from smart_espresso.smart_espresso import SmartEspresso
 from smart_espresso.utils import strtobool
@@ -17,6 +18,7 @@ from smart_espresso.utils import strtobool
 try:
     from luma.core.interface.serial import i2c
     from luma.oled.device import sh1106
+
     display = sh1106(i2c(port=1, address=0x3C), width=128, height=64, rotate=0)
     print("Display initialized")
 except Exception as e:
@@ -28,7 +30,8 @@ HA_ENABLE = strtobool(os.environ.get("HA_ENABLE", "False"))
 client_ha = None
 
 if HA_ENABLE:
-    from homeassistant_api import Client
+    from smart_espresso.home_assistant import Client
+
     HA_URL = os.environ.get("HA_URL")
     HA_TOKEN = os.environ.get("HA_TOKEN")
     HA_VERIFY_SSL = strtobool(os.environ.get("HA_VERIFY_SSL", "True"))
@@ -41,14 +44,14 @@ if HA_ENABLE:
 # Create pressure sensors (existing analog sensors)
 analog_devices = [
     PressureAnalogSensor(
-        adc=ADS1115ADC(pin=0, gain=2/3),
+        adc=ADS1115ADC(pin=0, gain=2 / 3),
         name="Head",
-        max_pressure_mpa=2.0  # 0-2MPa sensor for brew head (0-20 bar)
+        max_pressure_mpa=2.0,  # 0-2MPa sensor for brew head (0-20 bar)
     ),
     PressureAnalogSensor(
-        adc=ADS1115ADC(pin=1, gain=2/3),
+        adc=ADS1115ADC(pin=1, gain=2 / 3),
         name="Boiler",
-        max_pressure_mpa=0.5  # 0-0.5MPa sensor for boiler (0-5 bar)
+        max_pressure_mpa=0.5,  # 0-0.5MPa sensor for boiler (0-5 bar)
     ),
 ]
 
@@ -58,7 +61,7 @@ digital_sensors = [
     DHT22Sensor(
         pin=4,  # GPIO4 (Physical Pin 7)
         name="Environment",
-        use_fahrenheit=False  # Set to True for Fahrenheit
+        use_fahrenheit=False,  # Set to True for Fahrenheit
     )
 ]
 
@@ -74,11 +77,10 @@ se = SmartEspresso(
     digital_sensors=digital_sensors,
     client_ha=client_ha,
     display=display,
-    render_interval=0.1
+    render_interval=0.1,
 )
 
 try:
     se.run()
 except KeyboardInterrupt:
     print("\nStopping Smart Espresso...")
-

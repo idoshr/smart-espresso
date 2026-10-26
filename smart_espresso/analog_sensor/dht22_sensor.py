@@ -8,8 +8,6 @@ try:
 except ImportError:
     Adafruit_DHT = None
 
-from homeassistant_api import Client, State
-
 
 class DHT22Sensor:
     """
@@ -44,7 +42,9 @@ class DHT22Sensor:
         self._temperature: Optional[float] = None
         self._humidity: Optional[float] = None
         self._last_read_time = 0
-        self._min_read_interval = 2.0  # DHT22 max sampling rate is 0.5Hz (every 2 seconds)
+        self._min_read_interval = (
+            2.0  # DHT22 max sampling rate is 0.5Hz (every 2 seconds)
+        )
         self.sensor_type = Adafruit_DHT.DHT22
 
         self._lock = threading.Lock()
@@ -115,7 +115,7 @@ class DHT22Sensor:
         humidity_str = f"{self._humidity:.1f}%"
         return f"{self.name}: {temp_str} {humidity_str}"
 
-    def update_home_assistant(self, client: Client):
+    def update_home_assistant(self, client):
         """
         Update Home Assistant with current sensor readings.
 
@@ -124,6 +124,8 @@ class DHT22Sensor:
         """
         if client is None:
             return
+
+        from smart_espresso.home_assistant import State
 
         # Create entity IDs based on sensor name
         temp_entity_id = f"sensor.{self.name.lower().replace(' ', '_')}_temperature"
@@ -162,4 +164,3 @@ class DHT22Sensor:
 
     def __repr__(self) -> str:
         return f"DHT22Sensor(pin={self.pin}, name='{self.name}', temp={self._temperature}, humidity={self._humidity})"
-

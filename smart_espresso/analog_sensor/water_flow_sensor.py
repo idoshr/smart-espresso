@@ -2,8 +2,6 @@ from threading import Event, Thread
 from time import monotonic
 from typing import Optional
 
-from homeassistant_api import Client, State
-
 from smart_espresso.analog_sensor.analog_sensor import ADCInterface, AnalogSensor
 
 
@@ -223,7 +221,9 @@ class WaterFlowAnalogSensor(AnalogSensor):
     def normalized_value(self):
         return self.liter
 
-    def update_home_assistant(self, client: Client):
+    def update_home_assistant(self, client):
+        from smart_espresso.home_assistant import State
+
         return client.set_state(
             State(
                 entity_id=f"sensor.espresso_machine_{self.name.lower()}_flow",
