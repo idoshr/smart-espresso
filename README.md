@@ -192,9 +192,15 @@ a full-screen view).
 
 It shows:
 
-- **Machine state** (see below) with a live shot timer while a shot is pulled;
-  while the shot runs and you scroll away, a compact timer pins to the top
-  edge, and a short buzz marks the moment the pull enters its window
+- **Machine state** (see below) as a full-width block you can read from
+  across the kitchen: a 44 px label on a solid colour, with one secondary
+  line (how long it has been ready, or boiler pressure against 0.8 bar
+  while it warms, plus a thin progress bar). While a shot is pulled, a
+  live timer shows yield and ratio; if you scroll away, a compact timer
+  pins to the top edge. Entering the 25–30 s window buzzes once and
+  flashes the card (the flash is skipped when the system asks for less
+  motion). Holding **awake** — or long-pressing the state card — switches
+  to glance mode: only that state and, during a shot, the timer
 - **Today's pulls** in the header, so a glance answers how many shots the
   machine has seen today (in memory; resets when the machine restarts)
 - **Head pressure** and **Boiler pressure** on manometer dials, in bar,

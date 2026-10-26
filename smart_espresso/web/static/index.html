@@ -49,6 +49,24 @@
     --matcha-ink: #1F6B34;
     --clay-ink: #9A4632;
 
+    /* Solid state bands. Light text on each clears 4.5:1, and the five
+       kitchen states (off, heating, ready, brewing, steaming) are different
+       hues so they still separate across the room. */
+    --state-off: #3E4742;
+    --state-off-ink: #F7F8F5;
+    --state-heating: #8A4E12;
+    --state-heating-ink: #FFF8F0;
+    --state-ready: #1B5C30;
+    --state-ready-ink: #F3FBF4;
+    --state-brewing: #8E3E16;
+    --state-brewing-ink: #FFF6F0;
+    --state-steaming: #1A5278;
+    --state-steaming-ink: #F3F9FC;
+    --state-overpressure: #7A2A24;
+    --state-overpressure-ink: #FFF5F3;
+    --state-unknown: #4A534E;
+    --state-unknown-ink: #F7F8F5;
+
     --display: "Familjen Grotesk", ui-rounded, system-ui, sans-serif;
     --body: "Karla", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
@@ -204,37 +222,91 @@
   .state {
     display: flex;
     flex-direction: column;
-    background: var(--state-soft, var(--card));
+    padding: 0;
+    overflow: hidden;
+    background: var(--card);
     border-color: transparent;
   }
 
-  .state-main {
+  [data-state="off"] { --state-solid: var(--state-off); --state-ink: var(--state-off-ink); }
+  [data-state="heating"] { --state-solid: var(--state-heating); --state-ink: var(--state-heating-ink); }
+  [data-state="ready"] { --state-solid: var(--state-ready); --state-ink: var(--state-ready-ink); }
+  [data-state="brewing"] { --state-solid: var(--state-brewing); --state-ink: var(--state-brewing-ink); }
+  [data-state="steaming"] { --state-solid: var(--state-steaming); --state-ink: var(--state-steaming-ink); }
+  [data-state="overpressure"] { --state-solid: var(--state-overpressure); --state-ink: var(--state-overpressure-ink); }
+  [data-state="unknown"] { --state-solid: var(--state-unknown); --state-ink: var(--state-unknown-ink); }
+
+  /* The solid band is the thing you can read from across the kitchen.
+     min-height keeps it above 30% of the idle card. */
+  .state-band {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 14px;
+    min-height: 132px;
+    padding: 22px 18px;
+    background: var(--state-solid, var(--state-unknown));
+    color: var(--state-ink, var(--state-unknown-ink));
+    --state-color: var(--state-ink);
   }
 
-  .state-text { flex: 1; min-width: 0; }
+  .state-copy {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+  }
 
-  .state-head { display: flex; align-items: center; gap: 9px; }
-
-  .glyph { display: inline-flex; flex: none; }
-  .glyph svg { width: 19px; height: 19px; display: block; }
+  .glyph { display: inline-flex; flex: none; color: inherit; }
+  .glyph svg { width: 36px; height: 36px; display: block; }
 
   .state-label {
     font-family: var(--display);
-    font-size: 22px;
+    font-size: 44px;
     font-weight: 600;
-    letter-spacing: -.02em;
-    line-height: 1.1;
+    letter-spacing: -.03em;
+    line-height: 1.05;
+    color: inherit;
     /* Two-word labels wrap by balance, never orphaning a single word. */
     text-wrap: balance;
   }
 
+  .state-body { padding: 14px 16px 16px; }
+
   .state-detail {
-    font-size: 12.5px;
-    color: var(--ink-soft);
-    margin-top: 5px;
+    font-size: 15px;
+    color: var(--ink);
+    line-height: 1.35;
+  }
+
+  .warm {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 10px;
+  }
+
+  .warm-track {
+    flex: 1;
+    height: 6px;
+    border-radius: 999px;
+    background: var(--edge);
+    overflow: hidden;
+  }
+
+  .warm-track i {
+    display: block;
+    height: 100%;
+    width: 0;
+    border-radius: 999px;
+    background: var(--state-heating);
+  }
+
+  .warm-eta {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--ink);
+    white-space: nowrap;
   }
 
   /* The reference pull, kept as a chip: dialing in means comparing.
@@ -277,7 +349,7 @@
     flex-direction: column;
     align-items: center;
     text-align: center;
-    margin-top: 16px;
+    margin-top: 14px;
   }
 
   .shot b {
@@ -700,7 +772,7 @@
 
   .brewbar.show { transform: translateY(0); opacity: 1; }
 
-  .brewbar .lamp { width: 8px; height: 8px; }
+  .brewbar .lamp { width: 8px; height: 8px; background: var(--state-solid, var(--ink-faint)); }
 
   .bb-label {
     font-family: var(--display);
@@ -856,6 +928,53 @@
     box-shadow: var(--shadow);
   }
 
+  /* One-shot flash as a pull enters the window. The reduced-motion
+     block below cancels the animation; the script also skips the class. */
+  .state.window-cue .state-band,
+  .brewbar.window-cue {
+    animation: window-flash .6s ease;
+  }
+
+  @keyframes window-flash {
+    0% { filter: brightness(1.6); }
+    100% { filter: brightness(1); }
+  }
+
+  /* Glance: screen-awake (or a long-press) leaves state, timer, yield
+     and ratio. The connection pill and the offline banner stay, so a
+     kitchen glance cannot look live when it is not. */
+  body.glance {
+    max-width: none;
+  }
+
+  body.glance header h1,
+  body.glance header .tagline,
+  body.glance #rings,
+  body.glance #pulls-card,
+  body.glance #history-card,
+  body.glance #flow-card,
+  body.glance #tank-card,
+  body.glance #other-card,
+  body.glance #skeletons,
+  body.glance .last-pull,
+  body.glance footer,
+  body.glance .warm {
+    display: none !important;
+  }
+
+  body.glance .state-label {
+    font-size: clamp(40px, 9vh, 88px);
+  }
+
+  body.glance .shot b {
+    font-size: clamp(8rem, 28vh, 50vh);
+    line-height: 1;
+  }
+
+  body.glance .shot small {
+    font-size: clamp(1.15rem, 4.5vh, 8vh);
+  }
+
   @media (prefers-reduced-motion: reduce) {
     * { transition: none !important; animation: none !important; }
     /* A frozen shimmer stripe reads as a smear. A flat block does not. */
@@ -893,25 +1012,29 @@
 </header>
 
 <div class="stack">
-  <div class="card state" id="state">
-    <div class="state-main">
+  <div class="card state" id="state" data-state="unknown">
+    <div class="state-band" id="state-band">
       <span class="lamp" id="lamp"></span>
-      <div class="state-text">
-        <div class="state-head">
-          <span class="glyph" id="state-glyph" aria-hidden="true"></span>
-          <div class="state-label" id="state-label" aria-live="polite">Connecting…</div>
-          <span class="stale-tag" id="stale-tag" hidden>stale</span>
-        </div>
-        <div class="state-detail" id="state-detail">waiting for the machine</div>
+      <span class="glyph" id="state-glyph" aria-hidden="true"></span>
+      <div class="state-copy">
+        <div class="state-label" id="state-label" aria-live="polite">Connecting…</div>
+        <span class="stale-tag" id="stale-tag" hidden>stale</span>
       </div>
     </div>
-    <div class="shot" id="shot" hidden>
-      <b id="shot-seconds">0s</b>
-      <span class="stale-tag" id="shot-stale" hidden>stale</span>
-      <small id="shot-ml">0 ml</small>
-      <div class="shot-track"><u id="shot-window"></u><i id="shot-progress"></i></div>
+    <div class="state-body">
+      <div class="state-detail" id="state-detail">waiting for the machine</div>
+      <div class="warm" id="warm" hidden>
+        <div class="warm-track" aria-hidden="true"><i id="warm-fill"></i></div>
+        <span class="warm-eta" id="warm-eta"></span>
+      </div>
+      <div class="shot" id="shot" hidden>
+        <b id="shot-seconds">0s</b>
+        <span class="stale-tag" id="shot-stale" hidden>stale</span>
+        <small id="shot-ml">0 ml</small>
+        <div class="shot-track"><u id="shot-window"></u><i id="shot-progress"></i></div>
+      </div>
+      <span class="last-pull" id="last-pull" hidden></span>
     </div>
-    <span class="last-pull" id="last-pull" hidden></span>
   </div>
 
   <!-- end state -->
@@ -1014,14 +1137,6 @@ const DOSE_G = 18;              // the double basket's dose; ratio is a guide, n
 // whose whole life happens below 1.6 bar reads as flat-left otherwise).
 const RING_RANGE_FACTOR = 1.75;
 
-const STATE_STYLE = {
-  good:   ['var(--matcha)', 'var(--matcha-soft)'],
-  warn:   ['var(--crema)', 'var(--crema-soft)'],
-  active: ['var(--crema)', 'var(--crema-soft)'],
-  alert:  ['var(--clay)', 'var(--clay-soft)'],
-  idle:   ['var(--ink-faint)', 'var(--card)'],
-};
-
 // A small line icon per state, so heating and brewing are told apart by
 // shape as well as colour. Stroke inherits the state colour.
 const GLYPHS = {
@@ -1117,13 +1232,12 @@ let stateCardVisible = true;
 let shotSeen = false;
 let buzzedInWindow = false;
 
-function renderState(machine) {
+function renderState(machine, pressure) {
   lastMachine = machine;
-  const [color, soft] = STATE_STYLE[machine.severity] || STATE_STYLE.idle;
+  const stateName = GLYPHS[machine.state] ? machine.state : 'unknown';
   const card = document.getElementById('state');
-  card.style.setProperty('--state-color', color);
-  card.style.setProperty('--state-soft', soft);
-  document.getElementById('bb-lamp').style.setProperty('--state-color', color);
+  card.dataset.state = stateName;
+  document.getElementById('brewbar').dataset.state = stateName;
   document.getElementById('bb-label').textContent = machine.label;
 
   const lamp = document.getElementById('lamp');
@@ -1133,7 +1247,7 @@ function renderState(machine) {
   glyph.innerHTML =
     `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
           stroke-linecap="round" stroke-linejoin="round">${GLYPHS[machine.state] || GLYPHS.unknown}</svg>`;
-  glyph.style.color = color;
+  glyph.style.color = '';
 
   // Only rewritten when it actually changes: the label carries aria-live,
   // and a per-second "3s in this state" would talk an ear off.
@@ -1147,17 +1261,18 @@ function renderState(machine) {
     const inWindow =
       machine.shot.seconds >= SHOT_WINDOW[0] &&
       machine.shot.seconds <= SHOT_WINDOW[1];
-    // A short buzz as the pull crosses into the window: hands are busy
-    // tamping or steaming, so the wrist learns what the eyes miss. Only
-    // on the transition, never on the first sighting — the page may have
-    // loaded mid-shot, and a window it was already inside counts as
-    // consumed: no buzz for a transition nobody witnessed.
-    if (!shotSeen && inWindow) buzzedInWindow = true;
-    if (shotSeen && inWindow && !buzzedInWindow) {
-      buzzedInWindow = true;
-      if (navigator.vibrate) navigator.vibrate(10);
-    }
-    shotSeen = true;
+    // Same transition as the buzz: not on the first sighting (the page
+    // may have loaded mid-window), and only once per shot. The flash is
+    // the visual half of that cue; reduced motion skips it.
+    const cue = DashboardLogic.noteShotWindow(
+      { shotSeen: shotSeen, buzzedInWindow: buzzedInWindow },
+      inWindow,
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    );
+    shotSeen = cue.shotSeen;
+    buzzedInWindow = cue.buzzedInWindow;
+    if (cue.buzz && navigator.vibrate) navigator.vibrate(10);
+    if (cue.flash) flashWindow();
 
     // Fresh payload: take the machine's number. displayedShotText refuses
     // to advance a held reading while offline, which is what keeps the
@@ -1177,8 +1292,9 @@ function renderState(machine) {
     document.getElementById('bb-ml').textContent =
       `${machine.shot.ml.toFixed(0)} ml`;
   } else {
-    shotSeen = false;
-    buzzedInWindow = false;
+    const cleared = DashboardLogic.clearShotWindow();
+    shotSeen = cleared.shotSeen;
+    buzzedInWindow = cleared.buzzedInWindow;
     heldShotText = null;
     shotSeconds.className = '';
   }
@@ -1193,15 +1309,43 @@ function renderState(machine) {
       `last pull ${last.seconds.toFixed(0)} s · ${last.ml.toFixed(0)} ml · ${ratioText(last.ml)}`;
   }
 
-  let detail = `${formatDuration(machine.since_seconds)} in this state`;
-  if (machine.shot) {
-    detail = machine.shot.seconds < SHOT_WINDOW[0]
-      ? `aiming for ${SHOT_WINDOW[0]}-${SHOT_WINDOW[1]}s`
-      : (machine.shot.seconds <= SHOT_WINDOW[1] ? 'in the window' : 'running long');
-  }
-  document.getElementById('state-detail').textContent = detail;
+  const boilerBar = DashboardLogic.boilerReading(pressure);
+  document.getElementById('state-detail').textContent =
+    DashboardLogic.heroDetail(machine, boilerBar);
+  paintWarm(machine, boilerBar);
 
   syncBrewbar();
+}
+
+let flashTimer = null;
+
+function flashWindow() {
+  const card = document.getElementById('state');
+  const bar = document.getElementById('brewbar');
+  card.classList.remove('window-cue');
+  bar.classList.remove('window-cue');
+  // Dropping and re-adding the class replays the animation on the next shot.
+  void card.offsetWidth;
+  card.classList.add('window-cue');
+  bar.classList.add('window-cue');
+  clearTimeout(flashTimer);
+  flashTimer = setTimeout(() => {
+    card.classList.remove('window-cue');
+    bar.classList.remove('window-cue');
+  }, 700);
+}
+
+function paintWarm(machine, boilerBar) {
+  const warm = document.getElementById('warm');
+  const heating = machine.state === 'heating' && typeof boilerBar === 'number';
+  warm.hidden = !heating;
+  if (!heating) return;
+  const progress = DashboardLogic.warmingProgress(boilerBar);
+  document.getElementById('warm-fill').style.width = `${Math.round(progress * 100)}%`;
+  const eta = DashboardLogic.formatEta(
+    DashboardLogic.warmingEtaSeconds(boilerBar, machine.since_seconds)
+  );
+  document.getElementById('warm-eta').textContent = eta || '';
 }
 
 // ---- sticky brew bar -----------------------------------------------------
@@ -1731,7 +1875,7 @@ function renderToday(today) {
 }
 
 function render(data) {
-  renderState(data.machine);
+  renderState(data.machine, data.pressure);
   renderRings(data.pressure);
   renderPulls(data.machine.history || []);
   renderHistory(data.shots);
@@ -1936,6 +2080,29 @@ document.addEventListener('visibilitychange', () => {
 
 const wakeBtn = document.getElementById('wake');
 let wakeLock = null, wakeWanted = false, wakePending = false;
+let glancePinned = false;
+
+function syncGlance() {
+  document.body.classList.toggle('glance', DashboardLogic.glanceOn(!!wakeLock, glancePinned));
+}
+
+// Long-press the state card to pin glance mode on a phone with no wake
+// lock (and to leave it again). A short tap does not toggle it.
+let glancePress = null;
+document.getElementById('state').addEventListener('pointerdown', (event) => {
+  if (event.button && event.button !== 0) return;
+  clearTimeout(glancePress);
+  glancePress = setTimeout(() => {
+    glancePinned = !glancePinned;
+    syncGlance();
+  }, 450);
+});
+// pointerleave is not in this list: a synthetic or slightly drifting
+// contact was cancelling the hold before it landed. Lifting or a
+// cancelled pointer still aborts it.
+['pointerup', 'pointercancel'].forEach((type) => {
+  document.getElementById('state').addEventListener(type, () => clearTimeout(glancePress));
+});
 
 async function syncWake() {
   const setUI = (on) => {
@@ -1944,6 +2111,7 @@ async function syncWake() {
     // The label offers the action, not the state: press to wake, or —
     // while held — press to let the screen sleep.
     document.getElementById('wake-text').textContent = on ? 'sleep' : 'awake';
+    syncGlance();
   };
   if (!wakeWanted) {
     if (wakeLock) { wakeLock.release(); wakeLock = null; }
