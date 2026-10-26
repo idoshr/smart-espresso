@@ -116,6 +116,7 @@ class TestHomeAssistantClient(unittest.TestCase):
         self.assertEqual(payload["state"], "9.10")
         self.assertEqual(payload["attributes"]["unit_of_measurement"], "Bar")
         self.assertEqual(session.headers["Authorization"], "Bearer token-1")
+        self.assertEqual(session.post.call_args.kwargs["timeout"], (2.0, 3.0))
         response.raise_for_status.assert_called_once()
 
 

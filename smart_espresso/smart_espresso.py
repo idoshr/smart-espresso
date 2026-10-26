@@ -4,6 +4,7 @@ from luma.core.render import canvas
 from luma.oled.device import sh1106
 
 from smart_espresso.analog_sensor.analog_sensor import AnalogSensor
+from smart_espresso.home_assistant import HomeAssistantPublisher, machine_states
 from smart_espresso.utils import font
 from smart_espresso.web.status_server import StatusServer
 
@@ -66,10 +67,9 @@ class SmartEspresso:
             display: OLED display device
             web_server: StatusServer serving the web dashboard (optional)
             render_interval: Update interval in seconds (default: 0.1)
-            ha_update_interval: Minimum seconds between Home Assistant pushes
-                (default: 1.0). Kept separate from render_interval so the
-                display can refresh quickly without flooding HA's REST API
-                with a request per sensor on every render tick.
+            ha_update_interval: Minimum seconds between Home Assistant
+                submissions (default: 1.0). The HTTP push runs on a worker
+                thread, so this only limits how often a snapshot is queued.
         """
         self.analog_devices: list[AnalogSensor] = analog_devices or []
         self.digital_sensors: list = digital_sensors or []
@@ -80,13 +80,16 @@ class SmartEspresso:
         self.render_interval: float = render_interval
         self.ha_update_interval: float = ha_update_interval
         self._last_ha_update: float = 0.0
+        self._publisher = (
+            HomeAssistantPublisher(client_ha) if client_ha is not None else None
+        )
         self._health = {
             sensor.name: SensorHealth(sensor.name) for sensor in self.all_sensors
         }
         self._display_health = SensorHealth("display")
         self.ticks = 0
 
-    def run(self, max_ticks=None):
+    def run(self, max_ticks=None, max_seconds=None):
         if not self.all_sensors:
             raise ValueError(
                 "No sensors to read (provide analog_devices or digital_sensors)"
@@ -94,15 +97,26 @@ class SmartEspresso:
 
         if self.web_server:
             self.web_server.start()
+        if self._publisher:
+            self._publisher.start()
 
-        # max_ticks lets a test run a finite loop. Production calls run()
-        # with no limit and stays here until the process is stopped.
+        # max_ticks and max_seconds let a test run a finite loop. Production
+        # calls run() with no limit and stays here until the process stops.
         # The count is per call, so a second run(max_ticks=n) does n more.
+        started = monotonic()
         completed = 0
-        while max_ticks is None or completed < max_ticks:
-            self._tick()
-            completed += 1
-            self.ticks += 1
+        try:
+            while True:
+                if max_ticks is not None and completed >= max_ticks:
+                    break
+                if max_seconds is not None and monotonic() - started >= max_seconds:
+                    break
+                self._tick()
+                completed += 1
+                self.ticks += 1
+        finally:
+            if self._publisher:
+                self._publisher.stop()
         return completed
 
     def _tick(self):
@@ -129,18 +143,15 @@ class SmartEspresso:
                 },
             )
 
-        # Update Home Assistant, throttled independently of render_interval
-        # so a slow/unreachable HA instance can't stall sensor sampling or
-        # the display, and so we don't hammer its REST API every tick.
+        # Queue the newest snapshot for the publisher thread. The HTTP push
+        # runs there, so a slow Home Assistant cannot stall sampling, the
+        # shot timer or the display. Submissions are throttled; the worker
+        # keeps only the newest snapshot and backs off while HA is down.
         if (
-            self.client_ha
+            self._publisher
             and (loop_start - self._last_ha_update) >= self.ha_update_interval
         ):
-            for sensor in self.all_sensors:
-                try:
-                    sensor.update_home_assistant(self.client_ha)
-                except Exception as e:
-                    print(f"Failed to update Home Assistant for {sensor.name}: {e}")
+            self._publisher.submit(self._ha_states())
             self._last_ha_update = loop_start
 
         if self.display:
@@ -167,3 +178,20 @@ class SmartEspresso:
                     font=font,
                 )
                 position_height += 15
+
+    def _ha_states(self):
+        """Sensor entities that read successfully, plus machine, shot and tank."""
+        states = []
+        for sensor in self.all_sensors:
+            if not self._health[sensor.name].ok:
+                continue
+            if hasattr(sensor, "ha_states"):
+                states.extend(sensor.ha_states())
+        if self.web_server:
+            states.extend(
+                machine_states(
+                    self.web_server.classifier.snapshot(),
+                    self.web_server.tank.snapshot(),
+                )
+            )
+        return states

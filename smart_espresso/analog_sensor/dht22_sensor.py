@@ -115,52 +115,44 @@ class DHT22Sensor:
         humidity_str = f"{self._humidity:.1f}%"
         return f"{self.name}: {temp_str} {humidity_str}"
 
-    def update_home_assistant(self, client):
-        """
-        Update Home Assistant with current sensor readings.
-
-        Args:
-            client: Home Assistant API client
-        """
-        if client is None:
-            return
-
+    def ha_states(self):
+        """Entity states for the current temperature and humidity, if known."""
         from smart_espresso.home_assistant import State
 
-        # Create entity IDs based on sensor name
-        temp_entity_id = f"sensor.{self.name.lower().replace(' ', '_')}_temperature"
-        humidity_entity_id = f"sensor.{self.name.lower().replace(' ', '_')}_humidity"
-
-        try:
-            # Update temperature sensor
-            if self._temperature is not None:
-                client.set_state(
-                    State(
-                        entity_id=temp_entity_id,
-                        state=str(round(self._temperature, 1)),
-                        attributes={
-                            "unit_of_measurement": self.temperature_unit,
-                            "friendly_name": f"{self.name} Temperature",
-                            "device_class": "temperature",
-                        },
-                    )
+        slug = self.name.lower().replace(" ", "_")
+        states = []
+        if self._temperature is not None:
+            states.append(
+                State(
+                    entity_id=f"sensor.{slug}_temperature",
+                    state=str(round(self._temperature, 1)),
+                    attributes={
+                        "unit_of_measurement": self.temperature_unit,
+                        "friendly_name": f"{self.name} Temperature",
+                        "device_class": "temperature",
+                    },
                 )
-
-            # Update humidity sensor
-            if self._humidity is not None:
-                client.set_state(
-                    State(
-                        entity_id=humidity_entity_id,
-                        state=str(round(self._humidity, 1)),
-                        attributes={
-                            "unit_of_measurement": "%",
-                            "friendly_name": f"{self.name} Humidity",
-                            "device_class": "humidity",
-                        },
-                    )
+            )
+        if self._humidity is not None:
+            states.append(
+                State(
+                    entity_id=f"sensor.{slug}_humidity",
+                    state=str(round(self._humidity, 1)),
+                    attributes={
+                        "unit_of_measurement": "%",
+                        "friendly_name": f"{self.name} Humidity",
+                        "device_class": "humidity",
+                    },
                 )
-        except Exception as e:
-            print(f"Failed to update Home Assistant for {self.name}: {e}")
+            )
+        return states
+
+    def update_home_assistant(self, client):
+        """Publish the current temperature and humidity."""
+        if client is None:
+            return
+        for state in self.ha_states():
+            client.set_state(state)
 
     def __repr__(self) -> str:
         return f"DHT22Sensor(pin={self.pin}, name='{self.name}', temp={self._temperature}, humidity={self._humidity})"
