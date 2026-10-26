@@ -120,6 +120,14 @@ class TestGlance:
         eta = call("logic.warmingEtaSeconds(0.6, 150)")
         assert eta is not None and eta > 0
 
+    def test_over_band_hides_until_the_reading_nears_it(self):
+        assert call("logic.showOverBand(0, 8)") is False
+        assert call("logic.showOverBand(7.1, 8)") is False
+        assert call("logic.showOverBand(7.2, 8)") is True
+        assert call("logic.showOverBand(9, 8)") is True
+        assert call("logic.showOverBand(null, 8)") is False
+        assert call("logic.showOverBand(1, null)") is False
+
     def test_glance_follows_the_wake_lock_or_a_pin(self):
         assert call("logic.glanceOn(true, false)") is True
         assert call("logic.glanceOn(false, true)") is True

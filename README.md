@@ -200,7 +200,7 @@ It shows:
   pins to the top edge. Entering the 25–30 s window buzzes once and
   flashes the card (the flash is skipped when the system asks for less
   motion). Holding **awake** — or long-pressing the state card — switches
-  to glance mode: only that state and, during a shot, the timer
+  to glance mode: only that state and, during a shot, the timer.
 - **Today's pulls** in the header, so a glance answers how many shots the
   machine has seen today (in memory; resets when the machine restarts)
 - **Head pressure** and **Boiler pressure** on manometer dials, in bar,
@@ -219,7 +219,13 @@ It shows:
 
 The page is styled as a quiet pastel bar readout on a near-white ground:
 crema for the group, a matcha green for the boiler, pale blue for water,
-with a dark scheme that follows the system setting. Before the first
+with a dark scheme that follows the system setting. Text clears
+4.5:1 and the small marks (dots, ticks, graph lines) clear 3:1 on
+both schemes. Labels are at least 11 px, and anything carrying a
+number is at least 12 px. A stronger theme follows
+`prefers-contrast: more`. The dial's over-band stays hidden until
+the reading nears that band, so a resting head at 0 bar does not
+look like a warning. Before the first
 `/api/status` response the header and the state card read
 **connecting…** (no green lamp), skeleton placeholders stand in for the
 dials and the flow and tank cards, and the footer says **never
