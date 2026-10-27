@@ -130,7 +130,9 @@ class TestWaterTank(unittest.TestCase):
                 tank.update(120.0)
 
             self.assertEqual(os.stat(path).st_mtime_ns, 0)
-            self.assertEqual(len(os.listdir(directory)), 1)  # no leftover temp files
+            # The previous good file is kept as tank.json.bak. Nothing else
+            # (no temp file) is left behind.
+            self.assertEqual(set(os.listdir(directory)), {"tank.json", "tank.json.bak"})
 
             tank.update(130.0)
             self.assertNotEqual(os.stat(path).st_mtime_ns, 0)

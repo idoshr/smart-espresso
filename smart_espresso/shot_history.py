@@ -6,21 +6,25 @@ flow curves. A later shot-card image can be drawn from that single record;
 this module only stores and serves it.
 
 Curves are sampled while the pull is open and written once, when it is
-committed. Writes are atomic and happen on a completed shot only, so an idle
-machine does not wear the SD card and a power cut cannot leave a half-written
-file. The log is capped (the oldest shots fall off) and restored on boot.
+committed. The file write runs on a background thread: serialising a full
+log is too slow to sit inside ``classifier.update``. The temp file and the
+directory are fsynced, and the previous good file is kept as ``.bak``. An
+unreadable file is renamed to ``.corrupt-<time>`` and is not overwritten.
+The log is capped (the oldest shots fall off) and restored on boot.
 
 The render loop records from its own thread while Flask workers read
-summaries, so mutations and reads share a lock. The file write happens
-outside that lock: a slow card must not stall a dashboard request.
+summaries, so mutations and reads share a lock. The disk writer takes its
+own snapshot and does not hold that lock across the card.
 """
-import json
+import atexit
 import math
 import os
-import tempfile
 import threading
+import time
 from datetime import datetime, timezone
 from typing import Callable, Optional
+
+from smart_espresso.json_store import atomic_write_json, load_with_backup
 
 DEFAULT_STATE_PATH = "~/.smart_espresso/shot_history.json"
 
@@ -218,14 +222,25 @@ class ShotHistory:
         self._now = now or _wall_time
 
         self._lock = threading.Lock()
-        # Held for a whole save so two commits cannot interleave their writes
-        # and let the older file land last.
-        self._write_lock = threading.Lock()
         self._shots: list[dict] = []
         self._next_id = 1
         self._active: Optional[_OpenShot] = None
+        self._cv = threading.Condition()
+        self._pending = None
+        self._generation = 0
+        self._written = 0
+        self._stop = False
+        self._writer = None
 
         self._load()
+        if self.state_path:
+            self._writer = threading.Thread(
+                target=self._write_loop,
+                name="shot-history",
+                daemon=True,
+            )
+            self._writer.start()
+            atexit.register(self._flush_on_exit)
 
     def open(self) -> None:
         """Start a new pull. Replaces any pull that was left open."""
@@ -258,40 +273,52 @@ class ShotHistory:
                 self.max_samples,
             )
 
-    def commit(self, seconds: float, ml: float) -> Optional[dict]:
+    def commit(self, seconds: float, ml: float, wait: bool = True) -> Optional[dict]:
         """
         Keep the open pull and persist the log.
 
         Returns the stored record, or None when nothing was open or the
         totals could not be read. ``seconds`` is the flowing time (pauses
         excluded) and ``ml`` the volume, both as the classifier measured them.
+
+        The file write runs on the background writer. ``wait`` blocks until
+        that snapshot is on disk (or the attempt has failed and the previous
+        file is still in place). The render loop passes ``wait=False`` so a
+        large log cannot stall ``classifier.update``.
         """
-        with self._write_lock:
-            with self._lock:
-                active = self._active
-                self._active = None
-                if active is None:
-                    return None
-                try:
-                    seconds_value = _required_float(seconds, "seconds")
-                    ml_value = _required_float(ml, "ml")
-                except ValueError as error:
-                    print(f"Dropping shot with unreadable totals: {error}")
-                    return None
-                if seconds_value < 0 or ml_value < 0:
-                    print(
-                        "Dropping shot with negative totals: "
-                        f"seconds={seconds_value}, ml={ml_value}"
-                    )
-                    return None
-                shot = active.finish(self._next_id, seconds_value, ml_value)
-                self._next_id += 1
-                self._shots.append(shot)
-                if len(self._shots) > self.max_shots:
-                    del self._shots[: len(self._shots) - self.max_shots]
-                stored = _public_shot(shot, with_samples=True)
-            self._write()
-            return stored
+        with self._lock:
+            active = self._active
+            self._active = None
+            if active is None:
+                return None
+            try:
+                seconds_value = _required_float(seconds, "seconds")
+                ml_value = _required_float(ml, "ml")
+            except ValueError as error:
+                print(f"Dropping shot with unreadable totals: {error}")
+                return None
+            if seconds_value < 0 or ml_value < 0:
+                print(
+                    "Dropping shot with negative totals: "
+                    f"seconds={seconds_value}, ml={ml_value}"
+                )
+                return None
+            shot = active.finish(self._next_id, seconds_value, ml_value)
+            self._next_id += 1
+            self._shots.append(shot)
+            if len(self._shots) > self.max_shots:
+                del self._shots[: len(self._shots) - self.max_shots]
+            stored = _public_shot(shot, with_samples=True)
+            payload = {
+                "version": FILE_VERSION,
+                "next_id": self._next_id,
+                "shots": list(self._shots),
+            }
+        if self.state_path:
+            self._enqueue(payload)
+            if wait:
+                self.flush()
+        return stored
 
     def abandon(self) -> None:
         """Drop the open pull without writing. Used for blips that are not shots."""
@@ -334,56 +361,74 @@ class ShotHistory:
         moment = datetime.fromtimestamp(self._now(), tz=timezone.utc).astimezone()
         return moment.isoformat(timespec="seconds")
 
-    def _write(self) -> None:
-        """
-        Persist the log atomically.
-
-        The caller holds ``_write_lock``. The snapshot is taken under
-        ``_lock`` and the file write is not, so a reader is not stuck behind
-        the card. Order on disk is oldest first, matching the in-memory list.
-        """
-        with self._lock:
-            if not self.state_path:
-                return
-            payload = {
-                "version": FILE_VERSION,
-                "next_id": self._next_id,
-                "shots": self._shots,
-            }
-
+    def _flush_on_exit(self) -> None:
+        """Best-effort flush when the process exits. Never raises."""
         try:
-            directory = os.path.dirname(self.state_path) or "."
-            os.makedirs(directory, exist_ok=True)
-            handle, temp_path = tempfile.mkstemp(dir=directory)
-        except OSError as error:
-            print(f"Could not save shot history to {self.state_path}: {error}")
+            self.flush()
+        except Exception as error:
+            print(f"Shot history was not flushed on exit: {error}")
+
+    def flush(self, timeout: float = 5.0) -> None:
+        """Block until the newest queued snapshot has been written."""
+        if not self.state_path:
             return
+        deadline = time.monotonic() + timeout
+        with self._cv:
+            target = self._generation
+            while self._written < target:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise TimeoutError("shot history write did not finish")
+                self._cv.wait(remaining)
 
-        try:
-            with os.fdopen(handle, "w") as file:
-                json.dump(payload, file, separators=(",", ":"))
-                file.write("\n")
-            os.replace(temp_path, self.state_path)
-        except OSError as error:
-            print(f"Could not save shot history to {self.state_path}: {error}")
+    def close(self) -> None:
+        """Flush and stop the writer. Used by tests that delete the directory."""
+        self.flush()
+        if self._writer is None:
+            return
+        with self._cv:
+            self._stop = True
+            self._cv.notify_all()
+        self._writer.join(timeout=2.0)
+        self._writer = None
+
+    def _enqueue(self, payload: dict) -> None:
+        with self._cv:
+            self._generation += 1
+            self._pending = payload
+            self._cv.notify()
+
+    def _write_loop(self) -> None:
+        while True:
+            with self._cv:
+                while self._pending is None and not self._stop:
+                    self._cv.wait()
+                if self._pending is None and self._stop:
+                    return
+                payload = self._pending
+                generation = self._generation
+                self._pending = None
             try:
-                os.unlink(temp_path)
-            except OSError:
-                pass
+                atomic_write_json(self.state_path, payload)
+            except OSError as error:
+                # The previous file is still in place. A later commit retries.
+                print(f"Could not save shot history to {self.state_path}: {error}")
+            with self._cv:
+                self._written = generation
+                self._cv.notify_all()
 
     def _load(self) -> None:
-        """Restore the log. A missing or unreadable file starts empty."""
-        if not self.state_path or not os.path.exists(self.state_path):
+        """Restore the log. A bad file is kept aside; ``.bak`` is the fallback."""
+        if not self.state_path:
             return
 
-        try:
-            with open(self.state_path) as file:
-                payload = json.load(file)
-            shots, next_id = self._parse_payload(payload)
-        except (OSError, ValueError, TypeError) as error:
-            print(f"Ignoring unreadable shot history {self.state_path}: {error}")
-            return
+        def parse(payload):
+            return self._parse_payload(payload)
 
+        loaded = load_with_backup(self.state_path, parse)
+        if loaded is None:
+            return
+        shots, next_id = loaded
         self._shots = shots[-self.max_shots :]
         highest = max((shot["id"] for shot in self._shots), default=0)
         self._next_id = max(next_id, highest + 1)

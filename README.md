@@ -328,10 +328,13 @@ the chart does not count those pauses. Peaks are taken from every reading,
 including ones that fell between two stored points.
 
 The log is written to `SHOT_HISTORY_STATE` (default
-`~/.smart_espresso/shot_history.json`) once per completed pull, atomically,
-and restored on boot. `SHOT_HISTORY_MAX` (default 200) caps the file; the
-oldest shots fall off. An idle machine does not rewrite it. A missing or
-unreadable file starts the log over instead of stopping the machine.
+`~/.smart_espresso/shot_history.json`) once per completed pull. The write
+runs off the render thread. The temp file and its directory are fsynced,
+and the previous good file is kept as `shot_history.json.bak`.
+`SHOT_HISTORY_MAX` (default 200) caps the file; the oldest shots fall off.
+An idle machine does not rewrite it. A missing file starts an empty log.
+An unreadable file is renamed to `shot_history.json.corrupt-<time>` and is
+not overwritten; the `.bak` is loaded when one is there.
 
 `GET /api/status` includes a small `shots` block (`count`, and `recent`
 newest first, without curves) so the dashboard list updates on the poll it
@@ -366,9 +369,11 @@ was last filled. Pressing **Tank filled** (a two-tap confirm, so a stray tap
 cannot wipe the count) calls `POST /api/tank/reset`, which moves the baseline
 to the current total.
 
-The count is written to `WATER_TANK_STATE` (atomically, at most every 15 s to
-spare the SD card) and restored on boot — otherwise every restart would claim
-a full tank. The dashboard warns below 15% remaining.
+The count is written to `WATER_TANK_STATE` (atomically and fsynced, at most
+every 15 s to spare the SD card) and restored on boot — otherwise every
+restart would claim a full tank. A bad file is kept as
+`water_tank.json.corrupt-<time>` and the last good `.bak` is used when one
+exists. The dashboard warns below 15% remaining.
 
 The page polls `GET /api/status` once per second:
 
