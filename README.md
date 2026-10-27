@@ -289,7 +289,7 @@ from the live readings, in this priority order:
 
 | State | Condition | Meaning |
 |-------|-----------|---------|
-| `brewing` | Flow ≥ 0.3 ml/s **or** head ≥ 2 bar | "Pulling shot" |
+| `brewing` | Flow ≥ 0.3 ml/s, head ≥ 4.5 bar, or head ≥ 2 bar within 5 s of flow | "Pulling shot" |
 | `steaming` | Boiler falling faster than 0.02 bar/s | "Steaming milk" |
 | `off` | Boiler < 0.15 bar | "Resting" — machine is not heating |
 | `heating` | Boiler < 0.8 bar | "Warming up" |
@@ -301,19 +301,24 @@ cannot make the dashboard flicker; `brewing` is the exception and is published
 immediately, so the shot timer starts on time. Every threshold is a constructor
 argument on `MachineStateClassifier` if your machine runs different pressures.
 
-While brewing, the classifier times the shot and measures its volume; when the
-pump stops, a pull longer than 2 s that actually moved water is kept (shorter
-blips are pump priming, not a shot, and a pressure reading with no flow is
-not one either). The dashboard marks the 25–30 s window on the shot timer, so
-you can see a pull running fast or long while it happens. Saved rows
-keep that verdict in words, not only in colour. That same pull is
-appended to the shot history below.
+While brewing, the classifier times the shot and measures its volume. Water
+moving, pump-level head pressure, or brew-band pressure within 5 s of flow
+publishes "Pulling shot" immediately. A saved shot also needs at least 2 s
+of flow, 5 ml, and a head peak at the brew threshold (2 bar). A flush or
+rinse with no brew pressure, and a backflush that barely moves water, update
+the tank and are not shots. A pause that stays above 0.5 bar is the same
+shot when flow returns within 10 s. Once the head vents, the next pull is a
+new shot. The dashboard marks the 25–30 s window on the shot timer, so you
+can see a pull running fast or long while it happens. Saved rows keep that
+verdict in words, not only in colour. That same pull is appended to the shot
+history below.
 
 ### Shot history
 
 [`shot_history.py`](smart_espresso/shot_history.py) keeps every completed
-pull, not just the last one. A pull longer than 2 s that moved water is
-saved; anything shorter is left out. Each record stores:
+pull, not just the last one. A pull is saved when it flowed for at least
+2 s, reached 5 ml, and head pressure peaked at the brew threshold. A flush,
+rinse, or backflush is left out. Each record stores:
 
 - when the pull started (`started_at`, local time with its UTC offset)
 - how long water was flowing (`seconds`, the same number as the live timer)
@@ -426,8 +431,8 @@ default and has no authentication — keep it on a trusted home network, or set
   to `MachineStateClassifier`
 - **Tank count looks wrong**: It counts measured water only. Delete
   `WATER_TANK_STATE` to start over, and press _Tank filled_ at every refill
-- **Shot history looks wrong**: Only pulls longer than 2 s that moved water
-  are kept. Delete `SHOT_HISTORY_STATE` to start the log over
+- **Shot history looks wrong**: A saved shot flowed for at least 2 s, reached
+  5 ml, and peaked at 2 bar. Delete `SHOT_HISTORY_STATE` to start the log over
 - **Permissions**: `sudo usermod -a -G spi,i2c,gpio pi && sudo reboot`
 
 ## Project Structure

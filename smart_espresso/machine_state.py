@@ -108,6 +108,16 @@ class MachineStateClassifier:
     # Recent pulls kept for the dashboard's duration strip. The persisted
     # log (shot_history.ShotHistory) is a separate, longer record.
     SHOT_HISTORY_MAX = 12
+    # A saved shot has to have moved at least this much water. A backflush
+    # and a short rinse fall under it.
+    MIN_SHOT_ML = 5.0
+    # Head pressure at or below this means the group has vented. A new pull
+    # after that is a new shot, not the rest of the previous one.
+    SHOT_VENT_BAR = 0.5
+    # How long a pause may last, after brewing has already ended, and still
+    # be the same shot, as long as the head never vented. Covers a bloom
+    # that outlasts the pressure-hold window.
+    SHOT_MERGE_SECONDS = 10.0
 
     def __init__(
         self,
@@ -122,6 +132,9 @@ class MachineStateClassifier:
         pressure_hold_seconds: float = PRESSURE_HOLD_SECONDS,
         max_flowless_brew_seconds: float = MAX_FLOWLESS_BREW_SECONDS,
         shot_history: Optional[ShotHistory] = None,
+        min_shot_ml: float = MIN_SHOT_ML,
+        shot_vent_bar: float = SHOT_VENT_BAR,
+        shot_merge_seconds: float = SHOT_MERGE_SECONDS,
     ):
         """
         Initialize the classifier.
@@ -150,6 +163,14 @@ class MachineStateClassifier:
                 None keeps the in-memory strip only. The log is updated
                 outside this object's lock so a disk write cannot stall a
                 reader of :meth:`snapshot`.
+            min_shot_ml: Volume below which a pull is not saved. A flush can
+                exceed this and still be dropped when the head never reached
+                brew pressure.
+            shot_vent_bar: Head pressure at or below which the group counts
+                as vented, so the next flow starts a new shot.
+            shot_merge_seconds: After brewing ends, how long flow may stay
+                away and still continue the same shot, if the head has not
+                vented.
         """
         if pump_head_bar < brew_head_bar:
             raise ValueError(
@@ -168,6 +189,9 @@ class MachineStateClassifier:
         self.pressure_hold_seconds = pressure_hold_seconds
         self.max_flowless_brew_seconds = max_flowless_brew_seconds
         self.shot_history = shot_history
+        self.min_shot_ml = min_shot_ml
+        self.shot_vent_bar = shot_vent_bar
+        self.shot_merge_seconds = shot_merge_seconds
 
         self._lock = threading.Lock()
         self.state: str = MachineState.UNKNOWN
@@ -195,6 +219,16 @@ class MachineStateClassifier:
         # out of the recorded duration.
         self._shot_prev: Optional[float] = None
         self._shot_prev_ml: float = 0.0
+        self._shot_peak_head: Optional[float] = None
+        # Set when brewing ends but the head is still charged, so a bloom
+        # can continue this same pull instead of starting another.
+        self._shot_suspended_at: Optional[float] = None
+        self._shot_head_vented = False
+        # open() runs after a commit of the pull that just closed, so it
+        # cannot wipe the record it is about to save. The usual case opens
+        # immediately, before the first curve sample.
+        self._open_after = False
+        self._deferred_sample = None
         self._last_shot: Optional[dict] = None
         # Newest last; a short memory of recent pulls so the dashboard can
         # show whether the machine (or the grinder) is drifting.
@@ -233,6 +267,8 @@ class MachineStateClassifier:
         outcome = None
         flow_known = flow_mls is not None and total_ml is not None
         with self._lock:
+            self._open_after = False
+            self._deferred_sample = None
             # A failed flow read must not look like a lifetime total of 0:
             # the next good sample would then count the whole shot again.
             if flow_mls is None:
@@ -241,6 +277,10 @@ class MachineStateClassifier:
                 total_ml = self._shot_prev_ml
             self._roll_day_if_needed()
             self._update_boiler_rate(boiler_bar, now)
+            self._note_shot_head(head_bar)
+            if self._suspension_ended(now, flow_mls, flow_known):
+                outcome = self._take_shot_outcome()
+                self._clear_open_shot()
             candidate = self._classify(head_bar, boiler_bar, flow_mls, now)
 
             if candidate != self._candidate:
@@ -254,7 +294,17 @@ class MachineStateClassifier:
                 now - self._candidate_since >= self.dwell_seconds
             )
             if promote and candidate != self.state:
-                outcome = self._on_state_change(candidate, now, total_ml)
+                change = self._on_state_change(
+                    candidate,
+                    now,
+                    total_ml,
+                    head_bar,
+                    flow_mls,
+                    flow_known,
+                    defer_open=outcome is not None,
+                )
+                if change is not None:
+                    outcome = change
 
             # Tracked against the candidate, not the published state: once the
             # pump stops, BREWING is still published while the line drains,
@@ -283,10 +333,25 @@ class MachineStateClassifier:
                 self._sample_open_shot(
                     now, head_bar, boiler_bar, flow_mls if flow_known else 0.0
                 )
+            elif (
+                self._shot_start is not None
+                and flow_known
+                and self._shot_prev is not None
+            ):
+                # Brewing has ended (or is about to) and the pull is still
+                # open. Advance the baseline so the pause is not counted as
+                # flowing time when water moves again.
+                self._shot_prev = now
+                self._shot_prev_ml = total_ml
 
             state = self.state
 
         self._close_recorded_shot(outcome)
+        if self._open_after and self.shot_history is not None:
+            self.shot_history.open()
+            if self._deferred_sample is not None:
+                elapsed, head, boiler, flow = self._deferred_sample
+                self.shot_history.sample(elapsed, head, boiler, flow)
         return state
 
     def _roll_day_if_needed(self) -> None:
@@ -383,49 +448,123 @@ class MachineStateClassifier:
 
         return MachineState.READY
 
+    def _note_shot_head(self, head_bar: Optional[float]) -> None:
+        """Track the peak, and whether the group has vented, for the open pull."""
+        if self._shot_start is None:
+            return
+        if head_bar is None or head_bar <= self.shot_vent_bar:
+            self._shot_head_vented = True
+            return
+        if self._shot_peak_head is None or head_bar > self._shot_peak_head:
+            self._shot_peak_head = head_bar
+
+    def _resume_continues(self, now: float, flow_mls: float, flow_known: bool) -> bool:
+        """True when this sample is the rest of a pull that has not vented."""
+        if self._shot_suspended_at is None or self._shot_start is None:
+            return False
+        if self._shot_head_vented:
+            return False
+        if now - self._shot_suspended_at > self.shot_merge_seconds:
+            return False
+        return bool(flow_known and flow_mls >= self.brew_flow_mls)
+
+    def _suspension_ended(self, now: float, flow_mls: float, flow_known: bool) -> bool:
+        """True when a paused pull should be saved or dropped on this sample."""
+        if self._shot_suspended_at is None:
+            return False
+        if self._resume_continues(now, flow_mls, flow_known):
+            return False
+        if self._shot_head_vented:
+            return True
+        return now - self._shot_suspended_at > self.shot_merge_seconds
+
+    def _can_defer_close(self, head_bar: Optional[float]) -> bool:
+        """Keep the pull open across a pause that has not vented the head."""
+        return (
+            self._shot_start is not None
+            and not self._shot_head_vented
+            and head_bar is not None
+            and head_bar > self.shot_vent_bar
+        )
+
+    def _begin_shot(
+        self, now: float, total_ml: float, head_bar: Optional[float]
+    ) -> None:
+        self._shot_start = now
+        self._shot_seconds = 0.0
+        self._shot_ml = 0.0
+        self._shot_prev = now
+        self._shot_prev_ml = total_ml
+        self._shot_peak_head = head_bar
+        self._shot_head_vented = head_bar is None or (head_bar <= self.shot_vent_bar)
+        self._shot_suspended_at = None
+
+    def _clear_open_shot(self) -> None:
+        self._shot_start = None
+        self._shot_prev = None
+        self._shot_seconds = 0.0
+        self._shot_ml = 0.0
+        self._shot_peak_head = None
+        self._shot_head_vented = False
+        self._shot_suspended_at = None
+
+    def _take_shot_outcome(self) -> tuple:
+        """Decide whether the open pull is a shot. Does not clear it."""
+        peak = self._shot_peak_head
+        qualifies = (
+            self._shot_seconds >= 2.0
+            and self._shot_ml >= self.min_shot_ml
+            and peak is not None
+            and peak >= self.brew_head_bar
+        )
+        if not qualifies:
+            return ("abandon",)
+        self._last_shot = {
+            "seconds": round(self._shot_seconds, 1),
+            "ml": round(self._shot_ml, 1),
+        }
+        self._shot_history.append(self._last_shot)
+        if len(self._shot_history) > self.SHOT_HISTORY_MAX:
+            del self._shot_history[: len(self._shot_history) - self.SHOT_HISTORY_MAX]
+        self._shots_today += 1
+        self._ml_today += self._shot_ml
+        return ("commit", self._last_shot["seconds"], self._last_shot["ml"])
+
     def _on_state_change(
-        self, new_state: str, now: float, total_ml: float
+        self,
+        new_state: str,
+        now: float,
+        total_ml: float,
+        head_bar: Optional[float],
+        flow_mls: float,
+        flow_known: bool,
+        defer_open: bool = False,
     ) -> Optional[tuple]:
         """Enter a new state, opening or closing the shot timer as needed.
 
         Returns ``("commit", seconds, ml)`` or ``("abandon",)`` when a pull
         closes, so the caller can persist it after releasing the lock.
+        A pause that leaves the head charged does not close yet: flow
+        returning inside the merge window continues the same pull.
         """
         outcome = None
         if new_state == MachineState.BREWING:
-            self._shot_start = now
-            self._shot_seconds = 0.0
-            self._shot_ml = 0.0
-            self._shot_prev = now
-            self._shot_prev_ml = total_ml
-            if self.shot_history is not None:
-                self.shot_history.open()
-        elif self.state == MachineState.BREWING:
-            # Very short blips are pump priming or a noisy sample, not a shot,
-            # and a pressure-only false positive (stuck sensor, static
-            # pressure) moves no water at all. A real pull always fills the
-            # shot volume, so require both before recording anything.
-            if self._shot_seconds >= 2.0 and self._shot_ml > 0:
-                self._last_shot = {
-                    "seconds": round(self._shot_seconds, 1),
-                    "ml": round(self._shot_ml, 1),
-                }
-                self._shot_history.append(self._last_shot)
-                if len(self._shot_history) > self.SHOT_HISTORY_MAX:
-                    del self._shot_history[
-                        : len(self._shot_history) - self.SHOT_HISTORY_MAX
-                    ]
-                self._shots_today += 1
-                self._ml_today += self._shot_ml
-                outcome = (
-                    "commit",
-                    self._last_shot["seconds"],
-                    self._last_shot["ml"],
-                )
+            if self._resume_continues(now, flow_mls, flow_known):
+                self._shot_suspended_at = None
             else:
-                outcome = ("abandon",)
-            self._shot_start = None
-            self._shot_prev = None
+                self._begin_shot(now, total_ml, head_bar)
+                if defer_open:
+                    # The previous pull is committed after this lock. Opening
+                    # now would make that commit save the new pull instead.
+                    self._open_after = self.shot_history is not None
+                elif self.shot_history is not None:
+                    self.shot_history.open()
+        elif self.state == MachineState.BREWING:
+            if self._can_defer_close(head_bar):
+                self._shot_suspended_at = now
+            else:
+                outcome = self._take_shot_outcome()
+                self._clear_open_shot()
 
         self.state = new_state
         self._state_since = now
@@ -446,7 +585,11 @@ class MachineStateClassifier:
         """
         if self.shot_history is None or self._shot_start is None:
             return
-        self.shot_history.sample(now - self._shot_start, head_bar, boiler_bar, flow_mls)
+        elapsed = now - self._shot_start
+        if self._open_after:
+            self._deferred_sample = (elapsed, head_bar, boiler_bar, flow_mls)
+            return
+        self.shot_history.sample(elapsed, head_bar, boiler_bar, flow_mls)
 
     def _close_recorded_shot(self, outcome: Optional[tuple]) -> None:
         """Persist or drop the pull that just closed. No-op otherwise."""
