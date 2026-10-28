@@ -1,11 +1,11 @@
 """Track how much water was drawn from the tank since it was last filled."""
-import json
 import math
 import os
-import tempfile
 import threading
 from time import monotonic
 from typing import Optional
+
+from smart_espresso.json_store import atomic_write_json, load_with_backup
 
 DEFAULT_STATE_PATH = "~/.smart_espresso/water_tank.json"
 
@@ -24,6 +24,9 @@ class WaterTank:
     survives a reboot of the Pi — otherwise every restart would claim a full
     tank. Writes are throttled (``save_interval``) and skipped entirely while
     nothing has changed, so an idle machine does not wear out the SD card.
+    The temp file is fsynced before it replaces the destination, the previous
+    good file is kept as ``.bak``, and a file that cannot be parsed is renamed
+    to ``.corrupt-<time>`` instead of being overwritten.
 
     The render loop feeds this from its own thread while Flask worker threads
     read snapshots and reset it, so all state changes are guarded by a lock.
@@ -211,25 +214,9 @@ class WaterTank:
             }
 
             try:
-                directory = os.path.dirname(self.state_path) or "."
-                os.makedirs(directory, exist_ok=True)
-                handle, temp_path = tempfile.mkstemp(dir=directory)
+                atomic_write_json(self.state_path, payload)
             except OSError as error:
                 print(f"Could not save water tank state to {self.state_path}: {error}")
-                return
-
-            try:
-                with os.fdopen(handle, "w") as file:
-                    json.dump(payload, file)
-                os.replace(temp_path, self.state_path)
-            except OSError as error:
-                print(f"Could not save water tank state to {self.state_path}: {error}")
-                # Leaving the temp file behind would litter the directory with
-                # one more on every retry.
-                try:
-                    os.unlink(temp_path)
-                except OSError:
-                    pass
                 return
 
             with self._lock:
@@ -237,13 +224,11 @@ class WaterTank:
                 self._saved_refills = refills
 
     def _load(self) -> None:
-        """Restore the used volume from disk; a missing or bad file starts fresh."""
-        if not self.state_path or not os.path.exists(self.state_path):
+        """Restore the used volume. A bad file is kept aside; ``.bak`` is next."""
+        if not self.state_path:
             return
 
-        try:
-            with open(self.state_path) as file:
-                payload = json.load(file)
+        def parse(payload):
             if not isinstance(payload, dict):
                 raise ValueError(f"expected an object, got {type(payload).__name__}")
             used = float(payload.get("used_ml", 0.0))
@@ -251,16 +236,17 @@ class WaterTank:
             # calculation, so treat them like any other unreadable file.
             if not math.isfinite(used):
                 raise ValueError(f"used_ml is not a finite number: {used}")
-            self._used_ml = used
-            self._refills = int(payload.get("refills", 0))
-        except (OSError, ValueError, TypeError) as error:
-            print(f"Ignoring unreadable water tank state {self.state_path}: {error}")
-            self._used_ml = 0.0
-            self._refills = 0
-            return
+            return used, int(payload.get("refills", 0))
 
-        self._saved_used_ml = self._used_ml
-        self._saved_refills = self._refills
+        loaded = load_with_backup(self.state_path, parse)
+        if loaded is None:
+            return
+        self._used_ml, self._refills = loaded
+        # A value restored only from the backup is not in the main file yet,
+        # so the next change has to write it.
+        if os.path.exists(self.state_path):
+            self._saved_used_ml = self._used_ml
+            self._saved_refills = self._refills
 
         # The flow sensor restarts at zero, so the restored volume becomes the
         # starting offset rather than a baseline against a lifetime total.

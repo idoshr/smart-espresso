@@ -596,7 +596,9 @@ class MachineStateClassifier:
         if self.shot_history is None or not outcome:
             return
         if outcome[0] == "commit":
-            self.shot_history.commit(outcome[1], outcome[2])
+            # The log may be a couple of megabytes. Writing it here would
+            # freeze the shot timer on the committing sample.
+            self.shot_history.commit(outcome[1], outcome[2], wait=False)
         else:
             self.shot_history.abandon()
 
