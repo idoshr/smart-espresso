@@ -206,7 +206,7 @@ pip install -e .
 python main.py --sim
 ```
 
-Open http://localhost:8080. `ADC_TYPE=SIM python main.py` starts the same
+Open <http://localhost:8080>. `ADC_TYPE=SIM python main.py` starts the same
 simulator.
 
 ```bash
