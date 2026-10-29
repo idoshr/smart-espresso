@@ -6,6 +6,7 @@ labels are the ones that failed, so every text pair is held to 4.5:1
 and every mark (dot, tick, arc, graph line) to 3:1.
 """
 
+import colorsys
 import re
 from pathlib import Path
 
@@ -52,6 +53,25 @@ def contrast(foreground, background):
     lighter = max(_luminance(foreground), _luminance(background))
     darker = min(_luminance(foreground), _luminance(background))
     return (lighter + 0.05) / (darker + 0.05)
+
+
+def _hsv(color):
+    hex_color = color.lstrip("#")
+    red = int(hex_color[0:2], 16) / 255
+    green = int(hex_color[2:4], 16) / 255
+    blue = int(hex_color[4:6], 16) / 255
+    return colorsys.rgb_to_hsv(red, green, blue)
+
+
+def states_separated(first, second):
+    """Hue separates saturated bands. A grey has no hue, so lightness must."""
+    hue_a, sat_a, _ = _hsv(first)
+    hue_b, sat_b, _ = _hsv(second)
+    hue = 0
+    if sat_a >= 0.18 and sat_b >= 0.18:
+        degrees = abs(hue_a - hue_b) * 360
+        hue = min(degrees, 360 - degrees)
+    return hue >= 40 or contrast(first, second) >= 1.5
 
 
 def _declarations(css, marker):
@@ -148,6 +168,25 @@ class TestDashboardContrast:
                         % (scheme, foreground, background, ratio, minimum)
                     )
         assert failures == []
+
+    def test_state_bands_are_distinct_in_every_scheme(self):
+        failures = []
+        for scheme, tokens in self.themes.items():
+            for index, left in enumerate(STATES):
+                for right in STATES[index + 1 :]:
+                    first = tokens["state-%s" % left]
+                    second = tokens["state-%s" % right]
+                    if not states_separated(first, second):
+                        failures.append(
+                            "%s %s %s vs %s %s" % (scheme, left, first, right, second)
+                        )
+        assert failures == []
+
+    def test_a_missing_sensor_is_striped_and_the_lamp_is_only_a_pulse(self):
+        assert '[data-state="unknown"] .state-band' in self.css
+        assert "repeating-linear-gradient" in self.css
+        assert ".state-band > .lamp { display: none; }" in self.css
+        assert ".state-band > .lamp.pulse { display: block; }" in self.css
 
     def test_labels_are_at_least_11px(self):
         sizes = [

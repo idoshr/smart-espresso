@@ -53,23 +53,23 @@
     /* Cool blue for a fast shot, so it does not share a hue with "long". */
     --fast-ink: #1A4E86;
 
-    /* Solid state bands. Light text on each clears 4.5:1, and the five
-       kitchen states (off, heating, ready, brewing, steaming) are different
-       hues so they still separate across the room. */
-    --state-off: #3E4742;
-    --state-off-ink: #F7F8F5;
-    --state-heating: #8A4E12;
-    --state-heating-ink: #FFF8F0;
+    /* Solid state bands. Text on each clears 4.5:1. Neighbouring states
+       differ by hue or by lightness, so warming is not brewing and off is
+       not a missing sensor. */
+    --state-off: #1E2924;
+    --state-off-ink: #F4F7F4;
+    --state-heating: #C4841A;
+    --state-heating-ink: #2A1604;
     --state-ready: #1B5C30;
     --state-ready-ink: #F3FBF4;
     --state-brewing: #8E3E16;
     --state-brewing-ink: #FFF6F0;
     --state-steaming: #1A5278;
     --state-steaming-ink: #F3F9FC;
-    --state-overpressure: #7A2A24;
-    --state-overpressure-ink: #FFF5F3;
-    --state-unknown: #4A534E;
-    --state-unknown-ink: #F7F8F5;
+    --state-overpressure: #6E1218;
+    --state-overpressure-ink: #FFF5F5;
+    --state-unknown: #5E3A86;
+    --state-unknown-ink: #F7F2FC;
 
     --display: "Familjen Grotesk", ui-rounded, system-ui, sans-serif;
     --body: "Karla", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -97,6 +97,8 @@
       --water-ink: #9EC4DC;
       --clay-ink: #E0917F;
       --fast-ink: #B7D9F2;
+      --state-heating: #4E3806;
+      --state-heating-ink: #FFF6E8;
       --shadow: 0 3px 14px rgba(0, 0, 0, .3);
     }
   }
@@ -118,6 +120,8 @@
     --water-ink: #9EC4DC;
     --clay-ink: #E0917F;
     --fast-ink: #B7D9F2;
+    --state-heating: #4E3806;
+    --state-heating-ink: #FFF6E8;
     --shadow: 0 3px 14px rgba(0, 0, 0, .3);
   }
 
@@ -140,7 +144,7 @@
       --clay-ink: #742E1E;
       --fast-ink: #123E73;
       --state-off-ink: #FFFFFF;
-      --state-heating-ink: #FFFFFF;
+      --state-heating-ink: #2A1604;
       --state-ready-ink: #FFFFFF;
       --state-brewing-ink: #FFFFFF;
       --state-steaming-ink: #FFFFFF;
@@ -314,6 +318,19 @@
     color: var(--state-ink, var(--state-unknown-ink));
     --state-color: var(--state-ink);
   }
+
+  /* Stripes, not another grey, so a missing sensor is not Off. */
+  [data-state="unknown"] .state-band {
+    background-image: repeating-linear-gradient(
+      -45deg,
+      transparent 0 8px,
+      rgba(255, 255, 255, .22) 8px 10px
+    );
+  }
+
+  /* The glyph carries the state. The dot only pulses for overpressure. */
+  .state-band > .lamp { display: none; }
+  .state-band > .lamp.pulse { display: block; }
 
   .state-copy {
     display: flex;
