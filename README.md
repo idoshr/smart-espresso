@@ -426,7 +426,10 @@ default and has no authentication — keep it on a trusted home network, or set
 ## Troubleshooting
 
 - **No devices**: `sudo raspi-config` → Enable I2C/SPI, then `sudo i2cdetect -y 1`
-- **Wrong readings**: Verify 3.3V sensors, check wiring, wait for auto-calibration
+- **Wrong readings**: Verify 3.3V sensors and wiring. A pressure zero is
+  learned from a median only while the boiler is off, or the head stays
+  under 0.5 bar with no flow, and that offset is kept across restarts.
+  A reading under 0.2 V is a disconnected sensor, not a new zero
 - **Display issues**: Check I2C address with `sudo i2cdetect -y 1` (usually 0x3C)
 - **HA errors**: Verify URL includes `http://`, check token validity
 - **Dashboard unreachable**: Check the Pi's IP (`hostname -I`), confirm

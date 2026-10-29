@@ -92,21 +92,22 @@ class TestPressureAutoCalibration(unittest.TestCase):
         self.assertEqual(sensor.offset_voltage, 0.0)
         self.assertAlmostEqual(sensor.bar, 0.0)
 
-    def test_sustained_low_readings_recalibrate_offset(self):
-        # Five consecutive low samples are a real drift, not noise.
+    def test_low_readings_alone_do_not_move_the_zero(self):
+        # A run of low samples is not a known zero. The old ratchet treated
+        # five of them as drift and permanently lowered the offset.
         sensor = self._sensor([0.45] * 6)
         for _ in range(6):
             sensor.read()
 
-        self.assertAlmostEqual(sensor.offset_voltage, -0.05)
-        self.assertAlmostEqual(sensor.bar, 0.0)
+        self.assertEqual(sensor.offset_voltage, 0.0)
 
-    def test_calibration_is_capped_at_minus_0_1v(self):
-        sensor = self._sensor([0.2] * 10)
-        for _ in range(10):
+    def test_a_low_but_connected_reading_is_not_a_fault(self):
+        sensor = self._sensor([0.2] * 3)
+        for _ in range(3):
             sensor.read()
 
-        self.assertEqual(sensor.offset_voltage, -0.1)
+        self.assertEqual(sensor.offset_voltage, 0.0)
+        self.assertFalse(sensor._disconnected)
 
     def test_mpa_conversion_is_linear_over_sensor_range(self):
         # 0.5V -> 0 MPa, 4.5V -> max_pressure_mpa.

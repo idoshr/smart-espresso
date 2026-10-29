@@ -142,6 +142,7 @@ class SmartEspresso:
                     for name, item in self._health.items()
                 },
             )
+        self._observe_pressure_zeros()
 
         # Queue the newest snapshot for the publisher thread. The HTTP push
         # runs there, so a slow Home Assistant cannot stall sampling, the
@@ -162,6 +163,22 @@ class SmartEspresso:
 
         elapsed = monotonic() - loop_start
         sleep(max(0.0, self.render_interval - elapsed))
+
+    def _observe_pressure_zeros(self) -> None:
+        """Train a pressure zero only while that sensor is known to read zero."""
+        machine_state = None
+        if self.web_server is not None:
+            machine_state = self.web_server.classifier.snapshot()["state"]
+        flow_mls = 0.0
+        for sensor in self.analog_devices:
+            rate = getattr(sensor, "flow_rate", None)
+            if rate is not None:
+                flow_mls += float(rate) * 1000.0 / 60.0
+        for sensor in self.analog_devices:
+            observe = getattr(sensor, "observe_zero", None)
+            if observe is None:
+                continue
+            observe(sensor.tracks_zero(machine_state, flow_mls))
 
     def _draw(self):
         # NB this will only send the data to the display after this "with" block is complete.

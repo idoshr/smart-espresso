@@ -104,7 +104,7 @@ class TestFlushFeedsTheTank(unittest.TestCase):
             patcher.start()
             self.addCleanup(patcher.stop)
 
-        head_adc = FakeADC(0.0)
+        head_adc = FakeADC(0.5)
         boiler_adc = FakeADC(1.2)
         flow_adc = FakeADC(0.0)
         head = PressureAnalogSensor(adc=head_adc, name="Head", max_pressure_mpa=2.0)
@@ -132,14 +132,14 @@ class TestFlushFeedsTheTank(unittest.TestCase):
 
         # ~10 ml/s for about 4 s with the head at 0.4 bar. Every tick carries
         # the pressure sensors too: the render loop never samples flow alone.
-        head_adc.set(0.1)
+        head_adc.set(0.58)
         for _ in range(40):
             for voltage in (3.0, 0.0):
                 flow_adc.set(voltage)
                 tick()
                 clock.advance(0.05)
 
-        head_adc.set(0.0)
+        head_adc.set(0.5)
         for _ in range(8):
             tick()
             clock.advance(0.5)

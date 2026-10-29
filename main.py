@@ -121,6 +121,11 @@ def _default_adc(adc_type, pin, gain):
     return MCP3008ADC(pin=pin)
 
 
+def _pressure_offset_path(name: str) -> str:
+    directory = os.environ.get("PRESSURE_OFFSET_DIR", "~/.smart_espresso")
+    return os.path.join(os.path.expanduser(directory), f"pressure_{name.lower()}.json")
+
+
 def build_analog_devices(adc_type=None, flow_sample_interval=_UNSET, adc_builder=None):
     """
     Build the head, boiler and flow sensors.
@@ -152,6 +157,7 @@ def build_analog_devices(adc_type=None, flow_sample_interval=_UNSET, adc_builder
             adc=MedianFilterADC(adc_builder(0, pressure_gain)),
             name="Head",
             max_pressure_mpa=2.0,
+            state_path=_pressure_offset_path("Head"),
         ),
     )
     attempt(
@@ -160,6 +166,7 @@ def build_analog_devices(adc_type=None, flow_sample_interval=_UNSET, adc_builder
             adc=MedianFilterADC(adc_builder(1, pressure_gain)),
             name="Boiler",
             max_pressure_mpa=0.5,
+            state_path=_pressure_offset_path("Boiler"),
         ),
     )
     attempt(
