@@ -96,9 +96,11 @@ output) → A2. See the usage example below.
 
 ## Installation
 
-On a Raspberry Pi, install the hardware extras. The `dht` extra is separate
-because `Adafruit_DHT` builds only on a Pi. A machine that only serves the
-dashboard can install the core package, with no GPIO or ADC libraries.
+On a Raspberry Pi, install the hardware extras. The `dht` extra is separate:
+it is `adafruit-circuitpython-dht` (Blinka, and libgpiod on the Pi) and is
+imported only when a DHT22 is constructed. The core package and CI do not
+install it. A machine that only serves the dashboard can install the core
+package, with no GPIO or ADC libraries.
 
 ```bash
 # Enable interfaces

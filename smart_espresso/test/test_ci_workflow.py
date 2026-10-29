@@ -12,6 +12,7 @@ PI_DISTRIBUTIONS = {
     "luma.oled",
     "adafruit-circuitpython-ads1x15",
     "adafruit-blinka",
+    "adafruit-circuitpython-dht",
     "adafruit_dht",
 }
 

@@ -244,9 +244,12 @@ class StatusServer:
                     }
                 )
             else:
-                message = str(sensor.message) if ok else f"{name}: fault"
                 other.append(
-                    {"name": name, "message": message, "health": health_fields}
+                    {
+                        "name": name,
+                        "message": sensor_text(sensor, ok),
+                        "health": health_fields,
+                    }
                 )
 
         # A failed flow sensor must not report a lifetime total of 0: the
@@ -379,6 +382,22 @@ class StatusServer:
         self._thread = threading.Thread(target=_serve, daemon=True)
         self._thread.start()
         print(f"Status web server listening on http://{self.host}:{self.port}")
+
+
+def sensor_text(sensor, ok: bool) -> str:
+    """Line for the display and the dashboard.
+
+    A failed ADC read becomes ``name: fault`` so the previous number is not
+    shown. A DHT sample that the sensor itself has expired already says
+    stale or no data, and that text is the one to show.
+    """
+    if ok:
+        return str(sensor.message)
+    sample_problem = getattr(sensor, "sample_problem", None)
+    if sample_problem is not None and sample_problem() is not None:
+        return str(sensor.message)
+    name = getattr(sensor, "name", "sensor")
+    return f"{name}: fault"
 
 
 def _reading_ok(health: Optional[dict], name: str) -> bool:

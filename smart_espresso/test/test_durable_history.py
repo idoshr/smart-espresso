@@ -271,7 +271,10 @@ class TestShotCommitLatency(unittest.TestCase):
                     total = 0.0
                     times = []
                     for _ in range(100):
-                        for _step in range(3):
+                        # Four samples: the opening one is the baseline, so
+                        # the recorded volume is 6 ml. That clears the 5 ml
+                        # minimum, and the leaving update below is a commit.
+                        for _step in range(4):
                             total += 2.0
                             clock.advance(1.0)
                             classifier.update(9.0, 1.2, 2.0, total)
@@ -289,7 +292,7 @@ class TestShotCommitLatency(unittest.TestCase):
             try:
                 payload = restored.list_payload()
                 self.assertEqual(payload["count"], 200)
-                self.assertEqual(payload["shots"][0]["ml"], 4.0)
+                self.assertEqual(payload["shots"][0]["ml"], 6.0)
             finally:
                 _finish(restored)
 
