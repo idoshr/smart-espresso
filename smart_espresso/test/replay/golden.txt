@@ -1,0 +1,5 @@
+shots 3
+27.0 36.6
+24.0 36.9
+29.0 33.7
+states unknown heating ready brewing ready brewing ready brewing ready brewing ready

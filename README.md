@@ -134,7 +134,7 @@ sudo systemctl enable --now smart-espresso.service
 Set via environment variables:
 
 ```bash
-export ADC_TYPE="ADS1115"          # or "MCP3008"
+export ADC_TYPE="ADS1115"          # or "MCP3008" or "SIM"
 export HA_ENABLE="True"            # Optional
 export HA_URL="http://192.168.1.100:8123"
 export HA_TOKEN="your_token_here"
@@ -183,6 +183,46 @@ To integrate with Home Assistant, you need a long-lived access token:
 
 **Important**: Save the token immediately. It is not shown again.
 See the [authentication docs][ha-auth].
+
+## Simulator
+
+No Pi is required. `ADC_TYPE=SIM` builds fake head, boiler, flow, DHT and
+OLED drivers. The status server, dashboard, `/api/status` health and
+Home Assistant path are the same code as on the machine.
+
+```bash
+ADC_TYPE=SIM python main.py
+python main.py --sim --seed 59
+python main.py --sim --record /tmp/session.csv
+python main.py --replay smart_espresso/test/replay/session.csv
+python scripts/hil_checklist.py --sim
+```
+
+`SIM_SEED` (default 59) only shifts the flow square wave. The demo cycle
+heats, pulls a shot, flushes, steams, faults the head for two seconds,
+and repeats. Simulator shot history defaults to
+`~/.smart_espresso/sim_shot_history.json`.
+
+`--record` writes `t,ch,volts` (channel 0 head, 1 boiler, 2 flow).
+CI replays `smart_espresso/test/replay/session.csv`: three pulls and one
+flush. Those traces come from this simulator with seed 59. They are not
+a bench capture.
+
+`scripts/hil_checklist.py` without `--sim` is the Pi checklist. If the
+flow `sample_hz` is well below 200 Hz, set
+`dtparam=i2c_arm_baudrate=400000` in `/boot/config.txt` and reboot.
+A simulator run prints:
+
+```text
+channel     sample_hz   i2c_errors   zero_V
+Head             10.0            0    0.500
+Boiler           10.0            0    0.540
+Brew            210.0            0    0.000
+i2c_error_rate 0.0000
+```
+
+Head and boiler are the render loop (10 Hz). Brew counts every virtual
+5 ms sample, including the extra read on each render, so it prints 210.
 
 ## Usage
 
