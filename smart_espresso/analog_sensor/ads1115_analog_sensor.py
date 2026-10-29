@@ -1,4 +1,5 @@
 import threading
+from typing import Any
 
 import adafruit_ads1x15.ads1115 as ADS
 import board
@@ -39,7 +40,7 @@ class ADS1115ADC(ADCInterface):
 
     # Class-level I2C and ADS1115 instances to share across sensors
     _i2c = None
-    _ads_instances = {}
+    _ads_instances: dict[int, Any] = {}
 
     def __init__(
         self, pin: int, gain: float = 1, i2c_address: int = 0x48, data_rate: int = 860

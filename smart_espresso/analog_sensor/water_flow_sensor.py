@@ -143,13 +143,13 @@ class WaterFlowAnalogSensor(AnalogSensor):
         self._flow_window_start = monotonic()
         self._flow_window_pulses = 0
 
-        self._sample_hz = None
-        self._hz_window_start = None
+        self._sample_hz: Optional[float] = None
+        self._hz_window_start: Optional[float] = None
         self._hz_window_samples = 0
         # None, not 0: a test clock (and a monotonic clock) both start near
         # zero, and "last warned at 0" would swallow the first half minute.
-        self._last_alias_warn = None
-        self._last_rate_log = None
+        self._last_alias_warn: Optional[float] = None
+        self._last_rate_log: Optional[float] = None
 
         self._stop_event = Event()
         self._thread = None
@@ -241,11 +241,21 @@ class WaterFlowAnalogSensor(AnalogSensor):
         return total
 
     def _update_rate(self, now: float) -> None:
-        """Recompute the flow rate over a fixed window to keep it stable."""
-        elapsed = now - self._flow_window_start
-        if elapsed >= self.flow_interval:
-            pulses = self.pulses
+        """Recompute the flow rate over a fixed window to keep it stable.
+
+        The pulse total and the window baseline share ``_pulse_lock`` with
+        ``reset``. Reading one and then the other without the lock lets a
+        reset zero the total while the baseline still holds the old count,
+        and the rate comes out negative.
+        """
+        with self._pulse_lock:
+            elapsed = now - self._flow_window_start
+            if elapsed < self.flow_interval or elapsed <= 0:
+                return
+            pulses = self._pulses
             pulses_in_window = pulses - self._flow_window_pulses
+            if pulses_in_window < 0:
+                pulses_in_window = 0
             liters_in_window = pulses_in_window / self.pulses_per_liter
             self._flow_rate_lpm = (liters_in_window / elapsed) * 60.0
             self._flow_window_start = now
@@ -324,7 +334,10 @@ class WaterFlowAnalogSensor(AnalogSensor):
                 if now - last_error_log >= 30.0:
                     last_error_log = now
                     print(f"{self.name} flow sensor sampling failed: {error}")
-            remaining = self.sample_interval - (monotonic() - started)
+            interval = self.sample_interval
+            if interval is None:
+                return
+            remaining = interval - (monotonic() - started)
             if remaining > 0 and self._stop_event.wait(remaining):
                 return
 
@@ -356,9 +369,9 @@ class WaterFlowAnalogSensor(AnalogSensor):
         with self._pulse_lock:
             self._pulses = 0
             self._pulse_times.clear()
-        self._flow_rate_lpm = 0.0
-        self._flow_window_start = monotonic()
-        self._flow_window_pulses = 0
+            self._flow_rate_lpm = 0.0
+            self._flow_window_start = monotonic()
+            self._flow_window_pulses = 0
 
     @property
     def pulses(self) -> int:

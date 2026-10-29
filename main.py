@@ -1,5 +1,6 @@
 import argparse
 import os
+from contextlib import contextmanager
 
 from smart_espresso.analog_sensor.analog_sensor import MedianFilterADC
 from smart_espresso.analog_sensor.pressure_analog_sensor import PressureAnalogSensor
@@ -214,6 +215,81 @@ def build_analog_devices(adc_type=None, flow_sample_interval=_UNSET, adc_builder
     return sensors
 
 
+def _web_enabled() -> bool:
+    raw = os.environ.get("WEB_ENABLE")
+    if raw is None:
+        return True
+    return bool(strtobool(raw))
+
+
+@contextmanager
+def _temporary_environ(environ):
+    """Apply ``environ`` for one build, then put ``os.environ`` back."""
+    if environ is None:
+        yield
+        return
+    previous = {key: os.environ.get(key) for key in environ}
+    for key, value in environ.items():
+        os.environ[str(key)] = str(value)
+    try:
+        yield
+    finally:
+        for key, value in previous.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
+
+
+def build_from_env(environ=None, sim=None, recorder=None):
+    """Build sensors, display, the optional web server and the HA client.
+
+    ``environ`` replaces those keys in ``os.environ`` for this call only.
+    The render loop is not started. ``sim`` forces simulator mode the same
+    way ``--sim`` does.
+    """
+    with _temporary_environ(environ):
+        if sim is None:
+            sim = _sim_requested()
+        if sim:
+            os.environ["ADC_TYPE"] = "SIM"
+        ha = build_home_assistant_client()
+        if sim:
+            from smart_espresso.sim.machine import SimulatedMachine
+            from smart_espresso.sim.sensors import SimDHT
+            from smart_espresso.sim.session import build_sim_sensors
+
+            seed = int(os.environ.get("SIM_SEED") or 59)
+            machine = SimulatedMachine(seed=seed, loop=True)
+            devices = build_sim_sensors(
+                machine,
+                recorder=recorder,
+                sample_interval=_flow_sample_interval(),
+            )
+            digital = [SimDHT(machine)]
+            panel = build_display(sim=True)
+            serve = None
+            if _web_enabled():
+                shot_path = os.environ.get(
+                    "SHOT_HISTORY_STATE", "~/.smart_espresso/sim_shot_history.json"
+                )
+                tank_path = os.environ.get(
+                    "WATER_TANK_STATE", "~/.smart_espresso/sim_water_tank.json"
+                )
+                serve = StatusServer(
+                    host=os.environ.get("WEB_HOST", "0.0.0.0"),
+                    port=int(os.environ.get("WEB_PORT", 8080)),
+                    tank=WaterTank(state_path=tank_path),
+                    shot_history=ShotHistory(state_path=shot_path),
+                )
+        else:
+            devices = build_analog_devices()
+            digital = build_digital_sensors()
+            panel = build_display()
+            serve = web_server if _web_enabled() else None
+        return devices, digital, panel, serve, ha
+
+
 def parse_args(argv=None):
     parser = argparse.ArgumentParser(description="Smart espresso monitor")
     parser.add_argument(
@@ -255,8 +331,6 @@ def main(argv=None):
         print("states " + " ".join(collapsed(states)))
         return 0
     sim = args.sim or _sim_requested()
-    if sim:
-        os.environ["ADC_TYPE"] = "SIM"
     recorder = None
     if args.record:
         from smart_espresso.sim.adc import CsvRecorder
@@ -266,40 +340,7 @@ def main(argv=None):
         # Sensors are built here, after ``--sim`` is known. Building them at
         # import tried the real DHT and ADC drivers before the flag was parsed
         # and printed a missing-driver warning for a simulator run.
-        serve = web_server
-        if sim:
-            from smart_espresso.sim.machine import SimulatedMachine
-            from smart_espresso.sim.sensors import SimDHT
-            from smart_espresso.sim.session import build_sim_sensors
-
-            seed = int(os.environ.get("SIM_SEED") or 59)
-            machine = SimulatedMachine(seed=seed, loop=True)
-            devices = build_sim_sensors(
-                machine,
-                recorder=recorder,
-                sample_interval=_flow_sample_interval(),
-            )
-            digital = [SimDHT(machine)]
-            panel = build_display(sim=True)
-            if os.environ.get("WEB_ENABLE") is None or strtobool(
-                os.environ.get("WEB_ENABLE") or True
-            ):
-                shot_path = os.environ.get(
-                    "SHOT_HISTORY_STATE", "~/.smart_espresso/sim_shot_history.json"
-                )
-                tank_path = os.environ.get(
-                    "WATER_TANK_STATE", "~/.smart_espresso/sim_water_tank.json"
-                )
-                serve = StatusServer(
-                    host=os.environ.get("WEB_HOST", "0.0.0.0"),
-                    port=int(os.environ.get("WEB_PORT", 8080)),
-                    tank=WaterTank(state_path=tank_path),
-                    shot_history=ShotHistory(state_path=shot_path),
-                )
-        else:
-            devices = build_analog_devices()
-            digital = build_digital_sensors()
-            panel = build_display()
+        devices, digital, panel, serve, ha = build_from_env(sim=sim, recorder=recorder)
         if serve is None:
             # The dashboard is off, but the machine, tank and shot log still
             # run. Sim uses its own files so it does not clobber the Pi's.
@@ -334,7 +375,7 @@ def main(argv=None):
         se = SmartEspresso(
             analog_devices=devices,
             digital_sensors=digital,
-            client_ha=client_ha,
+            client_ha=ha,
             display=panel,
             web_server=serve,
             tank=tank,

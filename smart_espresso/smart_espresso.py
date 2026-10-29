@@ -1,6 +1,7 @@
 import signal
 import threading
 from time import monotonic
+from typing import Any, Optional
 
 from smart_espresso.analog_sensor.analog_sensor import AnalogSensor
 from smart_espresso.home_assistant import HomeAssistantPublisher, machine_states
@@ -56,16 +57,16 @@ class SensorHealth:
 class SmartEspresso:
     def __init__(
         self,
-        analog_devices: list[AnalogSensor] = None,
-        digital_sensors: list = None,
+        analog_devices: Optional[list[AnalogSensor]] = None,
+        digital_sensors: Optional[list] = None,
         client_ha=None,
         display=None,
-        web_server: StatusServer = None,
+        web_server: Optional[StatusServer] = None,
         render_interval: float = 0.1,
         ha_update_interval: float = 1.0,
-        tank: WaterTank = None,
-        shot_history: ShotHistory = None,
-        classifier: MachineStateClassifier = None,
+        tank: Optional[WaterTank] = None,
+        shot_history: Optional[ShotHistory] = None,
+        classifier: Optional[MachineStateClassifier] = None,
     ):
         """
         Initialize SmartEspresso monitoring system.
@@ -90,7 +91,7 @@ class SmartEspresso:
         self.all_sensors = self.analog_devices + self.digital_sensors
         self.client_ha = client_ha
         self.display = display
-        self.web_server: StatusServer = web_server
+        self.web_server: Optional[StatusServer] = web_server
         if web_server is not None:
             self.tank = web_server.tank
             self.shot_history = web_server.shot_history
@@ -122,7 +123,7 @@ class SmartEspresso:
         self.ticks = 0
         self._stop = threading.Event()
         self._shut_down = False
-        self._previous_signals = {}
+        self._previous_signals: dict[int, Any] = {}
         # systemd restarts us if this is quieter than WatchdogSec (30s).
         self._watchdog_interval = 10.0
 
@@ -293,9 +294,10 @@ class SmartEspresso:
                 flow_mls += float(rate) * 1000.0 / 60.0
         for sensor in self.analog_devices:
             observe = getattr(sensor, "observe_zero", None)
-            if observe is None:
+            tracks = getattr(sensor, "tracks_zero", None)
+            if observe is None or tracks is None:
                 continue
-            observe(sensor.tracks_zero(machine_state, flow_mls))
+            observe(tracks(machine_state, flow_mls))
 
     def _draw(self):
         # NB the luma canvas only sends the frame when this block ends.

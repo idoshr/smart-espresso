@@ -1,5 +1,6 @@
 import math
 import os
+from typing import Optional
 
 from smart_espresso.analog_sensor.analog_sensor import ADCInterface, AnalogSensor
 from smart_espresso.json_store import atomic_write_json, load_with_backup
@@ -78,7 +79,7 @@ class PressureAnalogSensor(AnalogSensor):
         self._now = now or _monotonic
         self.offset_voltage = 0.0
         self._disconnected = False
-        self._trusted_since = None
+        self._trusted_since: Optional[float] = None
         self._zero_samples: list[float] = []
         self._load_offset()
 
@@ -119,11 +120,13 @@ class PressureAnalogSensor(AnalogSensor):
             self._drop_zero_window()
             return
         now = self._now()
-        if self._trusted_since is None:
+        since = self._trusted_since
+        if since is None:
             self._trusted_since = now
             self._zero_samples = []
+            since = now
         self._zero_samples.append(voltage)
-        if now - self._trusted_since < self.zero_window_seconds:
+        if now - since < self.zero_window_seconds:
             return
         if len(self._zero_samples) < self.calibration_samples:
             return

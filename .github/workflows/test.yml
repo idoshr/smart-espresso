@@ -64,4 +64,4 @@ jobs:
       - name: Install test and device libraries
         run: pip install -e ".[test,pi]"
       - name: Run tests
-        run: pytest
+        run: pytest --cov=smart_espresso --cov-report=term-missing --cov-fail-under=90

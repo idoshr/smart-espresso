@@ -59,6 +59,7 @@ ha = [
 ]
 test = [
   "pytest>=7.0",
+  "pytest-cov>=4.0",
 ]
 
 [project.urls]
@@ -118,6 +119,21 @@ multi_line_output = 3
 include_trailing_comma = true
 force_grid_wrap = 0
 use_parentheses = true
+
+[tool.mypy]
+ignore_missing_imports = true
+exclude = ["smart_espresso/test/"]
+
+[tool.coverage.run]
+source = ["smart_espresso"]
+omit = [
+  "smart_espresso/test/*",
+  "smart_espresso/_version.py",
+]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = false
 
 [tool.pytest.ini_options]
 #addopts = "--cov=smart_espresso --cov-config=setup.cfg"
