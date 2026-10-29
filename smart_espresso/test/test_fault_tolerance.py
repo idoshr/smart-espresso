@@ -116,7 +116,7 @@ class TestSensorFaults(unittest.TestCase):
             render_interval=0,
         )
         with mock.patch(
-            "smart_espresso.smart_espresso.canvas",
+            "smart_espresso.smart_espresso._display_canvas",
             side_effect=OSError(121, "Remote I/O error"),
         ):
             ticks = app.run(max_ticks=20)

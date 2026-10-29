@@ -1,8 +1,5 @@
 from time import monotonic, sleep
 
-from luma.core.render import canvas
-from luma.oled.device import sh1106
-
 from smart_espresso.analog_sensor.analog_sensor import AnalogSensor
 from smart_espresso.home_assistant import HomeAssistantPublisher, machine_states
 from smart_espresso.utils import font
@@ -52,7 +49,7 @@ class SmartEspresso:
         analog_devices: list[AnalogSensor] = None,
         digital_sensors: list = None,
         client_ha=None,
-        display: sh1106 = None,
+        display=None,
         web_server: StatusServer = None,
         render_interval: float = 0.1,
         ha_update_interval: float = 1.0,
@@ -75,7 +72,7 @@ class SmartEspresso:
         self.digital_sensors: list = digital_sensors or []
         self.all_sensors = self.analog_devices + self.digital_sensors
         self.client_ha = client_ha
-        self.display: sh1106 = display
+        self.display = display
         self.web_server: StatusServer = web_server
         self.render_interval: float = render_interval
         self.ha_update_interval: float = ha_update_interval
@@ -164,8 +161,9 @@ class SmartEspresso:
         sleep(max(0.0, self.render_interval - elapsed))
 
     def _draw(self):
-        # NB this will only send the data to the display after this "with" block is complete.
-        # see https://github.com/rm-hull/luma.core/blob/master/luma/core/render.py
+        # NB the luma canvas only sends the frame when this block ends.
+        # A simulator display draws with Pillow, so luma is not imported.
+        canvas = _display_canvas(self.display)
         with canvas(self.display, dither=True) as draw:
             position_height = 15
             for sensor in self.all_sensors:
@@ -195,3 +193,14 @@ class SmartEspresso:
                 )
             )
         return states
+
+
+def _display_canvas(device):
+    """The OLED canvas. Sim displays never import luma."""
+    if getattr(device, "sim_display", False):
+        from smart_espresso.sim.sensors import PillowCanvas
+
+        return PillowCanvas
+    from luma.core.render import canvas
+
+    return canvas
