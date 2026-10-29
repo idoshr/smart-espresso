@@ -2006,7 +2006,9 @@ function renderTank(tank) {
 
   const warn = document.getElementById('tank-warn');
   warn.hidden = !tank.low;
-  warn.textContent = tank.empty ? 'Tank is empty' : 'Time to refill';
+  warn.textContent = tank.empty
+    ? "Tank's probably empty. Refill before the next shot."
+    : 'Time to refill';
 }
 
 // ---- pour chart ----------------------------------------------------------

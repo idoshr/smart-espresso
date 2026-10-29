@@ -318,7 +318,7 @@
       items.push({
         id: "tank-empty",
         role: "alert",
-        title: "Tank is empty",
+        title: "Tank's probably empty. Refill before the next shot.",
         action: "I refilled the tank",
         snooze: true,
       });

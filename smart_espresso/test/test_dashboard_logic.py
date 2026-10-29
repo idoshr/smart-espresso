@@ -362,7 +362,10 @@ class TestAlertBanner:
         messages = call("logic.alertMessages({tankEmpty: true, tankLow: true})")
         assert [item["id"] for item in messages] == ["tank-empty"]
         assert messages[0]["role"] == "alert"
-        assert messages[0]["title"] == "Tank is empty"
+        assert (
+            messages[0]["title"]
+            == "Tank's probably empty. Refill before the next shot."
+        )
 
     def test_a_cleared_alert_drops_its_snooze(self):
         kept = call(
