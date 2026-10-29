@@ -1,6 +1,6 @@
 # Pinned device install (core + pi + dht). CI installs the core package
-# and the pi extra from pyproject.toml, and skips dht: Adafruit_DHT builds
-# only on a Raspberry Pi.
+# and the pi extra from pyproject.toml, and skips dht: the DHT driver is
+# imported only when a sensor is constructed, and it needs Pi GPIO.
 gpiozero==1.6.2
 luma.core==2.4.1
 luma.oled==3.13.0
@@ -8,5 +8,5 @@ requests==2.32.5
 Pillow==13.0.0
 adafruit-circuitpython-ads1x15==2.2.24
 adafruit-blinka==8.47.0
-Adafruit_DHT==1.4.0
+adafruit-circuitpython-dht==4.0.12
 Flask==3.1.3

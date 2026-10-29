@@ -1,131 +1,238 @@
-"""DHT22 (AM2302) Temperature and Humidity Sensor implementation."""
+"""DHT22 (AM2302) temperature and humidity sensor.
+
+The GPIO driver is ``adafruit-circuitpython-dht`` (Blinka, libgpiod on a Pi).
+It is imported only when a sensor is constructed without an injected reader,
+so the core package and CI do not need it.
+"""
 import threading
 import time
-from typing import Optional
+from typing import Callable, Optional
 
-try:
-    import Adafruit_DHT
-except ImportError:
-    Adafruit_DHT = None
+# A sample older than this many poll intervals is not a reading anymore.
+STALE_AFTER_POLLS = 3
+# Checksum and timeout errors are normal on a DHT22. Log them, but not on
+# every failed poll.
+ERROR_LOG_INTERVAL = 30.0
+
+
+def _circuitpython_reader(pin: int):
+    """Build a reader around ``adafruit_dht.DHT22``. Imported on first use."""
+    try:
+        import adafruit_dht
+        import board
+    except ImportError as error:
+        raise ImportError(
+            "DHT22 driver not found. Install it with: "
+            "pip install 'smart-espresso[dht]'"
+        ) from error
+
+    gpio = getattr(board, f"D{pin}", None)
+    if gpio is None:
+        raise ImportError(
+            f"Board pin D{pin} is not available to adafruit-circuitpython-dht"
+        )
+    # pulseio is unreliable on Pi 4 / Bookworm. The bitbang path uses libgpiod.
+    device = adafruit_dht.DHT22(gpio, use_pulseio=False)
+
+    def read():
+        # temperature's measure() also fills humidity, and a second property
+        # access inside the library's own 2 s window does not hit the wire.
+        temperature = device.temperature
+        humidity = device.humidity
+        return humidity, temperature
+
+    read.device = device
+    return read
 
 
 class DHT22Sensor:
     """
     DHT22 (AM2302) digital temperature and humidity sensor.
 
-    Note: This is a digital sensor, not analog, so it doesn't use the ADCInterface.
+    Sampling bit-bangs GPIO and can block, and the datasheet wants at least
+    two seconds between reads. A daemon thread does that work. ``read``
+    returns the cached sample and never touches the pin.
 
-    Adafruit_DHT.read_retry() bit-bangs GPIO and can block for a few hundred
-    milliseconds even when successful. To keep that latency off the shared
-    render loop, actual sampling happens on a background daemon thread;
-    read() just returns the most recently cached value.
+    A failed read is logged (at most once every 30 s) and the thread keeps
+    polling. A sample older than three poll intervals is dropped: the values
+    become ``None``, ``message`` says stale or no data, and Home Assistant
+    is not given the old numbers.
     """
 
-    def __init__(self, pin: int, name: str = "DHT22", use_fahrenheit: bool = False):
+    def __init__(
+        self,
+        pin: int,
+        name: str = "DHT22",
+        use_fahrenheit: bool = False,
+        reader: Optional[Callable[[], tuple]] = None,
+        interval: float = 2.0,
+        now: Optional[Callable[[], float]] = None,
+    ):
         """
-        Initialize DHT22 sensor.
+        Initialize the DHT22 sensor.
 
         Args:
-            pin: GPIO pin number (BCM numbering, e.g., 4 for GPIO4)
-            name: Sensor name for display and Home Assistant
-            use_fahrenheit: If True, return temperature in Fahrenheit instead of Celsius
+            pin: GPIO pin number (BCM numbering, e.g. 4 for GPIO4).
+            name: Sensor name for display and Home Assistant.
+            use_fahrenheit: Convert Celsius readings to Fahrenheit.
+            reader: Callable returning ``(humidity, temperature)``. The
+                default constructs an ``adafruit_dht.DHT22`` on ``pin``.
+                Tests pass a fake. The callable may raise; the poll thread
+                catches that and tries again.
+            interval: Seconds between polls. The DHT22 datasheet floor is 2.
+            now: Monotonic clock used to age samples. Defaults to
+                ``time.monotonic``.
         """
-        if Adafruit_DHT is None:
-            raise ImportError(
-                "Adafruit_DHT library not found. Install with: "
-                "sudo pip3 install Adafruit_DHT"
-            )
+        if interval <= 0:
+            raise ValueError(f"interval must be positive (got {interval})")
 
         self.name = name
         self.pin = pin
         self.use_fahrenheit = use_fahrenheit
+        self._interval = interval
+        self._now = now or time.monotonic
+        self._reader = reader if reader is not None else _circuitpython_reader(pin)
+        self._device = getattr(self._reader, "device", None)
+
         self._temperature: Optional[float] = None
         self._humidity: Optional[float] = None
-        self._last_read_time = 0
-        self._min_read_interval = (
-            2.0  # DHT22 max sampling rate is 0.5Hz (every 2 seconds)
-        )
-        self.sensor_type = Adafruit_DHT.DHT22
+        self._last_ok: Optional[float] = None
+        self._error_count = 0
+        self._last_error_log: Optional[float] = None
 
         self._lock = threading.Lock()
         self._stop_event = threading.Event()
-        self._poll_thread = threading.Thread(target=self._poll_loop, daemon=True)
+        self._poll_thread = threading.Thread(
+            target=self._poll_loop, name=f"dht22-{name}", daemon=True
+        )
         self._poll_thread.start()
 
-    def _poll_loop(self):
-        """Background loop that performs the blocking sensor read every _min_read_interval."""
+    def _poll_loop(self) -> None:
+        """Poll until stopped. One bad read does not end the loop."""
         while not self._stop_event.is_set():
-            humidity, temperature = Adafruit_DHT.read_retry(self.sensor_type, self.pin)
+            try:
+                humidity, temperature = self._reader()
+            except Exception as error:
+                self._log_error(error)
+            else:
+                self._store(humidity, temperature)
+            if self._stop_event.wait(self._interval):
+                return
 
-            if humidity is not None and temperature is not None:
-                # Convert to Fahrenheit if requested
-                if self.use_fahrenheit:
-                    temperature = temperature * 9.0 / 5.0 + 32.0
+    def _store(self, humidity, temperature) -> None:
+        if humidity is None or temperature is None:
+            return
+        try:
+            humidity = float(humidity)
+            temperature = float(temperature)
+        except (TypeError, ValueError) as error:
+            self._log_error(error)
+            return
+        if self.use_fahrenheit:
+            temperature = temperature * 9.0 / 5.0 + 32.0
+        with self._lock:
+            self._humidity = humidity
+            self._temperature = temperature
+            self._last_ok = self._now()
 
-                with self._lock:
-                    self._humidity = humidity
-                    self._temperature = temperature
-                    self._last_read_time = time.time()
+    def _log_error(self, error: BaseException) -> None:
+        now = self._now()
+        with self._lock:
+            self._error_count += 1
+            count = self._error_count
+            last = self._last_error_log
+            if last is not None and now - last < ERROR_LOG_INTERVAL:
+                return
+            self._last_error_log = now
+        print(f"{self.name} DHT22 read failed ({count}): {error}")
 
-            self._stop_event.wait(self._min_read_interval)
+    def _cached(self):
+        """Return ``(humidity, temperature, state)`` with state ok/stale/none."""
+        with self._lock:
+            if self._last_ok is None:
+                return None, None, "none"
+            age = self._now() - self._last_ok
+            if age > self._interval * STALE_AFTER_POLLS:
+                return None, None, "stale"
+            return self._humidity, self._temperature, "ok"
+
+    def sample_problem(self):
+        """
+        Exception when the cache is missing or expired, else None.
+
+        The render loop records this on the sensor's health entry, which
+        keeps the value out of Home Assistant and marks ``/api/status``.
+        """
+        _humidity, _temperature, state = self._cached()
+        if state == "ok":
+            return None
+        if state == "stale":
+            return RuntimeError("stale")
+        return RuntimeError("no data")
 
     def read(self) -> tuple[Optional[float], Optional[float]]:
         """
-        Return the most recently sampled temperature and humidity.
+        Return the cached ``(humidity, temperature)``.
 
-        This never blocks on hardware I/O: actual sampling happens on a
-        background thread (see _poll_loop) since DHT22 can only be read
-        every 2 seconds and each read may take a few hundred ms.
+        Both are ``None`` when nothing has been read yet, or when the last
+        good sample is older than three poll intervals. This does not talk
+        to the sensor.
         """
-        with self._lock:
-            return self._humidity, self._temperature
+        humidity, temperature, _state = self._cached()
+        return humidity, temperature
 
-    def stop(self):
-        """Stop the background polling thread."""
+    def stop(self) -> None:
+        """Stop the background polling thread and release the GPIO pin."""
         self._stop_event.set()
-        self._poll_thread.join(timeout=self._min_read_interval)
+        self._poll_thread.join(timeout=max(self._interval, 0.5))
+        if self._device is not None:
+            try:
+                self._device.exit()
+            except Exception as error:
+                print(f"{self.name} DHT22 close failed: {error}")
+            self._device = None
 
     @property
     def temperature(self) -> Optional[float]:
-        """Get the last temperature reading."""
-        return self._temperature
+        """Last temperature, or None when it is missing or stale."""
+        _humidity, temperature, _state = self._cached()
+        return temperature
 
     @property
     def humidity(self) -> Optional[float]:
-        """Get the last humidity reading."""
-        return self._humidity
+        """Last humidity, or None when it is missing or stale."""
+        humidity, _temperature, _state = self._cached()
+        return humidity
 
     @property
     def temperature_unit(self) -> str:
-        """Get temperature unit symbol."""
+        """Temperature unit symbol."""
         return "°F" if self.use_fahrenheit else "°C"
 
     @property
     def message(self) -> str:
-        """
-        Get formatted message for display.
-
-        Returns:
-            Formatted string with temperature and humidity
-        """
-        if self._temperature is None or self._humidity is None:
+        """One line for the display and the dashboard's other-sensor row."""
+        humidity, temperature, state = self._cached()
+        if state == "stale":
+            return f"{self.name}: stale"
+        if state != "ok" or temperature is None or humidity is None:
             return f"{self.name}: No data"
-
-        temp_str = f"{self._temperature:.1f}{self.temperature_unit}"
-        humidity_str = f"{self._humidity:.1f}%"
+        temp_str = f"{temperature:.1f}{self.temperature_unit}"
+        humidity_str = f"{humidity:.1f}%"
         return f"{self.name}: {temp_str} {humidity_str}"
 
     def ha_states(self):
-        """Entity states for the current temperature and humidity, if known."""
+        """Entity states for a fresh sample. Empty when the sample is stale."""
         from smart_espresso.home_assistant import State
 
+        humidity, temperature, _state = self._cached()
         slug = self.name.lower().replace(" ", "_")
         states = []
-        if self._temperature is not None:
+        if temperature is not None:
             states.append(
                 State(
                     entity_id=f"sensor.{slug}_temperature",
-                    state=str(round(self._temperature, 1)),
+                    state=str(round(temperature, 1)),
                     attributes={
                         "unit_of_measurement": self.temperature_unit,
                         "friendly_name": f"{self.name} Temperature",
@@ -133,11 +240,11 @@ class DHT22Sensor:
                     },
                 )
             )
-        if self._humidity is not None:
+        if humidity is not None:
             states.append(
                 State(
                     entity_id=f"sensor.{slug}_humidity",
-                    state=str(round(self._humidity, 1)),
+                    state=str(round(humidity, 1)),
                     attributes={
                         "unit_of_measurement": "%",
                         "friendly_name": f"{self.name} Humidity",
@@ -155,4 +262,8 @@ class DHT22Sensor:
             client.set_state(state)
 
     def __repr__(self) -> str:
-        return f"DHT22Sensor(pin={self.pin}, name='{self.name}', temp={self._temperature}, humidity={self._humidity})"
+        humidity, temperature, _state = self._cached()
+        return (
+            f"DHT22Sensor(pin={self.pin}, name='{self.name}', "
+            f"temp={temperature}, humidity={humidity})"
+        )

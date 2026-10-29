@@ -34,7 +34,8 @@ maintainers = [
 dynamic = ["version"]
 
 # Core install is the web stack. Pi ADC, GPIO and OLED drivers are the
-# ``pi`` extra. ``dht`` is separate because Adafruit_DHT builds only on a Pi.
+# ``pi`` extra. ``dht`` is separate: adafruit-circuitpython-dht is imported
+# only when a DHT22 is constructed, and it needs Pi GPIO (Blinka / libgpiod).
 dependencies = [
   "Flask==3.1.3",
   "Pillow==13.0.0",
@@ -50,7 +51,8 @@ pi = [
   "adafruit-blinka==8.47.0",
 ]
 dht = [
-  "Adafruit_DHT==1.4.0",
+  "adafruit-blinka==8.47.0",
+  "adafruit-circuitpython-dht==4.0.12",
 ]
 ha = [
   "requests==2.32.5",

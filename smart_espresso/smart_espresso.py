@@ -3,7 +3,7 @@ from time import monotonic, sleep
 from smart_espresso.analog_sensor.analog_sensor import AnalogSensor
 from smart_espresso.home_assistant import HomeAssistantPublisher, machine_states
 from smart_espresso.utils import font
-from smart_espresso.web.status_server import StatusServer
+from smart_espresso.web.status_server import StatusServer, sensor_text
 
 
 class SensorHealth:
@@ -120,14 +120,7 @@ class SmartEspresso:
         loop_start = monotonic()
 
         for sensor in self.all_sensors:
-            health = self._health[sensor.name]
-            try:
-                sensor.read()
-            except Exception as error:
-                # A failed read is "unknown", not the previous sample.
-                health.record_failure(error, loop_start)
-            else:
-                health.record_success(loop_start)
+            self._record_read(sensor, loop_start)
 
         # Snapshot readings for the web dashboard. Cheap in-memory copy,
         # so it runs every tick and HTTP handlers never touch the ADCs.
@@ -185,7 +178,7 @@ class SmartEspresso:
             position_height = 15
             for sensor in self.all_sensors:
                 health = self._health[sensor.name]
-                text = sensor.message if health.ok else f"{sensor.name}: fault"
+                text = sensor_text(sensor, health.ok)
                 draw.text(
                     (5, position_height),
                     text,
@@ -193,6 +186,22 @@ class SmartEspresso:
                     font=font,
                 )
                 position_height += 15
+
+    def _record_read(self, sensor, now):
+        """Read one sensor. A stale DHT sample counts as a failed read."""
+        health = self._health[sensor.name]
+        try:
+            sensor.read()
+        except Exception as error:
+            # A failed read is "unknown", not the previous sample.
+            health.record_failure(error, now)
+            return
+        sample_problem = getattr(sensor, "sample_problem", None)
+        problem = sample_problem() if sample_problem else None
+        if problem is not None:
+            health.record_failure(problem, now)
+            return
+        health.record_success(now)
 
     def _ha_states(self):
         """Sensor entities that read successfully, plus machine, shot and tank."""
