@@ -291,6 +291,16 @@
 
   // A water-chart bucket. Same head line as a live flush: water below
   // brew pressure is Water running, water at brew pressure is a shot.
+  function peakBucketLabel(seconds) {
+    if (typeof seconds !== "number" || !isFinite(seconds) || seconds <= 0) {
+      return "peak";
+    }
+    const rounded = Math.round(seconds);
+    const text =
+      Math.abs(seconds - rounded) < 0.05 ? String(rounded) : seconds.toFixed(1);
+    return text + " s peak";
+  }
+
   function flowBarKind(ml, headBar) {
     if (typeof ml !== "number" || !(ml > 0)) return "other";
     if (typeof headBar !== "number" || !isFinite(headBar)) return "other";
@@ -352,6 +362,7 @@
     offlineMessage: offlineMessage,
     isFlush: isFlush,
     flowBarKind: flowBarKind,
+    peakBucketLabel: peakBucketLabel,
     livePresentation: livePresentation,
     shownState: shownState,
     nearestTickIndex: nearestTickIndex,

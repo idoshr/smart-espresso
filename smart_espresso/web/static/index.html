@@ -1243,7 +1243,7 @@
     <div class="meta">
       <span>now <b id="flow-rate">0.0 ml/s</b></span>
       <span>all time <b id="flow-total">0 ml</b></span>
-      <span>peak, 3 s <b id="flow-peak">0.0 ml/s</b></span>
+      <span><span id="flow-peak-label">peak</span> <b id="flow-peak">0.0 ml/s</b></span>
     </div>
     <div class="chart-wrap">
       <div class="chart-scale" aria-hidden="true">
@@ -2041,6 +2041,8 @@ function renderFlow(sensor) {
   // One bucket spans window/length seconds; its peak is a flow rate too.
   const bucketSeconds = sensor.window_seconds / sensor.chart.length;
   const peakRate = peak / bucketSeconds;
+  document.getElementById('flow-peak-label').textContent =
+    DashboardLogic.peakBucketLabel(bucketSeconds);
   document.getElementById('flow-peak').textContent = `${peakRate.toFixed(1)} ml/s`;
   document.getElementById('flow-scale-max').textContent =
     sensor.chart.some(ml => ml > 0) ? `${peakRate.toFixed(1)}` : '0';

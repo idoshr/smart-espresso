@@ -194,6 +194,9 @@ class TestGlance:
         assert call("logic.showOverBand(null, 10)") is False
 
     def test_a_flush_bucket_is_not_drawn_as_a_shot(self):
+        assert call("logic.peakBucketLabel(3)") == "3 s peak"
+        assert call("logic.peakBucketLabel(120 / 40)") == "3 s peak"
+        assert call("logic.peakBucketLabel(2.6)") == "2.6 s peak"
         assert call("logic.flowBarKind(24, 0.4)") == "flush"
         assert call("logic.flowBarKind(39, 9)") == "shot"
         assert call("logic.flowBarKind(0, 0.4)") == "other"
@@ -207,6 +210,8 @@ class TestGlance:
         assert "Water running" in page
         assert "bar flush" in page or "swatch flush" in page
         assert "showOverBand(sensor.bar, el.bandTop)" in page
+        assert "peakBucketLabel" in page
+        assert "peak, 3 s" not in page
 
     def test_glance_follows_the_wake_lock_or_a_pin(self):
         assert call("logic.glanceOn(true, false)") is True
