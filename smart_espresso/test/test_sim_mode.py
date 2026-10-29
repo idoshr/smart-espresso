@@ -98,6 +98,87 @@ print("sim-ok")
         self.assertIn("Environment", payload["other"][0]["name"])
         self.assertTrue(payload["other"][0]["health"]["ok"])
 
+    def test_sim_flag_does_not_construct_real_drivers(self):
+        """``python main.py --sim`` must not touch a DHT or ADC driver.
+
+        Sensors used to be built at import, before ``--sim`` was parsed, so
+        the process logged a missing DHT22 driver and imported it anyway.
+        """
+        script = r"""
+import os
+import sys
+
+os.environ.pop("ADC_TYPE", None)
+os.environ.pop("DISPLAY_ENABLE", None)
+os.environ.pop("SIM_SEED", None)
+os.environ["DHT_ENABLE"] = "true"
+os.environ["HA_ENABLE"] = "false"
+os.environ["WEB_ENABLE"] = "false"
+sys.argv = ["main.py", "--sim"]
+
+attempted = []
+
+class _Block:
+    def find_spec(self, fullname, path, target=None):
+        blocked = (
+            "board",
+            "busio",
+            "gpiozero",
+            "spidev",
+            "RPi",
+            "RPi.GPIO",
+            "Adafruit_DHT",
+            "adafruit_dht",
+            "adafruit_ads1x15",
+            "luma",
+        )
+        if (
+            fullname in blocked
+            or fullname.startswith("luma.")
+            or fullname.startswith("adafruit_")
+            or fullname.startswith("RPi")
+        ):
+            attempted.append(fullname)
+            raise ModuleNotFoundError(fullname)
+        return None
+
+sys.meta_path.insert(0, _Block())
+import main
+from smart_espresso.smart_espresso import SmartEspresso
+
+def _stop(self, max_ticks=None, max_seconds=None):
+    names = []
+    for sensor in self.all_sensors:
+        names.append(type(sensor).__name__)
+        stop = getattr(sensor, "stop", None)
+        if stop is not None:
+            stop()
+    display_name = type(self.display).__name__ if self.display else "none"
+    print("KINDS", ",".join(names), display_name)
+    return 0
+
+SmartEspresso.run = _stop
+assert main.main(["--sim"]) == 0, "sim startup failed"
+assert not attempted, attempted
+loaded = sys.modules
+for banned in (
+    "smart_espresso.analog_sensor.dht22_sensor",
+    "smart_espresso.analog_sensor.ads1115_analog_sensor",
+    "smart_espresso.analog_sensor.mcp3008_analog_sensor",
+):
+    assert banned not in loaded, banned
+print("sim-flag-ok")
+"""
+        result = _run_python(script)
+        self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
+        self.assertIn("sim-flag-ok", result.stdout)
+        self.assertIn("KINDS", result.stdout)
+        self.assertIn("SimDHT", result.stdout)
+        self.assertIn("SimOLED", result.stdout)
+        self.assertNotIn("WARNING", result.stdout)
+        self.assertNotIn("DHT22", result.stdout)
+        self.assertNotIn("DHT22", result.stderr)
+
     def test_readme_documents_sim_and_the_hil_script(self):
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
         self.assertIn("ADC_TYPE=SIM", readme)
