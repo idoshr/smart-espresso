@@ -1,4 +1,9 @@
+import math
+import os
+
 from smart_espresso.analog_sensor.analog_sensor import ADCInterface, AnalogSensor
+from smart_espresso.json_store import atomic_write_json, load_with_backup
+from smart_espresso.machine_state import MachineState, MachineStateClassifier
 
 
 class PressureAnalogSensor(AnalogSensor):
@@ -19,17 +24,26 @@ class PressureAnalogSensor(AnalogSensor):
     SENSOR_MAX_VOLTAGE = 4.5
     SENSOR_VOLTAGE_RANGE = SENSOR_MAX_VOLTAGE - SENSOR_MIN_VOLTAGE  # 4.0V
 
-    # How many consecutive below-zero samples must be seen before the
-    # auto-calibration moves the offset. A single noise glitch must not
-    # count, otherwise one spike permanently skews every later reading.
-    CALIBRATION_CONFIRM_SAMPLES = 5
+    # Below this the wire is open, not a pressure. It is a fault, and it
+    # must not move the zero.
+    DISCONNECT_VOLTAGE = 0.2
+    # ±3% of the 4 V span (0.5–4.5 V). The span itself stays fixed (#52).
+    ZERO_LIMIT_FRACTION = 0.03
+    # How long pressure must be a known zero before the median may move
+    # the offset. Head: vented and no flow. Boiler: machine off.
+    ZERO_WINDOW_SECONDS = 10.0
+    # A median needs more than a glitch. Five was the old confirm count.
+    ZERO_MIN_SAMPLES = 5
 
     def __init__(
         self,
         adc: ADCInterface,
         name: str,
         max_pressure_mpa: float,
-        calibration_samples: int = CALIBRATION_CONFIRM_SAMPLES,
+        calibration_samples: int = ZERO_MIN_SAMPLES,
+        zero_window_seconds: float = ZERO_WINDOW_SECONDS,
+        state_path: str | None = None,
+        now=None,
     ):
         """
         Initialize pressure sensor.
@@ -39,42 +53,133 @@ class PressureAnalogSensor(AnalogSensor):
             name: Name of the sensor (e.g., "Head", "Boiler")
             max_pressure_mpa: Maximum pressure rating of the sensor in MPa
                             (e.g., 2.0 for 0-2MPa sensor, 0.5 for 0-0.5MPa sensor)
-            calibration_samples: Consecutive low samples required before the
-                                 zero offset is re-calibrated.
+            calibration_samples: Minimum samples in a zero window before the
+                                 median may move the offset.
+            zero_window_seconds: How long a known zero must last before the
+                                 median is applied.
+            state_path: File the learned offset is persisted to. None keeps
+                        it in memory (tests). A leading ``~`` is expanded.
+            now: Monotonic clock for the zero window. Defaults to
+                 ``time.monotonic``.
         """
         super().__init__(adc, name)
+        if zero_window_seconds <= 0:
+            raise ValueError(
+                f"zero_window_seconds must be positive (got {zero_window_seconds})"
+            )
+        if calibration_samples < 1:
+            raise ValueError(
+                f"calibration_samples must be at least 1 (got {calibration_samples})"
+            )
         self.max_pressure_mpa = max_pressure_mpa
-        self.offset_voltage = 0.0  # Auto-calibrated offset for fine-tuning
         self.calibration_samples = calibration_samples
-        self._low_streak = 0
+        self.zero_window_seconds = zero_window_seconds
+        self.state_path = os.path.expanduser(state_path) if state_path else None
+        self._now = now or _monotonic
+        self.offset_voltage = 0.0
+        self._disconnected = False
+        self._trusted_since = None
+        self._zero_samples: list[float] = []
+        self._load_offset()
 
     def read(self):
-        """Read the ADC and update the zero offset from confirmed samples only."""
+        """Read the ADC. An open wire raises; it is not a zero sample."""
         value = super().read()
-        self._auto_calibrate(self.adc.voltage)
+        voltage = self.adc.voltage
+        if voltage < self.DISCONNECT_VOLTAGE:
+            self._disconnected = True
+            self._drop_zero_window()
+            raise RuntimeError("sensor disconnected")
+        self._disconnected = False
         return value
 
-    def _auto_calibrate(self, voltage: float) -> None:
-        """Track the zero-pressure offset, ignoring noise glitches.
+    def tracks_zero(self, machine_state: str | None, flow_mls: float) -> bool:
+        """True when this sample is a known zero and may train the offset.
 
-        The offset may only move after ``calibration_samples`` consecutive
-        below-zero readings — a sustained drift, not a spike. Moving it on a
-        single glitched sample would add a phantom baseline (with the -0.1V
-        cap, up to +0.5 Bar on a 0-2MPa sensor) to every later reading.
+        The boiler is at zero only while the machine is off. The head is at
+        zero when it has vented: under 0.5 bar and no flow. An open wire is
+        neither.
         """
-        if voltage < self.SENSOR_MIN_VOLTAGE + self.offset_voltage:
-            self._low_streak += 1
-            if self._low_streak >= self.calibration_samples:
-                new_offset = max(voltage - self.SENSOR_MIN_VOLTAGE, -0.1)
-                if new_offset < self.offset_voltage:
-                    self.offset_voltage = new_offset
-                    print(
-                        f"{self.name} - Calibrating offset: "
-                        f"{self.offset_voltage:.4f}V (voltage: {voltage:.4f}V)"
-                    )
-                self._low_streak = 0
-        else:
-            self._low_streak = 0
+        if self._disconnected:
+            return False
+        name = self.name.lower()
+        if "boiler" in name or "steam" in name:
+            return machine_state == MachineState.OFF
+        if flow_mls >= MachineStateClassifier.BREW_FLOW_MLS:
+            return False
+        return self.bar < MachineStateClassifier.SHOT_VENT_BAR
+
+    def observe_zero(self, trusted: bool) -> None:
+        """Fold the current voltage into the zero median when ``trusted``."""
+        if self._disconnected or not trusted:
+            self._drop_zero_window()
+            return
+        voltage = self.adc.voltage
+        if voltage < self.DISCONNECT_VOLTAGE:
+            self._drop_zero_window()
+            return
+        now = self._now()
+        if self._trusted_since is None:
+            self._trusted_since = now
+            self._zero_samples = []
+        self._zero_samples.append(voltage)
+        if now - self._trusted_since < self.zero_window_seconds:
+            return
+        if len(self._zero_samples) < self.calibration_samples:
+            return
+        self._apply_median()
+        self._zero_samples = []
+        self._trusted_since = now
+
+    def _drop_zero_window(self) -> None:
+        self._trusted_since = None
+        self._zero_samples = []
+
+    def _apply_median(self) -> None:
+        """Move the offset to the window median, inside ±3% of full scale.
+
+        The median is the slow part: a dip shorter than half the window
+        cannot steer it, and it is free to move up or down.
+        """
+        target = _median(self._zero_samples) - self.SENSOR_MIN_VOLTAGE
+        target = self._clamp_offset(target)
+        if abs(target - self.offset_voltage) < 1e-6:
+            return
+        self.offset_voltage = target
+        print(
+            f"{self.name} - zero offset {self.offset_voltage:.4f} V "
+            f"from {len(self._zero_samples)} samples"
+        )
+        self._save_offset()
+
+    def _clamp_offset(self, offset: float) -> float:
+        limit = self.SENSOR_VOLTAGE_RANGE * self.ZERO_LIMIT_FRACTION
+        return max(-limit, min(limit, offset))
+
+    def _load_offset(self) -> None:
+        if not self.state_path:
+            return
+
+        def parse(payload):
+            if not isinstance(payload, dict):
+                raise ValueError(f"expected an object, got {type(payload).__name__}")
+            offset = float(payload["offset_voltage"])
+            if not math.isfinite(offset):
+                raise ValueError(f"offset_voltage is not finite: {offset}")
+            return offset
+
+        loaded = load_with_backup(self.state_path, parse)
+        if loaded is None:
+            return
+        self.offset_voltage = self._clamp_offset(loaded)
+
+    def _save_offset(self) -> None:
+        if not self.state_path:
+            return
+        try:
+            atomic_write_json(self.state_path, {"offset_voltage": self.offset_voltage})
+        except OSError as error:
+            print(f"Could not save pressure zero to {self.state_path}: {error}")
 
     @property
     def mpa(self):
@@ -149,7 +254,16 @@ class PressureAnalogSensor(AnalogSensor):
         for state in self.ha_states():
             client.set_state(state)
 
-    # value = pot.voltage
-    # if value < OFFSET_VOLTAGE:
-    #     print(f'Lowest value {value}')
-    # message = f'MPa: {round(((value - OFFSET_VOLTAGE) * 3.333 / 1024) * 250, 2)}'
+
+def _monotonic() -> float:
+    from time import monotonic
+
+    return monotonic()
+
+
+def _median(values: list[float]) -> float:
+    ordered = sorted(values)
+    mid = len(ordered) // 2
+    if len(ordered) % 2:
+        return ordered[mid]
+    return (ordered[mid - 1] + ordered[mid]) / 2.0
