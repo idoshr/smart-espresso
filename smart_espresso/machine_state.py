@@ -258,14 +258,13 @@ class MachineStateClassifier:
         # show whether the machine (or the grinder) is drifting.
         self._shot_history: list[dict] = []
 
-        # Daily tally behind the dashboard's "N pulls · X ml today" line:
-        # pulls completed since local midnight. In-memory on purpose — the
-        # machine's own uptime is the day's honest denominator, and the
-        # flow total it would otherwise need to survive reboots is the
-        # tank counter's job.
+        # Daily tally behind the dashboard's "N pulls · X ml today" line.
+        # Restored from the shot log so a restart does not zero a day that
+        # already has pulls. Local midnight still starts a fresh tally.
         self._today_stamp = localtime()[:3]
         self._shots_today = 0
         self._ml_today = 0.0
+        self._restore_today_from_history()
 
     def update(
         self,
@@ -289,6 +288,12 @@ class MachineStateClassifier:
                 The 1 s ``flow_mls`` value is still sampled onto the curve.
         """
         now = monotonic()
+        if self.shot_history is not None and self.shot_history.observe_clock():
+            shots, ml = self.shot_history.totals_on_local_day(localtime()[:3])
+            with self._lock:
+                self._today_stamp = localtime()[:3]
+                self._shots_today = shots
+                self._ml_today = ml
         reported_flow = flow_mls
         if flow_sensor is not None:
             self._flow_sensor = flow_sensor
@@ -390,6 +395,29 @@ class MachineStateClassifier:
                 elapsed, head, boiler, flow = self._deferred_sample
                 self.shot_history.sample(elapsed, head, boiler, flow)
         return state
+
+    def _restore_today_from_history(self) -> None:
+        """Set the daily tally from shots stamped on the current local day."""
+        if self.shot_history is None:
+            return
+        shots, ml = self.shot_history.totals_on_local_day(self._today_stamp)
+        self._shots_today = shots
+        self._ml_today = ml
+
+    def close_open_pull(self) -> None:
+        """Commit a qualifying open pull, or abandon one that is not a shot.
+
+        Called on shutdown so a pull in progress is not dropped when the
+        process exits.
+        """
+        now = monotonic()
+        with self._lock:
+            if self._shot_start is None:
+                outcome = None
+            else:
+                outcome = self._take_shot_outcome(now)
+                self._clear_open_shot()
+        self._close_recorded_shot(outcome)
 
     def _roll_day_if_needed(self) -> None:
         """Reset the daily tally once the wall clock crosses local midnight."""

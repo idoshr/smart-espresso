@@ -21,7 +21,7 @@ import math
 import os
 import threading
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Callable, Optional
 
 from smart_espresso.json_store import atomic_write_json, load_with_backup
@@ -30,6 +30,41 @@ DEFAULT_STATE_PATH = "~/.smart_espresso/shot_history.json"
 
 # One file shape. Bump only when a reader would misread an older file.
 FILE_VERSION = 1
+# A wall clock before 2020 is the epoch a Pi without an RTC boots at.
+_PLAUSIBLE_WALL = 1_577_836_800.0
+# Smaller steps are slews. A step this large is NTP setting the clock.
+_CLOCK_STEP_SECONDS = 30.0
+
+
+def clock_is_synced(wall: float) -> bool:
+    """True when systemd has synced, or the clock is already past 2020.
+
+    Laptops and CI have no ``/run/systemd/timesync/synchronized``. A
+    plausible wall clock there is treated as synced so dev shots are not
+    all marked unsynced. An epoch clock is not.
+    """
+    if os.path.exists("/run/systemd/timesync/synchronized"):
+        return True
+    return wall >= _PLAUSIBLE_WALL
+
+
+def _shift_stamp(stamp: str, seconds: float) -> str:
+    moment = datetime.fromisoformat(stamp)
+    if moment.tzinfo is None:
+        moment = moment.replace(tzinfo=timezone.utc)
+    moved = moment + timedelta(seconds=seconds)
+    return moved.isoformat(timespec="seconds")
+
+
+def _local_day(stamp: str):
+    try:
+        moment = datetime.fromisoformat(stamp)
+    except ValueError:
+        return None
+    if moment.tzinfo is None:
+        moment = moment.replace(tzinfo=timezone.utc)
+    local = moment.astimezone()
+    return (local.year, local.month, local.day)
 
 
 def _finite_float(value) -> Optional[float]:
@@ -81,8 +116,9 @@ def _parse_sample(raw) -> Optional[dict]:
 class _OpenShot:
     """Curve buffer for the pull currently in progress. Not persisted."""
 
-    def __init__(self, started_at: str):
+    def __init__(self, started_at: str, clock_synced: bool = True):
         self.started_at = started_at
+        self.clock_synced = clock_synced
         self.samples: list[dict] = []
         self.latest: Optional[dict] = None
         self.peak_head: Optional[float] = None
@@ -161,6 +197,7 @@ class _OpenShot:
             "peak_boiler_bar": _optional_round(self.peak_boiler),
             "peak_flow_mls": _optional_round(self.peak_flow),
             "samples": self.samples,
+            "clock_synced": bool(self.clock_synced),
         }
 
 
@@ -220,6 +257,11 @@ class ShotHistory:
         self.sample_interval = sample_interval
         self.max_samples = max_samples
         self._now = now or _wall_time
+        self._monotonic = time.monotonic
+        wall = self._now()
+        self._clock_wall = wall
+        self._clock_mono = self._monotonic()
+        self._clock_synced = clock_is_synced(wall)
 
         self._lock = threading.Lock()
         self._shots: list[dict] = []
@@ -245,7 +287,7 @@ class ShotHistory:
     def open(self) -> None:
         """Start a new pull. Replaces any pull that was left open."""
         with self._lock:
-            self._active = _OpenShot(self._stamp())
+            self._active = _OpenShot(self._stamp(), self._clock_synced)
 
     def sample(
         self,
@@ -347,6 +389,67 @@ class ShotHistory:
                 "count": len(self._shots),
                 "shots": [_public_shot(shot, with_samples=False) for shot in chosen],
             }
+
+    def totals_on_local_day(self, day_stamp) -> tuple[int, float]:
+        """Shots and volume whose ``started_at`` falls on ``day_stamp``.
+
+        ``day_stamp`` is ``(year, month, day)`` in local time, the same
+        tuple ``time.localtime()[:3]`` uses.
+        """
+        wanted = tuple(day_stamp)
+        count = 0
+        ml = 0.0
+        with self._lock:
+            for shot in self._shots:
+                if _local_day(shot.get("started_at", "")) != wanted:
+                    continue
+                count += 1
+                ml += float(shot["ml"])
+        return count, ml
+
+    def observe_clock(self) -> bool:
+        """Re-stamp unsynced shots when the wall clock steps forward.
+
+        Returns True when at least one stamp moved. A Pi that booted at the
+        epoch marks those shots ``clock_synced: false`` until NTP steps.
+        """
+        wall = self._now()
+        mono = self._monotonic()
+        elapsed = mono - self._clock_mono
+        jump = wall - (self._clock_wall + elapsed)
+        self._clock_mono = mono
+        self._clock_wall = wall
+        if jump >= _CLOCK_STEP_SECONDS and not self._clock_synced:
+            self._shift_unsynced(jump)
+            self._clock_synced = True
+            return True
+        if clock_is_synced(wall):
+            self._clock_synced = True
+        return False
+
+    def _shift_unsynced(self, seconds: float) -> None:
+        with self._lock:
+            changed = False
+            for shot in self._shots:
+                if shot.get("clock_synced", True):
+                    continue
+                shot["started_at"] = _shift_stamp(shot["started_at"], seconds)
+                shot["clock_synced"] = True
+                changed = True
+            active = self._active
+            if active is not None and not active.clock_synced:
+                active.started_at = _shift_stamp(active.started_at, seconds)
+                active.clock_synced = True
+                changed = True
+            payload = None
+            if changed and self.state_path:
+                payload = {
+                    "version": FILE_VERSION,
+                    "next_id": self._next_id,
+                    "shots": list(self._shots),
+                }
+        if payload is not None:
+            self._enqueue(payload)
 
     def status_summary(self, limit: int = 12) -> dict:
         """Small newest-first summary embedded in ``GET /api/status``."""
@@ -505,6 +608,7 @@ def _shot_from_disk(raw) -> dict:
         "peak_boiler_bar": _peak(raw, "peak_boiler_bar", "boiler_bar", samples),
         "peak_flow_mls": _peak(raw, "peak_flow_mls", "flow_mls", samples),
         "samples": samples,
+        "clock_synced": raw.get("clock_synced", True) is True,
     }
 
 
@@ -530,6 +634,7 @@ def _public_shot(shot: dict, with_samples: bool) -> dict:
         "peak_head_bar": shot["peak_head_bar"],
         "peak_boiler_bar": shot["peak_boiler_bar"],
         "peak_flow_mls": shot["peak_flow_mls"],
+        "clock_synced": shot.get("clock_synced", True) is True,
     }
     if with_samples:
         summary["samples"] = [dict(point) for point in shot["samples"]]

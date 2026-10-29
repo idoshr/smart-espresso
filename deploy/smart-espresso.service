@@ -1,10 +1,12 @@
 [Unit]
 Description=Smart Espresso monitor
-After=network-online.target
-Wants=network-online.target
+After=network-online.target time-sync.target
+Wants=network-online.target time-sync.target
 
 [Service]
-Type=simple
+Type=notify
+NotifyAccess=main
+WatchdogSec=30
 # Point these at the checkout and the interpreter that has the deps.
 WorkingDirectory=/opt/smart-espresso
 EnvironmentFile=-/etc/smart-espresso.env
