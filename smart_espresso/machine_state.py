@@ -87,6 +87,14 @@ class MachineStateClassifier:
     # flow (the flow meter may see nothing through a fully clogged puck).
     PUMP_HEAD_BAR = 4.5
     BREW_FLOW_MLS = 0.3
+    # When a flow meter is attached, "water is moving" is this many pulses
+    # inside the window — not a ml/s rate, so a calibration constant cannot
+    # turn one noise edge into a shot. The 1 s block average stays on the
+    # chart and in Home Assistant.
+    BREW_PULSE_COUNT = 2
+    BREW_PULSE_WINDOW = 1.0
+    # Gaps longer than this are pauses: they stay out of the recorded seconds.
+    FLOW_GAP_SECONDS = 1.0
     # How long brew-band head pressure counts as brewing after water stopped
     # moving: the line is still charged right after the pump stops or the
     # puck blocks up. Kept short — once the pressure is also below pump
@@ -125,6 +133,9 @@ class MachineStateClassifier:
         brew_head_bar: float = BREW_HEAD_BAR,
         pump_head_bar: float = PUMP_HEAD_BAR,
         brew_flow_mls: float = BREW_FLOW_MLS,
+        brew_pulse_count: int = BREW_PULSE_COUNT,
+        brew_pulse_window: float = BREW_PULSE_WINDOW,
+        flow_gap_seconds: float = FLOW_GAP_SECONDS,
         ready_min_bar: float = READY_MIN_BAR,
         ready_max_bar: float = READY_MAX_BAR,
         steam_drop_bar_per_s: float = STEAM_DROP_BAR_PER_S,
@@ -145,7 +156,13 @@ class MachineStateClassifier:
                 progress (needs flow, or very recent flow, to count).
             pump_head_bar: Head pressure only a running pump produces; a
                 shot even with no flow, until it proves to be a stuck sensor.
-            brew_flow_mls: Flow rate (ml/s) at/above which a shot is in progress.
+            brew_flow_mls: Flow rate (ml/s) at/above which a shot is in
+                progress when no flow meter is passing pulse times.
+            brew_pulse_count: With a flow meter, pulses inside
+                ``brew_pulse_window`` that mean water is moving.
+            brew_pulse_window: Seconds those pulses are counted over.
+            flow_gap_seconds: A gap between pulses longer than this is a
+                pause and is left out of the recorded shot time.
             ready_min_bar: Bottom of the boiler's ready band.
             ready_max_bar: Top of the boiler's ready band.
             steam_drop_bar_per_s: Boiler fall rate that indicates steam use.
@@ -182,6 +199,9 @@ class MachineStateClassifier:
         self.brew_head_bar = brew_head_bar
         self.pump_head_bar = pump_head_bar
         self.brew_flow_mls = brew_flow_mls
+        self.brew_pulse_count = brew_pulse_count
+        self.brew_pulse_window = brew_pulse_window
+        self.flow_gap_seconds = flow_gap_seconds
         self.ready_min_bar = ready_min_bar
         self.ready_max_bar = ready_max_bar
         self.steam_drop_bar_per_s = steam_drop_bar_per_s
@@ -229,6 +249,10 @@ class MachineStateClassifier:
         # immediately, before the first curve sample.
         self._open_after = False
         self._deferred_sample = None
+        # Set when a flow meter is feeding this classifier. Shot seconds and
+        # millilitres then come from pulse timestamps, not the 1 s average.
+        self._flow_sensor = None
+        self._shot_pulse_from: Optional[float] = None
         self._last_shot: Optional[dict] = None
         # Newest last; a short memory of recent pulls so the dashboard can
         # show whether the machine (or the grinder) is drifting.
@@ -249,6 +273,7 @@ class MachineStateClassifier:
         boiler_bar: Optional[float],
         flow_mls: Optional[float] = 0.0,
         total_ml: Optional[float] = 0.0,
+        flow_sensor=None,
     ) -> str:
         """
         Feed one sample and return the current published state.
@@ -258,10 +283,16 @@ class MachineStateClassifier:
             boiler_bar: Boiler pressure in bar, or None if not fitted.
             flow_mls: Current flow rate in millilitres per second, or None
                 when that read failed.
-            total_ml: Lifetime volume in millilitres, used for the shot timer,
-                or None when that read failed.
+            total_ml: Lifetime volume in millilitres, used for the shot timer
+                when no flow meter is attached, or None when that read failed.
+            flow_sensor: Flow meter whose pulse timestamps time the shot.
+                The 1 s ``flow_mls`` value is still sampled onto the curve.
         """
         now = monotonic()
+        reported_flow = flow_mls
+        if flow_sensor is not None:
+            self._flow_sensor = flow_sensor
+            flow_mls = self._gate_flow(now, flow_mls)
         # "commit" / "abandon" once a pull closes, applied after the lock so
         # the history file is not written while readers wait on it.
         outcome = None
@@ -279,7 +310,7 @@ class MachineStateClassifier:
             self._update_boiler_rate(boiler_bar, now)
             self._note_shot_head(head_bar)
             if self._suspension_ended(now, flow_mls, flow_known):
-                outcome = self._take_shot_outcome()
+                outcome = self._take_shot_outcome(now)
                 self._clear_open_shot()
             candidate = self._classify(head_bar, boiler_bar, flow_mls, now)
 
@@ -331,7 +362,10 @@ class MachineStateClassifier:
                     # outage is not later counted as flowing time.
                     self._shot_prev = now
                 self._sample_open_shot(
-                    now, head_bar, boiler_bar, flow_mls if flow_known else 0.0
+                    now,
+                    head_bar,
+                    boiler_bar,
+                    reported_flow if flow_known and reported_flow is not None else 0.0,
                 )
             elif (
                 self._shot_start is not None
@@ -343,6 +377,9 @@ class MachineStateClassifier:
                 # flowing time when water moves again.
                 self._shot_prev = now
                 self._shot_prev_ml = total_ml
+
+            if self._shot_pulse_from is not None:
+                self._shot_seconds, self._shot_ml = self._measure_pulses(now)
 
             state = self.state
 
@@ -498,6 +535,10 @@ class MachineStateClassifier:
         self._shot_peak_head = head_bar
         self._shot_head_vented = head_bar is None or (head_bar <= self.shot_vent_bar)
         self._shot_suspended_at = None
+        self._shot_pulse_from = None
+        if self._flow_sensor is not None:
+            # The pulses that opened the gate are already behind this sample.
+            self._shot_pulse_from = now - self.brew_pulse_window
 
     def _clear_open_shot(self) -> None:
         self._shot_start = None
@@ -507,9 +548,39 @@ class MachineStateClassifier:
         self._shot_peak_head = None
         self._shot_head_vented = False
         self._shot_suspended_at = None
+        self._shot_pulse_from = None
 
-    def _take_shot_outcome(self) -> tuple:
+    def _gate_flow(self, now: float, flow_mls: Optional[float]) -> Optional[float]:
+        """Turn the pulse window into the boolean the state machine already uses.
+
+        Enough pulses count as flow even while the 1 s average is still
+        zero. Once the pulses stop, the average is ignored so it cannot
+        keep the timer running.
+        """
+        sensor = self._flow_sensor
+        flowing = (
+            sensor.pulses_within(now, self.brew_pulse_window) >= self.brew_pulse_count
+        )
+        if not flowing:
+            return 0.0 if flow_mls is not None else None
+        if flow_mls is None:
+            return self.brew_flow_mls
+        return max(flow_mls, self.brew_flow_mls)
+
+    def _measure_pulses(self, now: float) -> tuple[float, float]:
+        sensor = self._flow_sensor
+        start = self._shot_pulse_from
+        count = sensor.pulses - sensor.count_before(start)
+        if count < 0:
+            count = 0
+        ml = count * 1000.0 / sensor.pulses_per_liter
+        seconds = sensor.flowing_seconds(start, now, self.flow_gap_seconds)
+        return seconds, ml
+
+    def _take_shot_outcome(self, now: float) -> tuple:
         """Decide whether the open pull is a shot. Does not clear it."""
+        if self._shot_pulse_from is not None:
+            self._shot_seconds, self._shot_ml = self._measure_pulses(now)
         peak = self._shot_peak_head
         qualifies = (
             self._shot_seconds >= 2.0
@@ -563,7 +634,7 @@ class MachineStateClassifier:
             if self._can_defer_close(head_bar):
                 self._shot_suspended_at = now
             else:
-                outcome = self._take_shot_outcome()
+                outcome = self._take_shot_outcome(now)
                 self._clear_open_shot()
 
         self.state = new_state

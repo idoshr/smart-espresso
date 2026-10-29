@@ -1,4 +1,5 @@
-from threading import Event, Thread
+from collections import deque
+from threading import Event, Lock, Thread
 from time import monotonic
 from typing import Optional
 
@@ -88,6 +89,9 @@ class WaterFlowAnalogSensor(AnalogSensor):
     ALIAS_RATE_FACTOR = 2.5
     ALIAS_WARN_INTERVAL = 30.0
     RATE_LOG_INTERVAL = 60.0
+    # Pulse timestamps kept for the shot timer. The 1 s block average above
+    # stays what the chart and Home Assistant show; the shot uses the edges.
+    PULSE_HISTORY_SECONDS = 600.0
 
     def __init__(
         self,
@@ -130,6 +134,8 @@ class WaterFlowAnalogSensor(AnalogSensor):
         self.sample_interval = sample_interval
 
         self._pulses = 0
+        self._pulse_times: deque[float] = deque()
+        self._pulse_lock = Lock()
         self._above = False  # current hysteresis state (True once above high)
         self._synced = False  # idle level latched yet?
         self._inverted = False  # True when the sensor idles high
@@ -158,7 +164,7 @@ class WaterFlowAnalogSensor(AnalogSensor):
             self._thread = Thread(target=self._sample_loop, daemon=True)
             self._thread.start()
 
-    def _count_edge(self, voltage: float) -> None:
+    def _count_edge(self, voltage: float, now: float) -> None:
         """Update the pulse counter from one voltage sample."""
         if not self._synced:
             # Latch the idle level without counting it, otherwise an idle-high
@@ -168,36 +174,88 @@ class WaterFlowAnalogSensor(AnalogSensor):
             self._inverted = self._above
             return
 
+        counted = False
         if self._inverted:
             # Idle-high sensor: each pulse is one drop below the low threshold.
             if self._above and voltage <= self.low_threshold:
                 self._above = False
-                self._pulses += 1
+                counted = True
             elif not self._above and voltage >= self.high_threshold:
                 self._above = True
         else:
             # Idle-low sensor: each pulse is one rise above the high threshold.
             if not self._above and voltage >= self.high_threshold:
                 self._above = True
-                self._pulses += 1
+                counted = True
             elif self._above and voltage <= self.low_threshold:
                 self._above = False
+        if counted:
+            self._note_pulse(now)
+
+    def _note_pulse(self, now: float) -> None:
+        cutoff = now - self.PULSE_HISTORY_SECONDS
+        with self._pulse_lock:
+            self._pulses += 1
+            self._pulse_times.append(now)
+            while self._pulse_times and self._pulse_times[0] < cutoff:
+                self._pulse_times.popleft()
+
+    def pulses_within(self, now: float, window: float) -> int:
+        """How many pulses landed in ``(now - window, now]``."""
+        cutoff = now - window
+        with self._pulse_lock:
+            count = 0
+            for ts in reversed(self._pulse_times):
+                if ts <= cutoff:
+                    break
+                if ts <= now:
+                    count += 1
+            return count
+
+    def count_before(self, instant: float) -> int:
+        """Lifetime pulses strictly earlier than ``instant``."""
+        with self._pulse_lock:
+            after = 0
+            for ts in self._pulse_times:
+                if ts >= instant:
+                    after += 1
+            return self._pulses - after
+
+    def flowing_seconds(self, start: float, end: float, gap: float) -> float:
+        """Time from the first pulse to the last in ``[start, end]``.
+
+        A gap longer than ``gap`` is a pause and is left out. The 1 s rate
+        window is not involved.
+        """
+        with self._pulse_lock:
+            times = [ts for ts in self._pulse_times if start <= ts <= end]
+        if len(times) < 2:
+            return 0.0
+        total = 0.0
+        previous = times[0]
+        for ts in times[1:]:
+            step = ts - previous
+            if step <= gap:
+                total += step
+            previous = ts
+        return total
 
     def _update_rate(self, now: float) -> None:
         """Recompute the flow rate over a fixed window to keep it stable."""
         elapsed = now - self._flow_window_start
         if elapsed >= self.flow_interval:
-            pulses_in_window = self._pulses - self._flow_window_pulses
+            pulses = self.pulses
+            pulses_in_window = pulses - self._flow_window_pulses
             liters_in_window = pulses_in_window / self.pulses_per_liter
             self._flow_rate_lpm = (liters_in_window / elapsed) * 60.0
             self._flow_window_start = now
-            self._flow_window_pulses = self._pulses
+            self._flow_window_pulses = pulses
 
     def _sample(self) -> None:
         """Take one ADC sample and update counters and cached value."""
         self._value = self.adc.read()
-        self._count_edge(self.adc.voltage)
         now = monotonic()
+        self._count_edge(self.adc.voltage, now)
         self._update_rate(now)
         self._observe_sample_clock(now)
 
@@ -295,7 +353,9 @@ class WaterFlowAnalogSensor(AnalogSensor):
         The latched idle level is kept: re-syncing it would let an idle-high
         sensor count its own idle level as a pulse.
         """
-        self._pulses = 0
+        with self._pulse_lock:
+            self._pulses = 0
+            self._pulse_times.clear()
         self._flow_rate_lpm = 0.0
         self._flow_window_start = monotonic()
         self._flow_window_pulses = 0
@@ -303,7 +363,8 @@ class WaterFlowAnalogSensor(AnalogSensor):
     @property
     def pulses(self) -> int:
         """Total pulses counted since the last reset."""
-        return self._pulses
+        with self._pulse_lock:
+            return self._pulses
 
     @property
     def sample_hz(self) -> Optional[float]:
@@ -313,7 +374,7 @@ class WaterFlowAnalogSensor(AnalogSensor):
     @property
     def liter(self) -> float:
         """Total volume of water measured, in litres."""
-        return self._pulses / self.pulses_per_liter
+        return self.pulses / self.pulses_per_liter
 
     @property
     def flow_rate(self) -> float:

@@ -189,6 +189,7 @@ class StatusServer:
         flow_rate_mls = 0.0
         saw_flow = False
         saw_flow_ok = False
+        flow_sensor = None
 
         for sensor in sensors:
             name = getattr(sensor, "name", "sensor")
@@ -227,6 +228,8 @@ class StatusServer:
                     )
                     continue
                 saw_flow_ok = True
+                if flow_sensor is None:
+                    flow_sensor = sensor
                 liters = sensor.liter
                 self._record_flow(name, now, liters)
                 sensor_ml = liters * 1000
@@ -256,13 +259,22 @@ class StatusServer:
         if flow_failed:
             classifier_flow = None
             classifier_total = None
+            flow_sensor = None
         else:
             classifier_flow = flow_rate_mls
             classifier_total = total_ml
 
         # Both keep their own lock, so they are updated outside self._lock:
         # nesting would drag the tank's disk write into every reader's path.
-        self.classifier.update(head_bar, boiler_bar, classifier_flow, classifier_total)
+        # flow_rate_mls above is the 1 s average for the chart. The classifier
+        # times the shot from the meter's pulses when flow_sensor is set.
+        self.classifier.update(
+            head_bar,
+            boiler_bar,
+            classifier_flow,
+            classifier_total,
+            flow_sensor=flow_sensor,
+        )
         if not flow_failed:
             self.tank.update(total_ml)
 
