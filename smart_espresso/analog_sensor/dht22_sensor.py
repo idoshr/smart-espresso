@@ -213,17 +213,31 @@ class DHT22Sensor:
         """Temperature unit symbol."""
         return "°F" if self.use_fahrenheit else "°C"
 
+    def _line_name(self) -> str:
+        """User-facing name. The Home Assistant slug stays on ``self.name``."""
+        if self.name == "Environment":
+            return "Room"
+        return self.name
+
     @property
     def message(self) -> str:
         """One line for the display and the dashboard's other-sensor row."""
         humidity, temperature, state = self._cached()
+        label = self._line_name()
         if state == "stale":
-            return f"{self.name}: stale"
+            with self._lock:
+                age = 0 if self._last_ok is None else self._now() - self._last_ok
+            seconds = max(0, int(round(age)))
+            if seconds < 60:
+                seen = f"{seconds} s ago"
+            else:
+                seen = f"{max(1, int(round(seconds / 60)))} min ago"
+            return f"{label}: Last seen {seen}"
         if state != "ok" or temperature is None or humidity is None:
-            return f"{self.name}: No data"
+            return f"{label}: No data"
         temp_str = f"{temperature:.1f}{self.temperature_unit}"
         humidity_str = f"{humidity:.1f}%"
-        return f"{self.name}: {temp_str} {humidity_str}"
+        return f"{label}: {temp_str} {humidity_str}"
 
     def ha_states(self):
         """Entity states for a fresh sample. Empty when the sample is stale."""

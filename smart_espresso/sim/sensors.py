@@ -32,9 +32,10 @@ class SimDHT:
 
     @property
     def message(self):
+        label = "Room" if self.name == "Environment" else self.name
         if self._temperature is None or self._humidity is None:
-            return f"{self.name}: No data"
-        return f"{self.name}: {self._temperature:.1f}°C {self._humidity:.1f}%"
+            return f"{label}: No data"
+        return f"{label}: {self._temperature:.1f}°C {self._humidity:.1f}%"
 
     def ha_states(self):
         from smart_espresso.home_assistant import State

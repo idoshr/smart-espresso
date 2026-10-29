@@ -1,4 +1,6 @@
 """Flushes, rinses and backflushes are not shots. A bloom pause is one shot."""
+import json
+import subprocess
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -10,6 +12,21 @@ from smart_espresso.shot_history import ShotHistory
 from smart_espresso.test.test_status_server import FakeADC, FakeClock
 from smart_espresso.water_tank import WaterTank
 from smart_espresso.web.status_server import StatusServer
+
+LOGIC = Path(__file__).resolve().parents[1] / "web" / "static" / "dashboard_logic.js"
+
+
+def _live_presentation(machine, head_bar):
+    script = (
+        "const logic = require(%s);\n" % json.dumps(str(LOGIC))
+        + "const value = logic.livePresentation(%s, %s);\n"
+        % (json.dumps(machine), json.dumps(head_bar))
+        + "process.stdout.write(JSON.stringify(value));\n"
+    )
+    result = subprocess.run(
+        ["node", "-e", script], check=True, capture_output=True, text=True
+    )
+    return json.loads(result.stdout)
 
 
 class TestShotVersusFlush(unittest.TestCase):
@@ -84,7 +101,7 @@ class TestShotVersusFlush(unittest.TestCase):
         )
         self.assertIn("0.3 ml/s", brewing)
         self.assertIn("4.5 bar", brewing)
-        self.assertIn("Pulling shot", brewing)
+        self.assertIn("Pulling a shot", brewing)
         self.assertIn("5 ml", readme)
         self.assertIn("0.5 bar", readme)
         self.assertIn("10 s", readme)
@@ -133,11 +150,25 @@ class TestFlushFeedsTheTank(unittest.TestCase):
         # ~10 ml/s for about 4 s with the head at 0.4 bar. Every tick carries
         # the pressure sensors too: the render loop never samples flow alone.
         head_adc.set(0.58)
+        flushing = None
         for _ in range(40):
             for voltage in (3.0, 0.0):
                 flow_adc.set(voltage)
                 tick()
                 clock.advance(0.05)
+                flushing = server.status_payload()
+
+        self.assertIsNotNone(flushing)
+        head_bar = next(
+            item["bar"] for item in flushing["pressure"] if item["name"] == "Head"
+        )
+        self.assertLess(head_bar, 2.0)
+        self.assertEqual(flushing["machine"]["state"], "brewing")
+        presented = _live_presentation(flushing["machine"], head_bar)
+        self.assertEqual(presented["label"], "Water running")
+        self.assertFalse(presented["showShot"])
+        self.assertFalse(presented["showTarget"])
+        self.assertNotIn("shot", presented["label"].lower())
 
         head_adc.set(0.5)
         for _ in range(8):

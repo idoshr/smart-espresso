@@ -23,8 +23,7 @@
   function footerText(connected, lastSeenAt, now) {
     if (connected) return null;
     if (lastSeenAt == null) return "never connected";
-    const ago = Math.max(0, Math.round((now - lastSeenAt) / 1000));
-    return `last seen ${ago} s ago`;
+    return staleTagText(lastSeenAt, now);
   }
 
   // Flow and tank cards carry numbers. They stay hidden until a payload
@@ -54,20 +53,36 @@
   // The banner is a consequence of giving up, not of the backoff counter.
   // Retry zeroes the backoff without clearing this, so the banner stays up
   // while the immediate poll is in flight.
+  function agePhrase(seconds) {
+    const whole = Math.max(0, Math.round(seconds));
+    if (whole < 60) return whole + " s ago";
+    const minutes = Math.round(whole / 60);
+    if (minutes < 60) return minutes + " min ago";
+    const hours = Math.round(minutes / 60);
+    return hours + " h ago";
+  }
+
+  function agePhraseFrom(lastSeenAt, now) {
+    if (lastSeenAt == null || typeof now !== "number") return null;
+    return agePhrase((now - lastSeenAt) / 1000);
+  }
+
+  function offlineMessage(lastSeenAt, now) {
+    if (lastSeenAt == null) {
+      return "Can't reach the machine yet. Is the Pi on? Same Wi-Fi?";
+    }
+    return (
+      "Can't reach the machine. Last seen " +
+      agePhraseFrom(lastSeenAt, now) +
+      ". Is the Pi on? Same Wi-Fi?"
+    );
+  }
+
   function offlineBanner(connected, missed, lastSeenAt, now) {
     if (connected || missed < OFFLINE_AFTER_MISSES) {
       return { visible: false, title: "", hint: "" };
     }
-    let when = "never connected";
-    if (lastSeenAt != null) {
-      const ago = Math.max(0, Math.round((now - lastSeenAt) / 1000));
-      when = `last reading ${ago} s ago`;
-    }
-    return {
-      visible: true,
-      title: `Can't reach the machine · ${when}`,
-      hint: "Is the Pi on? Same Wi-Fi?",
-    };
+    return { visible: true, title: offlineMessage(lastSeenAt, now), hint: "" };
   }
 
   function nextPollDelay(backoff) {
@@ -85,9 +100,8 @@
 
   // status is an HTTP code or null; error is the server's message or null.
   function resetFailureToast(status, error) {
-    if (error) return "Couldn't reset the tank — " + error;
-    if (status) return "Couldn't reset the tank — the machine answered " + status;
-    return "Couldn't reset the tank — the network dropped";
+    if (status || error) return "Couldn't save the refill. Try again in a moment.";
+    return "Couldn't save the refill. Check the Wi-Fi and try again.";
   }
 
   // While offline the timer shows the last reading, even if a stale
@@ -135,8 +149,8 @@
     if (seconds == null) return null;
     if (seconds < 45) return "almost ready";
     const minutes = Math.round(seconds / 60);
-    if (minutes <= 1) return "~1 min";
-    return "~" + minutes + " min";
+    if (minutes <= 1) return "about 1 min";
+    return "about " + minutes + " min";
   }
 
   function formatSpokenDuration(seconds) {
@@ -152,21 +166,37 @@
   // One secondary line. Shot copy wins while a pull is running; heating
   // names the boiler against the ready threshold; ready names the time in
   // state. A later temperature or ready-alert can append to this string.
+  const STATE_NAMES = {
+    off: "Off",
+    heating: "Warming up",
+    ready: "Ready to pull",
+    brewing: "Pulling a shot",
+    steaming: "Steaming milk",
+    overpressure: "Pressure high. Check the pressurestat.",
+    unknown: "No sensor reading",
+    flushing: "Water running",
+  };
+
+  function durationLine(state, sinceSeconds) {
+    const dur = formatSpokenDuration(sinceSeconds);
+    if (state === "ready") return "Ready for " + dur;
+    const name = STATE_NAMES[state] || "Off";
+    return name + " for " + dur;
+  }
+
   function heroDetail(machine, boilerBar) {
     if (machine.shot) {
       const seconds = machine.shot.seconds;
-      if (seconds < 25) return "aiming for 25–30s";
-      if (seconds <= 30) return "in the window";
-      return "running long";
+      if (seconds < 25) return "Aiming for 25 to 30 s";
+      if (seconds <= 30) return "On target";
+      return "Running long";
     }
     if (machine.state === "heating" && typeof boilerBar === "number") {
       const eta = formatEta(warmingEtaSeconds(boilerBar, machine.since_seconds));
-      const base = boilerBar.toFixed(1) + " / 0.8 bar";
+      const base = "Warming up · " + boilerBar.toFixed(1) + " of 0.8 bar";
       return eta ? base + " · " + eta : base;
     }
-    const dur = formatSpokenDuration(machine.since_seconds);
-    if (machine.state === "ready") return "Ready · " + dur;
-    return dur + " in this state";
+    return durationLine(machine.state, machine.since_seconds);
   }
 
   function glanceOn(wakeHeld, pinned) {
@@ -214,13 +244,62 @@
     if (typeof seconds !== "number" || Number.isNaN(seconds)) {
       return { key: "good", label: "on target", shape: "dot" };
     }
-    if (seconds < low) return { key: "fast", label: "fast", shape: "chevron-left" };
+    if (seconds < low) return { key: "fast", label: "short", shape: "chevron-left" };
     if (seconds <= high) return { key: "good", label: "on target", shape: "dot" };
     return { key: "long", label: "long", shape: "chevron-right" };
   }
 
   // Centers and the tap are in the same coordinate space. Equal distances
   // keep the earlier tick, so a point dead-centre never jumps to the right.
+  // The stale tag names the real age of the last applied reading.
+  function staleTagText(lastSeenAt, now) {
+    const phrase = agePhraseFrom(lastSeenAt, now);
+    if (!phrase) return "Last seen";
+    return "Last seen " + phrase;
+  }
+
+  // While the machine can't be reached, the last live label and timer
+  // stay off the card. Connecting… is only for a page that has no reading.
+  function shownState(machine, headBar, connected, hasPayload, lastSeenAt, now) {
+    if (!connected && hasPayload) {
+      return {
+        replace: true,
+        label: offlineMessage(lastSeenAt, now),
+        showShot: false,
+        showTarget: false,
+      };
+    }
+    const live = livePresentation(machine, headBar);
+    return {
+      replace: false,
+      label: live.label,
+      showShot: live.showShot,
+      showTarget: live.showTarget,
+    };
+  }
+
+  // A flush is water moving without brew-band head pressure. It must not
+  // wear the shot label, the 25–30 s target, or the ratio.
+  const BREW_HEAD_BAR = 2;
+
+  function isFlush(machine, headBar) {
+    if (!machine || machine.state !== "brewing") return false;
+    if (typeof headBar !== "number" || !isFinite(headBar)) return false;
+    return headBar < BREW_HEAD_BAR;
+  }
+
+  function livePresentation(machine, headBar) {
+    if (isFlush(machine, headBar)) {
+      return { label: "Water running", showShot: false, showTarget: false };
+    }
+    const shot = !!(machine && machine.shot);
+    return {
+      label: machine && machine.label ? machine.label : "",
+      showShot: shot,
+      showTarget: shot,
+    };
+  }
+
   function nearestTickIndex(centers, x) {
     if (!centers || !centers.length || typeof x !== "number") return -1;
     let best = 0;
@@ -259,6 +338,11 @@
     clearShotWindow: clearShotWindow,
     showOverBand: showOverBand,
     shotVerdict: shotVerdict,
+    staleTagText: staleTagText,
+    offlineMessage: offlineMessage,
+    isFlush: isFlush,
+    livePresentation: livePresentation,
+    shownState: shownState,
     nearestTickIndex: nearestTickIndex,
     READY_MIN_BAR: READY_MIN_BAR,
   };

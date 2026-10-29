@@ -196,7 +196,7 @@ class TestStatusServer(unittest.TestCase):
 
         page = client.get("/")
         self.assertEqual(page.status_code, 200)
-        self.assertIn(b"<title>Espresso Bar Status</title>", page.data)
+        self.assertIn(b"<title>Smart Espresso</title>", page.data)
 
         # The service worker is served from the site root, as its scope needs.
         worker = client.get("/sw.js")

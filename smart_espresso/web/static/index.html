@@ -13,7 +13,7 @@
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="icon" type="image/svg+xml" href="/icon.svg">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
-<title>Espresso Bar Status</title>
+<title>Smart Espresso</title>
 <!-- Webfonts are a progressive enhancement: the page falls back to system
      faces when the machine's network has no internet access. -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -1103,26 +1103,26 @@
 
 <div class="brewbar" id="brewbar" aria-hidden="true">
   <span class="lamp" id="bb-lamp"></span>
-  <span class="bb-label" id="bb-label">Pulling shot</span>
+  <span class="bb-label" id="bb-label">Pulling a shot</span>
   <b class="bb-time" id="bb-time">0s</b>
-  <span class="stale-tag" id="bb-stale" hidden>stale</span>
+  <span class="stale-tag" id="bb-stale" hidden>Last seen</span>
   <span class="bb-ml" id="bb-ml">0 ml</span>
 </div>
 
 <div class="offline-banner" id="offline-banner" role="status" hidden>
   <p class="offline-title" id="offline-title">Can't reach the machine</p>
-  <p class="offline-hint">Is the Pi on? Same Wi-Fi?</p>
+  <p class="offline-hint" id="offline-hint" hidden></p>
   <button class="retry" id="retry" type="button">Retry now</button>
 </div>
 
 <header>
   <div>
-    <h1>The bar</h1>
-    <div class="tagline" id="tagline">espresso machine</div>
+    <h1>Smart Espresso</h1>
+    <div class="tagline" id="tagline"></div>
   </div>
-  <button class="live" id="wake" type="button" title="Keep the screen awake"
+  <button class="live" id="wake" type="button" title="Keep screen on"
           aria-pressed="false" hidden><span class="dot"></span><span
-      id="wake-text">sleep</span></button>
+      id="wake-text">Keep screen on</span></button>
   <!-- Connecting, not live: the shell is often cached and painted before
        /api/status has ever answered. A green "live" here is a lie. -->
   <div class="live" role="status"><span class="dot off" id="dot"></span><span id="conn">connecting…</span></div>
@@ -1135,7 +1135,7 @@
       <span class="glyph" id="state-glyph" aria-hidden="true"></span>
       <div class="state-copy">
         <div class="state-label" id="state-label" aria-live="polite">Connecting…</div>
-        <span class="stale-tag" id="stale-tag" hidden>stale</span>
+        <span class="stale-tag" id="stale-tag" hidden>Last seen</span>
       </div>
     </div>
     <div class="state-body">
@@ -1146,7 +1146,7 @@
       </div>
       <div class="shot" id="shot" hidden>
         <b id="shot-seconds">0s</b>
-        <span class="stale-tag" id="shot-stale" hidden>stale</span>
+        <span class="stale-tag" id="shot-stale" hidden>Last seen</span>
         <small id="shot-ml">0 ml</small>
         <div class="shot-track"><u id="shot-window"></u><i id="shot-progress"></i></div>
       </div>
@@ -1173,16 +1173,16 @@
 
   <div class="card" id="pulls-card" hidden>
     <div class="card-head">
-      <span class="title">Recent pulls</span>
+      <span class="title">Recent shots</span>
       <span class="note" id="pulls-note" role="status"></span>
     </div>
     <div class="pulls-track" id="pulls-track" role="listbox" tabindex="0"
-         aria-label="Recent pulls" aria-orientation="horizontal">
+         aria-label="Recent shots" aria-orientation="horizontal">
       <u id="pulls-window"></u>
     </div>
     <div class="axis"><span>0 s</span><span id="pulls-axis-end">40 s</span></div>
     <p class="pulls-legend">
-      <span><i class="mark fast" aria-hidden="true"></i> fast</span>
+      <span><i class="mark fast" aria-hidden="true"></i> short</span>
       <span><i class="mark good" aria-hidden="true"></i> on target</span>
       <span><i class="mark long" aria-hidden="true"></i> long</span>
     </p>
@@ -1198,7 +1198,7 @@
 
   <div class="card" id="flow-card" hidden>
     <div class="card-head">
-      <span class="title" id="flow-title">Water poured</span>
+      <span class="title" id="flow-title">Water used, last 2 min</span>
       <span class="note" id="flow-window"></span>
     </div>
     <div class="figure"><b id="flow-recent">0</b><span>ml</span></div>
@@ -1219,18 +1219,18 @@
     <div class="figure"><b id="tank-remaining">--</b><span id="tank-capacity">ml left</span></div>
     <div class="level"><i id="tank-fill" style="width:0%"></i></div>
     <div class="meta">
-      <span>drawn <b id="tank-used">0 ml</b></span>
-      <span>about <b id="tank-shots">0</b> doubles left</span>
+      <span id="tank-used-line">0 ml used</span>
+      <span id="tank-left">About 0 shots left</span>
     </div>
     <div class="tank-foot">
       <span class="refill-hint" id="tank-warn" hidden>Time to refill</span>
       <span class="refill-hint" id="tank-offline-hint" hidden>Reconnect to mark the tank filled</span>
-      <button class="reset" id="tank-reset" type="button" aria-disabled="true">Tank filled</button>
+      <button class="reset" id="tank-reset" type="button" aria-disabled="true">I refilled the tank</button>
     </div>
   </div>
 
   <div class="card" id="other-card" hidden>
-    <div class="card-head"><span class="title">Around the machine</span></div>
+    <div class="card-head"><span class="title">Room</span></div>
     <div class="rows" id="other-rows"></div>
   </div>
 </div>
@@ -1326,6 +1326,7 @@ function arcPath(radius, fromDeg, toDeg) {
 }
 
 // Brew ratio against the basket's dose: 36 ml from 18 g reads as 1:2.
+// TODO(#26): show this once a real dose is stored. Hidden until then.
 function ratioText(ml) {
   const ratio = ml / DOSE_G;
   return `1:${ratio % 1 ? ratio.toFixed(1) : ratio.toFixed(0)}`;
@@ -1353,14 +1354,23 @@ let lastMachine = null;
 let stateCardVisible = true;
 let shotSeen = false;
 let buzzedInWindow = false;
+let flushDisplay = false;
+
+function headBar(pressure) {
+  const head = (pressure || []).find(sensor =>
+    sensor.name && sensor.name.toLowerCase() === 'head');
+  return head && typeof head.bar === 'number' ? head.bar : null;
+}
 
 function renderState(machine, pressure) {
   lastMachine = machine;
+  const presentation = DashboardLogic.livePresentation(machine, headBar(pressure));
+  flushDisplay = presentation.label === 'Water running';
   const stateName = GLYPHS[machine.state] ? machine.state : 'unknown';
   const card = document.getElementById('state');
   card.dataset.state = stateName;
   document.getElementById('brewbar').dataset.state = stateName;
-  document.getElementById('bb-label').textContent = machine.label;
+  document.getElementById('bb-label').textContent = presentation.label;
 
   const lamp = document.getElementById('lamp');
   lamp.classList.toggle('pulse', machine.severity === 'alert');
@@ -1374,12 +1384,12 @@ function renderState(machine, pressure) {
   // Only rewritten when it actually changes: the label carries aria-live,
   // and a per-second "3s in this state" would talk an ear off.
   const label = document.getElementById('state-label');
-  if (label.textContent !== machine.label) label.textContent = machine.label;
+  if (label.textContent !== presentation.label) label.textContent = presentation.label;
 
   const shot = document.getElementById('shot');
-  shot.hidden = !machine.shot;
+  shot.hidden = !presentation.showShot;
   const shotSeconds = document.getElementById('shot-seconds');
-  if (machine.shot) {
+  if (presentation.showShot && machine.shot) {
     const inWindow =
       machine.shot.seconds >= SHOT_WINDOW[0] &&
       machine.shot.seconds <= SHOT_WINDOW[1];
@@ -1407,10 +1417,12 @@ function renderState(machine, pressure) {
     document.getElementById('bb-time').className =
       `bb-time ${verdictOf(machine.shot.seconds).key}`;
     document.getElementById('shot-ml').textContent =
-      `${machine.shot.ml.toFixed(0)} ml · ${ratioText(machine.shot.ml)}`;
+      `${machine.shot.ml.toFixed(0)} ml`;
     document.getElementById('shot-progress').style.width =
       `${Math.min(100, machine.shot.seconds / SHOT_SCALE * 100)}%`;
-    Object.assign(document.getElementById('shot-window').style, windowStyle());
+    const windowEl = document.getElementById('shot-window');
+    if (presentation.showTarget) Object.assign(windowEl.style, windowStyle());
+    else windowEl.style.width = '0';
 
     document.getElementById('bb-time').textContent = shownShot;
     document.getElementById('bb-ml').textContent =
@@ -1424,20 +1436,23 @@ function renderState(machine, pressure) {
     document.getElementById('bb-time').className = 'bb-time';
   }
 
-  // The last pull stays up as a reference chip, even mid-shot — it is the
-  // pull to beat, so it keeps the ratio the detail line never repeats.
+  // The last shot stays up as a reference chip, even mid-shot.
+  // Ratio stays hidden until #26 stores a dose. See ratioText.
   const chip = document.getElementById('last-pull');
   const last = machine.last_shot;
   chip.hidden = !last;
   if (last) {
     const lastVerdict = verdictOf(last.seconds);
     chip.textContent =
-      `last pull ${last.seconds.toFixed(0)} s · ${last.ml.toFixed(0)} ml · ${ratioText(last.ml)} · ${lastVerdict.label}`;
+      `last shot ${last.seconds.toFixed(0)} s · ${last.ml.toFixed(0)} ml · ${lastVerdict.label}`;
   }
 
   const boilerBar = DashboardLogic.boilerReading(pressure);
+  const detailMachine = flushDisplay
+    ? Object.assign({}, machine, { shot: null, state: 'flushing' })
+    : machine;
   document.getElementById('state-detail').textContent =
-    DashboardLogic.heroDetail(machine, boilerBar);
+    DashboardLogic.heroDetail(detailMachine, boilerBar);
   paintWarm(machine, boilerBar);
 
   syncBrewbar();
@@ -1479,7 +1494,7 @@ function paintWarm(machine, boilerBar) {
 // Show the pinned timer only when the state card itself has scrolled out
 // of view; while the card is on screen, its big timer is the better figure.
 function syncBrewbar() {
-  const shotLive = !!(lastMachine && lastMachine.shot);
+  const shotLive = !!(lastMachine && lastMachine.shot) && !flushDisplay;
   document.getElementById('brewbar').classList.toggle(
     'show', shotLive && !stateCardVisible
   );
@@ -1658,7 +1673,7 @@ function renderPulls(history) {
       tick.setAttribute('role', 'option');
       tick.setAttribute('aria-selected', 'false');
       tick.setAttribute('aria-label',
-        `pull ${i + 1}: ${shot.seconds.toFixed(0)} seconds, ${shot.ml.toFixed(0)} ml, ${verdict.label}`);
+        `shot ${i + 1}: ${shot.seconds.toFixed(0)} seconds, ${shot.ml.toFixed(0)} ml, ${verdict.label}`);
       track.appendChild(tick);
     });
   }
@@ -1668,8 +1683,8 @@ function renderPulls(history) {
   const note = document.getElementById('pulls-note');
   const sel = pullHistory[selectedPull];
   note.textContent = sel
-    ? `${sel.seconds.toFixed(0)} s · ${sel.ml.toFixed(0)} ml · ${ratioText(sel.ml)} · ${verdictOf(sel.seconds).label}`
-    : `${history.length} pulls`;
+    ? `${sel.seconds.toFixed(0)} s · ${sel.ml.toFixed(0)} ml · ${verdictOf(sel.seconds).label}`
+    : `${history.length} shot${history.length === 1 ? '' : 's'}`;
 }
 
 function selectPull(index, toggle) {
@@ -1804,7 +1819,7 @@ async function showShot(id, scroll) {
     if (scroll) revealShot(detail);
   } catch (err) {
     if (token !== shotLoadToken || selectedShotId !== id) return;
-    detail.innerHTML = '<div class="history-meta">Could not load this shot</div>';
+    detail.innerHTML = '<div class="history-meta">Couldn\'t load this shot. Tap to try again.</div>';
   }
 }
 
@@ -1894,7 +1909,6 @@ function paintShot(detail, shot) {
     shotWhen(shot.started_at),
     `${seconds.toFixed(1)} s`,
     `${ml.toFixed(1)} ml`,
-    ratioText(ml),
     verdictOf(seconds).label,
   ];
   if (typeof shot.peak_head_bar === 'number') bits.push(`${shot.peak_head_bar.toFixed(1)} bar`);
@@ -1919,7 +1933,7 @@ function paintShot(detail, shot) {
       'ml/s', null,
     );
   } else {
-    charts = '<div class="history-meta">No curve saved for this shot</div>';
+    charts = '<div class="history-meta">This shot was saved without a curve.</div>';
   }
   detail.innerHTML = `<div class="history-meta">${bits.map(escapeHtml).join(' · ')}</div>${charts}`;
 }
@@ -1931,9 +1945,12 @@ function renderTank(tank) {
     Math.round(tank.remaining_ml).toLocaleString('en-US');
   document.getElementById('tank-capacity').textContent =
     `ml of ${Math.round(tank.capacity_ml).toLocaleString('en-US')} left`;
-  document.getElementById('tank-used').textContent =
-    `${Math.round(tank.used_ml).toLocaleString('en-US')} ml`;
-  document.getElementById('tank-shots').textContent = tank.shots_left;
+  document.getElementById('tank-used-line').textContent =
+    `${Math.round(tank.used_ml).toLocaleString('en-US')} ml used`;
+  const shotsLeft = tank.shots_left;
+  document.getElementById('tank-left').textContent = shotsLeft === 1
+    ? 'About 1 shot left'
+    : `About ${shotsLeft} shots left`;
   document.getElementById('tank-note').textContent =
     tank.refills ? `${tank.refills} refill${tank.refills === 1 ? '' : 's'}` : '';
 
@@ -1954,8 +1971,8 @@ let chartBars = [];
 
 function renderFlow(sensor) {
   const minutes = Math.round(sensor.window_seconds / 60);
-  document.getElementById('flow-title').textContent = `${sensor.name} water`;
-  document.getElementById('flow-window').textContent = `last ${minutes} min`;
+  document.getElementById('flow-title').textContent = `Water used, last ${minutes} min`;
+  document.getElementById('flow-window').textContent = '';
   document.getElementById('flow-recent').textContent =
     DashboardLogic.formatReading(sensor.recent_ml, 0);
   document.getElementById('flow-rate').textContent = sensor.flow_rate_mls == null
@@ -2019,8 +2036,8 @@ function renderToday(today) {
   if (!today) return;   // an older server payload: keep the static line
   const el = document.getElementById('tagline');
   el.textContent = today.shots > 0
-    ? `${today.shots} pull${today.shots === 1 ? '' : 's'} · ${volText(today.ml)} today`
-    : 'no pulls yet today';
+    ? `${today.shots} shot${today.shots === 1 ? '' : 's'} · ${volText(today.ml)} today`
+    : 'No shots yet today';
 }
 
 function render(data) {
@@ -2043,7 +2060,10 @@ function render(data) {
   otherCard.hidden = !data.other.length;
   if (data.other.length) {
     document.getElementById('other-rows').innerHTML = data.other
-      .map(s => `<div class="row"><span>${escapeHtml(s.name)}</span><span class="v">${escapeHtml(s.message)}</span></div>`)
+      .map(s => {
+        const name = s.name === 'Environment' ? 'Room' : s.name;
+        return `<div class="row"><span>${escapeHtml(name)}</span><span class="v">${escapeHtml(s.message)}</span></div>`;
+      })
       .join('');
   }
 
@@ -2095,10 +2115,27 @@ function paintOfflineChrome() {
   if (banner.visible) {
     document.getElementById('offline-title').textContent = banner.title;
   }
+  const hintEl = document.getElementById('offline-hint');
+  hintEl.hidden = !banner.hint;
+  hintEl.textContent = banner.hint || '';
 
   const stale = !connected && hasPayload;
-  document.getElementById('stale-tag').hidden = !stale;
-  const shotLive = !!(lastMachine && lastMachine.shot);
+  const tag = DashboardLogic.staleTagText(lastSeenAt, Date.now());
+  ['stale-tag', 'shot-stale', 'bb-stale'].forEach(id => {
+    document.getElementById(id).textContent = tag;
+  });
+  const offline = DashboardLogic.shownState(
+    lastMachine, null, connected, hasPayload, lastSeenAt, Date.now()
+  );
+  if (offline.replace) {
+    document.getElementById('state-label').textContent = offline.label;
+    document.getElementById('state-detail').textContent = '';
+    document.getElementById('shot').hidden = true;
+    document.getElementById('warm').hidden = true;
+    document.getElementById('brewbar').classList.remove('show');
+  }
+  document.getElementById('stale-tag').hidden = !stale || offline.replace;
+  const shotLive = !!(lastMachine && lastMachine.shot) && !flushDisplay && !offline.replace;
   document.getElementById('shot-stale').hidden = !(stale && shotLive);
   document.getElementById('bb-stale').hidden = !(stale && shotLive);
   document.getElementById('skeletons').hidden = !DashboardLogic.showSkeletons(hasPayload);
@@ -2154,7 +2191,7 @@ resetButton.addEventListener('click', async () => {
 
 function disarmReset() {
   resetButton.classList.remove('armed');
-  resetButton.textContent = 'Tank filled';
+  resetButton.textContent = 'I refilled the tank';
 }
 
 // ---- polling, with a backoff so a down machine is not hammered ----------
@@ -2257,9 +2294,8 @@ async function syncWake() {
   const setUI = (on) => {
     wakeBtn.classList.toggle('on', on);
     wakeBtn.setAttribute('aria-pressed', String(on));
-    // The label offers the action, not the state: press to wake, or —
-    // while held — press to let the screen sleep.
-    document.getElementById('wake-text').textContent = on ? 'sleep' : 'awake';
+    // One phrase. aria-pressed says whether the screen is being held.
+    document.getElementById('wake-text').textContent = 'Keep screen on';
     syncGlance();
   };
   if (!wakeWanted) {

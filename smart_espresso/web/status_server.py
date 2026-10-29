@@ -321,6 +321,8 @@ def sensor_text(sensor, ok: bool) -> str:
     if sample_problem is not None and sample_problem() is not None:
         return str(sensor.message)
     name = getattr(sensor, "name", "sensor")
+    if name == "Environment":
+        name = "Room"
     return f"{name}: fault"
 
 

@@ -40,7 +40,7 @@ class TestConnectionCopy:
 
     def test_footer_counts_from_the_reading_not_from_page_load(self):
         # 12.4 s after the reading, rounded.
-        assert call("logic.footerText(false, 1000, 13400)") == "last seen 12 s ago"
+        assert call("logic.footerText(false, 1000, 13400)") == "Last seen 12 s ago"
 
     def test_footer_does_not_claim_last_seen_while_connected(self):
         assert call("logic.footerText(true, 1000, 9000)") is None
@@ -65,12 +65,17 @@ class TestOfflineRules:
         assert hidden["visible"] is False
         shown = call("logic.offlineBanner(false, 3, null, 9000)")
         assert shown["visible"] is True
-        assert shown["title"] == "Can't reach the machine · never connected"
-        assert shown["hint"] == "Is the Pi on? Same Wi-Fi?"
+        assert (
+            shown["title"] == "Can't reach the machine yet. Is the Pi on? Same Wi-Fi?"
+        )
+        assert shown["hint"] == ""
 
     def test_banner_names_the_age_of_the_last_reading(self):
         shown = call("logic.offlineBanner(false, 3, 1000, 13000)")
-        assert shown["title"] == "Can't reach the machine · last reading 12 s ago"
+        assert (
+            shown["title"]
+            == "Can't reach the machine. Last seen 12 s ago. Is the Pi on? Same Wi-Fi?"
+        )
 
     def test_banner_hides_as_soon_as_a_poll_succeeds(self):
         shown = call("logic.offlineBanner(true, 5, 1000, 9000)")
@@ -93,10 +98,16 @@ class TestOfflineRules:
     def test_reset_failure_toast_includes_the_reason(self):
         assert (
             call("logic.resetFailureToast(403, 'missing dashboard header')")
-            == "Couldn't reset the tank — missing dashboard header"
+            == "Couldn't save the refill. Try again in a moment."
         )
-        assert "answered 500" in call("logic.resetFailureToast(500, null)")
-        assert "network dropped" in call("logic.resetFailureToast(null, null)")
+        assert (
+            call("logic.resetFailureToast(500, null)")
+            == "Couldn't save the refill. Try again in a moment."
+        )
+        assert (
+            call("logic.resetFailureToast(null, null)")
+            == "Couldn't save the refill. Check the Wi-Fi and try again."
+        )
 
     def test_shot_timer_does_not_advance_while_offline(self):
         assert call("logic.displayedShotText(false, '12s', '13s')") == "12s"
@@ -113,12 +124,12 @@ class TestGlance:
         ready = call(
             "logic.heroDetail({state:'ready', since_seconds:600, shot:null}, 1.1)"
         )
-        assert ready == "Ready · 10 min"
+        assert ready == "Ready for 10 min"
         heating = call(
             "logic.heroDetail({state:'heating', since_seconds:150, shot:null}, 0.6)"
         )
-        assert heating.startswith("0.6 / 0.8 bar")
-        assert "min" in heating
+        assert heating.startswith("Warming up · 0.6 of 0.8 bar")
+        assert "about" in heating and "min" in heating
 
     def test_warming_bar_and_eta_need_a_real_slope(self):
         assert call("logic.warmingProgress(0.4)") == 0.5
@@ -127,6 +138,51 @@ class TestGlance:
         assert call("logic.warmingEtaSeconds(0.16, 200)") is None
         eta = call("logic.warmingEtaSeconds(0.6, 150)")
         assert eta is not None and eta > 0
+
+    def test_stale_tag_names_the_real_age(self):
+        assert call("logic.staleTagText(1000, 13000)") == "Last seen 12 s ago"
+        assert call("logic.staleTagText(0, 120000)") == "Last seen 2 min ago"
+        assert call("logic.staleTagText(null, 13000)") == "Last seen"
+
+    def test_a_flush_is_not_presented_as_a_shot(self):
+        flushing = call(
+            "logic.livePresentation("
+            "{state:'brewing', label:'Pulling a shot', shot:{seconds:4, ml:24}}, 0.4)"
+        )
+        assert flushing == {
+            "label": "Water running",
+            "showShot": False,
+            "showTarget": False,
+        }
+        shot = call(
+            "logic.livePresentation("
+            "{state:'brewing', label:'Pulling a shot', shot:{seconds:12, ml:18}}, 9)"
+        )
+        assert shot["label"] == "Pulling a shot"
+        assert shot["showShot"] is True
+        assert shot["showTarget"] is True
+
+    def test_offline_hides_the_last_live_state(self):
+        ready = call(
+            "logic.shownState({state:'ready', label:'Ready to pull', shot:null},"
+            " 0, false, true, 1000, 41000)"
+        )
+        assert ready["replace"] is True
+        assert ready["showShot"] is False
+        assert "Ready to pull" not in ready["label"]
+        assert "Last seen 40 s ago" in ready["label"]
+        brewing = call(
+            "logic.shownState({state:'brewing', label:'Pulling a shot',"
+            " shot:{seconds:20, ml:30}}, 9, false, true, 1000, 41000)"
+        )
+        assert brewing["showShot"] is False
+        assert "Pulling a shot" not in brewing["label"]
+        live = call(
+            "logic.shownState({state:'ready', label:'Ready to pull', shot:null},"
+            " 0, true, true, 1000, 41000)"
+        )
+        assert live["replace"] is False
+        assert live["label"] == "Ready to pull"
 
     def test_over_band_hides_until_the_reading_nears_it(self):
         assert call("logic.showOverBand(0, 8)") is False
@@ -195,7 +251,7 @@ class TestVerdicts:
         good = call("logic.shotVerdict(27, 25, 30)")
         edge = call("logic.shotVerdict(30, 25, 30)")
         long = call("logic.shotVerdict(33, 25, 30)")
-        assert fast == {"key": "fast", "label": "fast", "shape": "chevron-left"}
+        assert fast == {"key": "fast", "label": "short", "shape": "chevron-left"}
         assert good["label"] == "on target" and good["shape"] == "dot"
         assert edge["label"] == "on target"
         assert long == {"key": "long", "label": "long", "shape": "chevron-right"}
@@ -247,7 +303,7 @@ class TestShippedShell:
     def test_offline_banner_is_a_status_with_retry(self):
         assert 'id="offline-banner" role="status"' in self.page
         assert "Retry now" in self.page
-        assert "Is the Pi on? Same Wi-Fi?" in self.page
+        assert "Is the Pi on? Same Wi-Fi?" in call("logic.offlineMessage(null, 0)")
         retry = self.page.split("getElementById('retry')", 1)[1]
         retry = retry.split("poll();", 1)[0]
         assert "backoffAfterRetry" in retry
@@ -262,7 +318,7 @@ class TestShippedShell:
 
     def test_verdict_is_written_and_ticks_are_not_buttons(self):
         assert 'class="pulls-legend"' in self.page
-        assert "> fast<" in self.page
+        assert "> short<" in self.page
         assert "> on target<" in self.page
         assert "> long<" in self.page
         assert "pointer-events: none" in self.page
