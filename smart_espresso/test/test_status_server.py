@@ -128,6 +128,23 @@ class TestStatusServer(unittest.TestCase):
         self.assertAlmostEqual(sum(entry["chart"]), entry["recent_ml"], places=1)
         self.assertGreater(len([b for b in entry["chart"] if b > 0]), 0)
 
+    def test_chart_heads_separate_a_flush_from_a_shot(self):
+        now = self.clock.now
+        bucket = self.server.window_seconds / StatusServer.CHART_BUCKETS
+        start = now - self.server.window_seconds
+        samples = [
+            (start + bucket * 0.4, 0.0, 0.4),
+            (start + bucket * 0.8, 0.02, 0.4),
+            (start + bucket * 2.3, 0.02, 9.0),
+            (start + bucket * 2.8, 0.05, 9.0),
+        ]
+        _recent, buckets, heads = self.server._window_stats(samples, now)
+        self.assertGreater(buckets[0], 0)
+        self.assertGreater(buckets[2], 0)
+        self.assertLess(heads[0], 2)
+        self.assertGreaterEqual(heads[2], 2)
+        self.assertIsNone(heads[1])
+
     def test_history_is_trimmed_to_the_window(self):
         for _ in range(400):
             self.clock.advance(1.0)

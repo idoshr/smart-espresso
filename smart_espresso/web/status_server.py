@@ -84,7 +84,7 @@ class StatusServer:
             "uptime": 0.0,
         }
         # name -> list[(monotonic_time, cumulative_liters)], oldest first
-        self._flow_history: dict[str, list[tuple[float, float]]] = {}
+        self._flow_history: dict[str, list[tuple[float, float, Optional[float]]]] = {}
         self._started_at = monotonic()
         self._thread: Optional[threading.Thread] = None
 
@@ -191,7 +191,7 @@ class StatusServer:
         if readings["tank_ml"] is not None:
             self.tank.update(readings["tank_ml"])
         for name, liters in readings["flow_points"]:
-            self._record_flow(name, now, liters)
+            self._record_flow(name, now, liters, readings["head_bar"])
 
         with self._lock:
             self._snapshot = {
@@ -201,16 +201,19 @@ class StatusServer:
                 "uptime": round(now - self._started_at, 1),
             }
 
-    def _record_flow(self, name: str, now: float, liters: float) -> None:
+    def _record_flow(
+        self, name: str, now: float, liters: float, head_bar: Optional[float]
+    ) -> None:
         """Append a cumulative-volume sample and drop samples older than the window."""
         with self._lock:
             history = self._flow_history.setdefault(name, [])
-            history.append((now, liters))
+            history.append((now, liters, head_bar))
             cutoff = now - (self.window_seconds + self.HISTORY_SLACK_SECONDS)
             # Samples are appended in time order, so trimming from the front
             # is enough; find the first index still inside the window.
             keep_from = 0
-            for index, (sample_time, _) in enumerate(history):
+            for index, sample in enumerate(history):
+                sample_time = sample[0]
                 if sample_time >= cutoff:
                     keep_from = index
                     break
@@ -233,10 +236,11 @@ class StatusServer:
 
         for entry in flow_entries:
             samples = histories.get(entry["name"], [])
-            recent_ml, buckets = self._window_stats(samples, now)
+            recent_ml, buckets, heads = self._window_stats(samples, now)
             entry["window_seconds"] = self.window_seconds
             entry["recent_ml"] = recent_ml
             entry["chart"] = buckets
+            entry["chart_head"] = heads
 
         snapshot["flow"] = flow_entries
         snapshot["window_seconds"] = self.window_seconds
@@ -251,25 +255,26 @@ class StatusServer:
         return snapshot
 
     def _window_stats(
-        self, samples: list[tuple[float, float]], now: float
-    ) -> tuple[float, list[float]]:
+        self, samples: list, now: float
+    ) -> tuple[float, list[float], list]:
         """
         Compute millilitres delivered in the window and per-bucket millilitres.
 
-        Returns (recent_ml, buckets) where buckets is oldest-first and has
-        CHART_BUCKETS entries, so the client can render a fixed-width chart.
+        Returns (recent_ml, buckets, heads). buckets is oldest-first and has
+        CHART_BUCKETS entries. heads is the highest head pressure seen in
+        that bucket, or None when the sample did not record one.
         """
-        buckets = [0.0] * self.CHART_BUCKETS
+        count = self.CHART_BUCKETS
+        buckets = [0.0] * count
+        heads: list = [None] * count
         if not samples:
-            return 0.0, buckets
+            return 0.0, buckets, heads
 
-        bucket_seconds = self.window_seconds / self.CHART_BUCKETS
+        bucket_seconds = self.window_seconds / count
         window_start = now - self.window_seconds
 
         # Cumulative volume at each bucket edge (CHART_BUCKETS + 1 edges).
-        edges = [
-            window_start + i * bucket_seconds for i in range(self.CHART_BUCKETS + 1)
-        ]
+        edges = [window_start + i * bucket_seconds for i in range(count + 1)]
         cumulative_at_edge = []
         index = 0
         last_value = samples[0][1]
@@ -279,14 +284,25 @@ class StatusServer:
                 index += 1
             cumulative_at_edge.append(last_value)
 
-        for i in range(self.CHART_BUCKETS):
+        for sample in samples:
+            moment = sample[0]
+            head = sample[2] if len(sample) > 2 else None
+            if head is None or moment <= window_start or moment > now:
+                continue
+            slot = int((moment - window_start - 1e-9) / bucket_seconds)
+            if slot < 0 or slot >= count:
+                continue
+            current = heads[slot]
+            heads[slot] = head if current is None else max(current, head)
+
+        for i in range(count):
             delta = cumulative_at_edge[i + 1] - cumulative_at_edge[i]
             buckets[i] = round(max(delta, 0.0) * 1000, 2)
 
         recent_ml = round(
             max(cumulative_at_edge[-1] - cumulative_at_edge[0], 0.0) * 1000, 1
         )
-        return recent_ml, buckets
+        return recent_ml, buckets, heads
 
     def start(self) -> None:
         """Start the HTTP server on a background daemon thread."""

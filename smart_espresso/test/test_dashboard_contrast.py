@@ -149,6 +149,15 @@ class TestDashboardContrast:
                     )
         assert failures == []
 
+    def test_dial_track_clears_three_to_one(self):
+        assert 'stroke="var(--ink-faint)"' in self.css
+        failures = []
+        for scheme, tokens in self.themes.items():
+            ratio = contrast(tokens["ink-faint"], tokens["card"])
+            if ratio < 3:
+                failures.append("%s ink-faint on card is %.2f" % (scheme, ratio))
+        assert failures == []
+
     def test_labels_are_at_least_11px(self):
         sizes = [
             float(size) for size in re.findall(r"font-size:\s*([0-9.]+)px", self.css)

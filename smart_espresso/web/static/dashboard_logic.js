@@ -229,11 +229,12 @@
     return { shotSeen: false, buzzedInWindow: false };
   }
 
-  // The over-band arc is a warning mark. At 0 bar it is the loudest thing
-  // on an idle dial, so it stays hidden until the reading nears the band.
-  function showOverBand(bar, bandFrom) {
-    if (typeof bar !== "number" || typeof bandFrom !== "number") return false;
-    return bar >= bandFrom * 0.9;
+  // The clay arc is only the part past the band. A reading inside the
+  // band, including 9 bar and 1.2 bar, is not a warning.
+  function showOverBand(bar, bandTop) {
+    if (typeof bar !== "number" || typeof bandTop !== "number") return false;
+    if (!isFinite(bar) || !isFinite(bandTop)) return false;
+    return bar > bandTop;
   }
 
   // fast / on target / long. The shape is what remains when colour is
@@ -286,6 +287,15 @@
     if (!machine || machine.state !== "brewing") return false;
     if (typeof headBar !== "number" || !isFinite(headBar)) return false;
     return headBar < BREW_HEAD_BAR;
+  }
+
+  // A water-chart bucket. Same head line as a live flush: water below
+  // brew pressure is Water running, water at brew pressure is a shot.
+  function flowBarKind(ml, headBar) {
+    if (typeof ml !== "number" || !(ml > 0)) return "other";
+    if (typeof headBar !== "number" || !isFinite(headBar)) return "other";
+    if (headBar < BREW_HEAD_BAR) return "flush";
+    return "shot";
   }
 
   function livePresentation(machine, headBar) {
@@ -341,6 +351,7 @@
     staleTagText: staleTagText,
     offlineMessage: offlineMessage,
     isFlush: isFlush,
+    flowBarKind: flowBarKind,
     livePresentation: livePresentation,
     shownState: shownState,
     nearestTickIndex: nearestTickIndex,

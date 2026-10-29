@@ -608,7 +608,45 @@
   }
 
   .bar.on { background: var(--water-ink); }
-  .bar.now { background: var(--crema-ink); }
+  .bar.shot { background: var(--crema-ink); }
+  .bar.flush {
+    background: repeating-linear-gradient(
+      -45deg,
+      var(--water-ink) 0 2px,
+      transparent 2px 4px
+    );
+    box-shadow: inset 0 0 0 1px var(--water-ink);
+  }
+
+  .chart-wrap { display: flex; align-items: stretch; gap: 8px; }
+  .chart-scale {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    min-width: 48px;
+    padding-bottom: 22px;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--ink-faint);
+  }
+  .chart-plot { flex: 1; min-width: 0; }
+
+  .swatch {
+    display: inline-block;
+    width: 14px;
+    height: 10px;
+    border-radius: 2px;
+    vertical-align: -1px;
+  }
+  .swatch.shot { background: var(--crema-ink); }
+  .swatch.flush {
+    background: repeating-linear-gradient(
+      -45deg,
+      var(--water-ink) 0 2px,
+      transparent 2px 4px
+    );
+    box-shadow: inset 0 0 0 1px var(--water-ink);
+  }
 
   .axis {
     display: flex;
@@ -1205,10 +1243,22 @@
     <div class="meta">
       <span>now <b id="flow-rate">0.0 ml/s</b></span>
       <span>all time <b id="flow-total">0 ml</b></span>
-      <span>peak <b id="flow-peak">0.0 ml/s</b></span>
+      <span>peak, 3 s <b id="flow-peak">0.0 ml/s</b></span>
     </div>
-    <div class="chart" id="flow-chart" aria-hidden="true"></div>
-    <div class="axis"><span id="flow-axis-start">-2:00</span><span>now</span></div>
+    <div class="chart-wrap">
+      <div class="chart-scale" aria-hidden="true">
+        <span id="flow-scale-max">0</span>
+        <span>0</span>
+      </div>
+      <div class="chart-plot">
+        <div class="chart" id="flow-chart" aria-hidden="true"></div>
+        <div class="axis"><span id="flow-axis-start">-2:00</span><span>now</span></div>
+      </div>
+    </div>
+    <p class="pulls-legend">
+      <span><i class="swatch shot" aria-hidden="true"></i> shot</span>
+      <span><i class="swatch flush" aria-hidden="true"></i> Water running</span>
+    </p>
   </div>
 
   <div class="card" id="tank-card" hidden>
@@ -1536,7 +1586,6 @@ function buildRings(pressure) {
     const dial = dialMaxFor(sensor);
     const guide = guideFor(sensor.name);
     const accent = guide.accent || 'var(--water)';
-    const soft = guide.soft || 'var(--water-soft)';
     const label = escapeHtml(sensor.name);
 
     // The target band rides on the same track as the reading. Past its
@@ -1546,9 +1595,14 @@ function buildRings(pressure) {
     let band = '';
     if (guide.band) {
       const [from, to] = guide.band;
-      band =
-        `<path d="${arcPath(R - 7, angleFor(from / dial), angleFor(to / dial))}" fill="none"
-              stroke="var(--ink-soft)" stroke-width="3" stroke-linecap="round"/>` +
+      // Ticks sit outside the value stroke, so a full dial cannot cover them.
+      const tick = (value) => {
+        const angle = angleFor(value / dial);
+        const [x1, y1] = polar(R - 1, angle);
+        const [x2, y2] = polar(Math.min(R + 6, 50), angle);
+        return `<line x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}" stroke="var(--ink)" stroke-width="2" stroke-linecap="round"/>`;
+      };
+      band = tick(from) + tick(to) +
         (dial > to
           ? `<path class="ring-over" d="${arcPath(R - 7, angleFor(to / dial), angleFor(1))}" fill="none"
                 stroke="var(--clay-ink)" stroke-width="3" stroke-linecap="round"
@@ -1562,8 +1616,8 @@ function buildRings(pressure) {
         <span class="title">${label}</span>
       </div>
       <svg class="ring" viewBox="0 0 120 100" role="img" aria-label="${label} 0 bar">
-        <path d="${arcPath(R - 7, angleFor(0), angleFor(1))}" fill="none" stroke="${soft}"
-              stroke-width="9" stroke-linecap="round"/>
+        <path d="${arcPath(R - 7, angleFor(0), angleFor(1))}" fill="none" stroke="var(--ink-faint)"
+              stroke-width="11" stroke-linecap="round"/>
         <path class="ring-value" d="${arcPath(R - 7, angleFor(0), angleFor(1))}" fill="none"
               stroke="${accent}" stroke-width="9" stroke-linecap="round"
               pathLength="1" stroke-dasharray="1" stroke-dashoffset="1"
@@ -1618,7 +1672,7 @@ function renderRings(pressure) {
     // At rest the clay "past the band" arc reads as a warning. Keep it
     // hidden until the needle is actually near the band.
     if (el.over) {
-      const show = DashboardLogic.showOverBand(sensor.bar, el.bandFrom);
+      const show = DashboardLogic.showOverBand(sensor.bar, el.bandTop);
       el.over.style.visibility = show ? 'visible' : 'hidden';
     }
     el.read.textContent = DashboardLogic.formatReading(sensor.bar, 1);
@@ -1983,12 +2037,13 @@ function renderFlow(sensor) {
   document.getElementById('flow-axis-start').textContent = `-${minutes}:00`;
 
   const peak = Math.max(...sensor.chart, 0.001);
-  const lastActive = sensor.chart.reduce((acc, ml, i) => (ml > 0 ? i : acc), -1);
 
   // One bucket spans window/length seconds; its peak is a flow rate too.
   const bucketSeconds = sensor.window_seconds / sensor.chart.length;
-  document.getElementById('flow-peak').textContent =
-    `${(peak / bucketSeconds).toFixed(1)} ml/s`;
+  const peakRate = peak / bucketSeconds;
+  document.getElementById('flow-peak').textContent = `${peakRate.toFixed(1)} ml/s`;
+  document.getElementById('flow-scale-max').textContent =
+    sensor.chart.some(ml => ml > 0) ? `${peakRate.toFixed(1)}` : '0';
 
   const chartEl = document.getElementById('flow-chart');
   // No water in the whole window: the chart bows out of the way instead
@@ -2005,12 +2060,14 @@ function renderFlow(sensor) {
     });
   }
 
+  const heads = Array.isArray(sensor.chart_head) ? sensor.chart_head : [];
   sensor.chart.forEach((ml, i) => {
     const bar = chartBars[i];
+    const kind = DashboardLogic.flowBarKind(ml, heads[i]);
     bar.style.height = `${ml > 0 ? Math.max(5, Math.round((ml / peak) * 60)) : 3}px`;
-    bar.className = ml > 0
-      ? `bar on${i === lastActive ? ' now' : ''}`
-      : 'bar';
+    bar.className = ml > 0 ? `bar ${kind}` : 'bar';
+    if (kind === 'flush') bar.setAttribute('title', 'Water running');
+    else bar.removeAttribute('title');
   });
 }
 

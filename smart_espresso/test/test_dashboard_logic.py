@@ -184,13 +184,29 @@ class TestGlance:
         assert live["replace"] is False
         assert live["label"] == "Ready to pull"
 
-    def test_over_band_hides_until_the_reading_nears_it(self):
-        assert call("logic.showOverBand(0, 8)") is False
-        assert call("logic.showOverBand(7.1, 8)") is False
-        assert call("logic.showOverBand(7.2, 8)") is True
-        assert call("logic.showOverBand(9, 8)") is True
-        assert call("logic.showOverBand(null, 8)") is False
-        assert call("logic.showOverBand(1, null)") is False
+    def test_over_band_stays_hidden_at_a_normal_reading(self):
+        # Head at 9 bar, band top 10. Main paints the clay arc from 90% of
+        # the lower edge, so 9 bar already counts as over.
+        assert call("logic.showOverBand(9, 10)") is False
+        assert call("logic.showOverBand(1.2, 1.4)") is False
+        assert call("logic.showOverBand(10.5, 10)") is True
+        assert call("logic.showOverBand(1.5, 1.4)") is True
+        assert call("logic.showOverBand(null, 10)") is False
+
+    def test_a_flush_bucket_is_not_drawn_as_a_shot(self):
+        assert call("logic.flowBarKind(24, 0.4)") == "flush"
+        assert call("logic.flowBarKind(39, 9)") == "shot"
+        assert call("logic.flowBarKind(0, 0.4)") == "other"
+        assert call("logic.flowBarKind(10, null)") == "other"
+        assert 'stroke="var(--ink-faint)"' in (
+            Path(__file__).resolve().parents[1] / "web" / "static" / "index.html"
+        ).read_text(encoding="utf-8")
+        page = (
+            Path(__file__).resolve().parents[1] / "web" / "static" / "index.html"
+        ).read_text(encoding="utf-8")
+        assert "Water running" in page
+        assert "bar flush" in page or "swatch flush" in page
+        assert "showOverBand(sensor.bar, el.bandTop)" in page
 
     def test_glance_follows_the_wake_lock_or_a_pin(self):
         assert call("logic.glanceOn(true, false)") is True
