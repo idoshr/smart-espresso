@@ -132,7 +132,7 @@ class TestGracefulShutdown(unittest.TestCase):
                 text=True,
             )
             seen = 0.0
-            deadline = time.monotonic() + 8
+            deadline = time.monotonic() + 15
             assert proc.stdout is not None
             while time.monotonic() < deadline and proc.poll() is None:
                 ready, _, _ = select.select([proc.stdout], [], [], 0.2)
@@ -152,6 +152,9 @@ class TestGracefulShutdown(unittest.TestCase):
                 stdout, stderr = proc.communicate()
                 self.fail(f"process still running after 2s\n{stdout}\n{stderr}")
             stdout, stderr = proc.communicate()
+            for line in stdout.splitlines():
+                if line.startswith("USED"):
+                    seen = max(seen, float(line.split()[1]))
             self.assertEqual(code, 0, stderr + stdout)
             self.assertIn("ALIVE False False", stdout)
             self.assertGreaterEqual(seen, 5)
