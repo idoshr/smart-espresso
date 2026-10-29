@@ -13,8 +13,18 @@ PAGE = (STATIC / "index.html").read_text(encoding="utf-8")
 LOGIC = (STATIC / "dashboard_logic.js").read_text(encoding="utf-8")
 MANIFEST = (STATIC / "manifest.webmanifest").read_text(encoding="utf-8")
 
-# Whole words a person should not see. Identifiers such as used_ml stay.
+# Whole words a person should not see. "Ready to pull" and "Pulling a shot"
+# stay: the guide keeps that verb. Identifiers such as used_ml stay.
 FORBIDDEN = re.compile(r"\b(pulls?|pulling|poured|drawn)\b", re.I)
+ALLOWED_PULL = ("Ready to pull", "Pulling a shot", "Pull to refresh")
+
+
+def _without_allowed(text):
+    for phrase in ALLOWED_PULL:
+        text = re.sub(re.escape(phrase), "", text, flags=re.I)
+    return text
+
+
 # Element ids are not copy. They keep the old name so the shell stays stable.
 ID_TEMPLATE = re.compile(r"^pull-\$\{")
 
@@ -93,9 +103,12 @@ class TestProductLanguage:
         assert "<h1>Smart Espresso</h1>" in PAGE
         assert ">Recent shots<" in PAGE
         assert 'aria-label="Recent shots"' in PAGE
-        assert ">Water used<" in PAGE
-        assert ">used <" in PAGE
-        assert ">Last seen —<" in PAGE
+        assert ">Water used, last 2 min<" in PAGE
+        assert ">0 ml used<" in PAGE
+        assert ">About 0 shots left<" in PAGE
+        assert ">I refilled the tank<" in PAGE
+        assert ">Room<" in PAGE
+        assert ">Last seen<" in PAGE
         assert ">Keep screen on<" in PAGE
         assert '"name": "Smart Espresso"' in MANIFEST
         assert "Espresso Bar Status" not in PAGE
@@ -121,7 +134,7 @@ class TestProductLanguage:
             phrase = bool(re.search(r"\s", stripped)) or bool(
                 FORBIDDEN.fullmatch(stripped)
             )
-            if phrase and FORBIDDEN.search(stripped):
+            if phrase and FORBIDDEN.search(_without_allowed(stripped)):
                 offenders.append(stripped)
         assert offenders == []
 
@@ -130,9 +143,14 @@ class TestProductLanguage:
         from smart_espresso.machine_state import MachineState
 
         labels = " ".join(MachineState.LABELS.values())
-        assert not FORBIDDEN.search(labels)
-        assert MachineState.LABELS[MachineState.READY] == "Ready for a shot"
-        assert MachineState.LABELS[MachineState.BREWING] == "Brewing a shot"
+        assert not FORBIDDEN.search(_without_allowed(labels))
+        assert MachineState.LABELS[MachineState.READY] == "Ready to pull"
+        assert MachineState.LABELS[MachineState.BREWING] == "Pulling a shot"
+        assert MachineState.LABELS[MachineState.OFF] == "Off"
+        assert (
+            MachineState.LABELS[MachineState.OVERPRESSURE]
+            == "Pressure high. Check the pressurestat."
+        )
 
         states = machine_states(
             {

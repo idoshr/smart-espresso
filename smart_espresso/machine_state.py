@@ -20,12 +20,12 @@ class MachineState:
     # Written the way a barista would call it out, not the way the sensor
     # reads it.
     LABELS = {
-        OFF: "Resting",
+        OFF: "Off",
         HEATING: "Warming up",
-        READY: "Ready for a shot",
-        BREWING: "Brewing a shot",
+        READY: "Ready to pull",
+        BREWING: "Pulling a shot",
         STEAMING: "Steaming milk",
-        OVERPRESSURE: "Pressure high",
+        OVERPRESSURE: "Pressure high. Check the pressurestat.",
         UNKNOWN: "No sensor reading",
     }
 

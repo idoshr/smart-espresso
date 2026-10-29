@@ -101,7 +101,7 @@ class TestShotVersusFlush(unittest.TestCase):
         )
         self.assertIn("0.3 ml/s", brewing)
         self.assertIn("4.5 bar", brewing)
-        self.assertIn("Brewing a shot", brewing)
+        self.assertIn("Pulling a shot", brewing)
         self.assertIn("5 ml", readme)
         self.assertIn("0.5 bar", readme)
         self.assertIn("10 s", readme)

@@ -275,7 +275,7 @@ class TestMachineStateClassifier(unittest.TestCase):
     def test_snapshot_carries_label_and_severity(self):
         self.settle(0.0, 1.2)
         snapshot = self.classifier.snapshot()
-        self.assertEqual(snapshot["label"], "Ready for a shot")
+        self.assertEqual(snapshot["label"], "Ready to pull")
         self.assertEqual(snapshot["severity"], "good")
 
 

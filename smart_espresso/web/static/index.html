@@ -1103,22 +1103,22 @@
 
 <div class="brewbar" id="brewbar" aria-hidden="true">
   <span class="lamp" id="bb-lamp"></span>
-  <span class="bb-label" id="bb-label">Brewing a shot</span>
+  <span class="bb-label" id="bb-label">Pulling a shot</span>
   <b class="bb-time" id="bb-time">0s</b>
-  <span class="stale-tag" id="bb-stale" hidden>Last seen —</span>
+  <span class="stale-tag" id="bb-stale" hidden>Last seen</span>
   <span class="bb-ml" id="bb-ml">0 ml</span>
 </div>
 
 <div class="offline-banner" id="offline-banner" role="status" hidden>
   <p class="offline-title" id="offline-title">Can't reach the machine</p>
-  <p class="offline-hint">Is the Pi on? Same Wi-Fi?</p>
+  <p class="offline-hint" id="offline-hint" hidden></p>
   <button class="retry" id="retry" type="button">Retry now</button>
 </div>
 
 <header>
   <div>
     <h1>Smart Espresso</h1>
-    <div class="tagline" id="tagline">espresso machine</div>
+    <div class="tagline" id="tagline"></div>
   </div>
   <button class="live" id="wake" type="button" title="Keep screen on"
           aria-pressed="false" hidden><span class="dot"></span><span
@@ -1135,7 +1135,7 @@
       <span class="glyph" id="state-glyph" aria-hidden="true"></span>
       <div class="state-copy">
         <div class="state-label" id="state-label" aria-live="polite">Connecting…</div>
-        <span class="stale-tag" id="stale-tag" hidden>Last seen —</span>
+        <span class="stale-tag" id="stale-tag" hidden>Last seen</span>
       </div>
     </div>
     <div class="state-body">
@@ -1146,7 +1146,7 @@
       </div>
       <div class="shot" id="shot" hidden>
         <b id="shot-seconds">0s</b>
-        <span class="stale-tag" id="shot-stale" hidden>Last seen —</span>
+        <span class="stale-tag" id="shot-stale" hidden>Last seen</span>
         <small id="shot-ml">0 ml</small>
         <div class="shot-track"><u id="shot-window"></u><i id="shot-progress"></i></div>
       </div>
@@ -1182,7 +1182,7 @@
     </div>
     <div class="axis"><span>0 s</span><span id="pulls-axis-end">40 s</span></div>
     <p class="pulls-legend">
-      <span><i class="mark fast" aria-hidden="true"></i> fast</span>
+      <span><i class="mark fast" aria-hidden="true"></i> short</span>
       <span><i class="mark good" aria-hidden="true"></i> on target</span>
       <span><i class="mark long" aria-hidden="true"></i> long</span>
     </p>
@@ -1198,7 +1198,7 @@
 
   <div class="card" id="flow-card" hidden>
     <div class="card-head">
-      <span class="title" id="flow-title">Water used</span>
+      <span class="title" id="flow-title">Water used, last 2 min</span>
       <span class="note" id="flow-window"></span>
     </div>
     <div class="figure"><b id="flow-recent">0</b><span>ml</span></div>
@@ -1219,18 +1219,18 @@
     <div class="figure"><b id="tank-remaining">--</b><span id="tank-capacity">ml left</span></div>
     <div class="level"><i id="tank-fill" style="width:0%"></i></div>
     <div class="meta">
-      <span>used <b id="tank-used">0 ml</b></span>
-      <span>about <b id="tank-shots">0</b> doubles left</span>
+      <span id="tank-used-line">0 ml used</span>
+      <span id="tank-left">About 0 shots left</span>
     </div>
     <div class="tank-foot">
       <span class="refill-hint" id="tank-warn" hidden>Time to refill</span>
       <span class="refill-hint" id="tank-offline-hint" hidden>Reconnect to mark the tank filled</span>
-      <button class="reset" id="tank-reset" type="button" aria-disabled="true">Tank filled</button>
+      <button class="reset" id="tank-reset" type="button" aria-disabled="true">I refilled the tank</button>
     </div>
   </div>
 
   <div class="card" id="other-card" hidden>
-    <div class="card-head"><span class="title">Around the machine</span></div>
+    <div class="card-head"><span class="title">Room</span></div>
     <div class="rows" id="other-rows"></div>
   </div>
 </div>
@@ -1819,7 +1819,7 @@ async function showShot(id, scroll) {
     if (scroll) revealShot(detail);
   } catch (err) {
     if (token !== shotLoadToken || selectedShotId !== id) return;
-    detail.innerHTML = '<div class="history-meta">Could not load this shot</div>';
+    detail.innerHTML = '<div class="history-meta">Couldn\'t load this shot. Tap to try again.</div>';
   }
 }
 
@@ -1933,7 +1933,7 @@ function paintShot(detail, shot) {
       'ml/s', null,
     );
   } else {
-    charts = '<div class="history-meta">No curve saved for this shot</div>';
+    charts = '<div class="history-meta">This shot was saved without a curve.</div>';
   }
   detail.innerHTML = `<div class="history-meta">${bits.map(escapeHtml).join(' · ')}</div>${charts}`;
 }
@@ -1945,9 +1945,12 @@ function renderTank(tank) {
     Math.round(tank.remaining_ml).toLocaleString('en-US');
   document.getElementById('tank-capacity').textContent =
     `ml of ${Math.round(tank.capacity_ml).toLocaleString('en-US')} left`;
-  document.getElementById('tank-used').textContent =
-    `${Math.round(tank.used_ml).toLocaleString('en-US')} ml`;
-  document.getElementById('tank-shots').textContent = tank.shots_left;
+  document.getElementById('tank-used-line').textContent =
+    `${Math.round(tank.used_ml).toLocaleString('en-US')} ml used`;
+  const shotsLeft = tank.shots_left;
+  document.getElementById('tank-left').textContent = shotsLeft === 1
+    ? 'About 1 shot left'
+    : `About ${shotsLeft} shots left`;
   document.getElementById('tank-note').textContent =
     tank.refills ? `${tank.refills} refill${tank.refills === 1 ? '' : 's'}` : '';
 
@@ -1968,8 +1971,8 @@ let chartBars = [];
 
 function renderFlow(sensor) {
   const minutes = Math.round(sensor.window_seconds / 60);
-  document.getElementById('flow-title').textContent = `${sensor.name} water`;
-  document.getElementById('flow-window').textContent = `last ${minutes} min`;
+  document.getElementById('flow-title').textContent = `Water used, last ${minutes} min`;
+  document.getElementById('flow-window').textContent = '';
   document.getElementById('flow-recent').textContent =
     DashboardLogic.formatReading(sensor.recent_ml, 0);
   document.getElementById('flow-rate').textContent = sensor.flow_rate_mls == null
@@ -2034,7 +2037,7 @@ function renderToday(today) {
   const el = document.getElementById('tagline');
   el.textContent = today.shots > 0
     ? `${today.shots} shot${today.shots === 1 ? '' : 's'} · ${volText(today.ml)} today`
-    : 'no shots yet today';
+    : 'No shots yet today';
 }
 
 function render(data) {
@@ -2057,7 +2060,10 @@ function render(data) {
   otherCard.hidden = !data.other.length;
   if (data.other.length) {
     document.getElementById('other-rows').innerHTML = data.other
-      .map(s => `<div class="row"><span>${escapeHtml(s.name)}</span><span class="v">${escapeHtml(s.message)}</span></div>`)
+      .map(s => {
+        const name = s.name === 'Environment' ? 'Room' : s.name;
+        return `<div class="row"><span>${escapeHtml(name)}</span><span class="v">${escapeHtml(s.message)}</span></div>`;
+      })
       .join('');
   }
 
@@ -2109,14 +2115,27 @@ function paintOfflineChrome() {
   if (banner.visible) {
     document.getElementById('offline-title').textContent = banner.title;
   }
+  const hintEl = document.getElementById('offline-hint');
+  hintEl.hidden = !banner.hint;
+  hintEl.textContent = banner.hint || '';
 
   const stale = !connected && hasPayload;
   const tag = DashboardLogic.staleTagText(lastSeenAt, Date.now());
   ['stale-tag', 'shot-stale', 'bb-stale'].forEach(id => {
     document.getElementById(id).textContent = tag;
   });
-  document.getElementById('stale-tag').hidden = !stale;
-  const shotLive = !!(lastMachine && lastMachine.shot) && !flushDisplay;
+  const offline = DashboardLogic.shownState(
+    lastMachine, null, connected, hasPayload, lastSeenAt, Date.now()
+  );
+  if (offline.replace) {
+    document.getElementById('state-label').textContent = offline.label;
+    document.getElementById('state-detail').textContent = '';
+    document.getElementById('shot').hidden = true;
+    document.getElementById('warm').hidden = true;
+    document.getElementById('brewbar').classList.remove('show');
+  }
+  document.getElementById('stale-tag').hidden = !stale || offline.replace;
+  const shotLive = !!(lastMachine && lastMachine.shot) && !flushDisplay && !offline.replace;
   document.getElementById('shot-stale').hidden = !(stale && shotLive);
   document.getElementById('bb-stale').hidden = !(stale && shotLive);
   document.getElementById('skeletons').hidden = !DashboardLogic.showSkeletons(hasPayload);
@@ -2172,7 +2191,7 @@ resetButton.addEventListener('click', async () => {
 
 function disarmReset() {
   resetButton.classList.remove('armed');
-  resetButton.textContent = 'Tank filled';
+  resetButton.textContent = 'I refilled the tank';
 }
 
 // ---- polling, with a backoff so a down machine is not hammered ----------

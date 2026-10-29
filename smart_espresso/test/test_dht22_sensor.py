@@ -98,7 +98,8 @@ class TestDhtPollThread(unittest.TestCase):
         self.assertIsNone(sensor.temperature)
         self.assertIsNone(sensor.humidity)
         self.assertEqual(sensor.read(), (None, None))
-        self.assertIn("stale", sensor.message.lower())
+        self.assertIn("last seen", sensor.message.lower())
+        self.assertNotIn("stale", sensor.message.lower())
         self.assertEqual(sensor.ha_states(), [])
 
         server = StatusServer(
@@ -126,7 +127,8 @@ class TestDhtPollThread(unittest.TestCase):
         self.assertFalse(app._health["Environment"].ok)
         self.assertIn("stale", app._health["Environment"].last_error.lower())
         row = server.status_payload()["other"][0]
-        self.assertIn("stale", row["message"].lower())
+        self.assertIn("last seen", row["message"].lower())
+        self.assertNotIn("stale", row["message"].lower())
         self.assertFalse(row["health"]["ok"])
 
 
