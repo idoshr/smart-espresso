@@ -96,28 +96,29 @@ output) → A2. See the usage example below.
 
 ## Installation
 
-On a Raspberry Pi, install the hardware extras. The `dht` extra is separate:
-it is `adafruit-circuitpython-dht` (Blinka, and libgpiod on the Pi) and is
-imported only when a DHT22 is constructed. The core package and CI do not
-install it. A machine that only serves the dashboard can install the core
-package, with no GPIO or ADC libraries.
+smart-espresso is not published on PyPI yet. `pip install smart-espresso`
+fails. Clone the repository and install from that checkout.
+
+On a Raspberry Pi, install the hardware extras from the clone. The `dht`
+extra is separate: it is `adafruit-circuitpython-dht` (Blinka, and libgpiod
+on the Pi) and is imported only when a DHT22 is constructed. The core
+package and CI do not install it. A machine that only serves the dashboard
+can install the core package, with no GPIO or ADC libraries.
 
 ```bash
 # Enable interfaces
 sudo raspi-config  # Enable I2C and/or SPI
 
-# Install package with the Pi and DHT drivers
-pip3 install "smart-espresso[pi,dht]"
-
-# Or from source
 git clone https://github.com/idoshr/smart-espresso.git
 cd smart-espresso
+
+# Pi and DHT drivers. `pip install .` and `pip install -e .` both work.
 pip3 install -e ".[pi,dht]"
 
 # Same pins, including DHT: pip3 install -r requirements.txt
 
-# Web stack only
-pip3 install smart-espresso
+# Web stack only, from this checkout
+pip3 install -e .
 ```
 
 ## Running on boot
@@ -190,10 +191,25 @@ See the [authentication docs][ha-auth].
 
 No Pi is required. `ADC_TYPE=SIM` builds fake head, boiler, flow, DHT and
 OLED drivers. The status server, dashboard, `/api/status` health and
-Home Assistant path are the same code as on the machine.
+Home Assistant path are the same code as on the machine. `--sim` and
+`ADC_TYPE=SIM` are the same mode.
+
+On a laptop, clone the repo and install the core package. `requirements.txt`
+and the `[pi]` and `[dht]` extras are for the Pi only: RPi.GPIO and spidev
+do not build on a laptop. Both `pip install .` and `pip install -e .` work.
 
 ```bash
-ADC_TYPE=SIM python main.py
+git clone https://github.com/idoshr/smart-espresso.git
+cd smart-espresso
+python3 -m venv .venv && . .venv/bin/activate
+pip install -e .
+python main.py --sim
+```
+
+Open <http://localhost:8080>. `ADC_TYPE=SIM python main.py` starts the same
+simulator.
+
+```bash
 python main.py --sim --seed 59
 python main.py --sim --record /tmp/session.csv
 python main.py --replay smart_espresso/test/replay/session.csv
@@ -434,11 +450,13 @@ The page polls `GET /api/status` once per second:
 {
   "pressure": [{"name": "Head", "bar": 9.1, "max_bar": 20.0}],
   "flow": [{"name": "Brew", "recent_ml": 36.0, "total_ml": 128.4,
-            "flow_rate_mls": 1.8, "sample_hz": 200.0,
+            "flow_rate_lpm": 0.108, "flow_rate_mls": 1.8, "sample_hz": 200.0,
             "window_seconds": 120.0, "chart": [0.0, 1.2]}],
   "machine": {"state": "brewing", "label": "Pulling shot", "severity": "active",
-              "since_seconds": 12.4, "shot": {"seconds": 12.4, "ml": 22.1},
+              "since_seconds": 12.4, "boiler_rate": 0.0,
+              "shot": {"seconds": 12.4, "ml": 22.1},
               "last_shot": {"seconds": 27.0, "ml": 38.4},
+              "history": [{"seconds": 27.0, "ml": 38.4}],
               "today": {"shots": 5, "ml": 183.4}},
   "shots": {"count": 42, "recent": [
     {"id": 42, "started_at": "2026-10-25T08:56:12-04:00",
@@ -448,6 +466,7 @@ The page polls `GET /api/status` once per second:
            "percent": 79.0, "low": false, "empty": false, "shots_left": 43,
            "refills": 3},
   "other": [],
+  "window_seconds": 120.0,
   "uptime": 412.3
 }
 ```

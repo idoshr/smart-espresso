@@ -74,9 +74,6 @@ def build_display(enabled=None, factory=None, sim=None):
         return None
 
 
-display = build_display()
-
-
 # Mobile status dashboard, served on the local network.
 WEB_ENABLE = strtobool(os.environ.get("WEB_ENABLE") or True)
 web_server = None
@@ -216,10 +213,6 @@ def build_analog_devices(adc_type=None, flow_sample_interval=_UNSET, adc_builder
     return sensors
 
 
-# Optional DHT22 / AM2302 ambient temperature & humidity sensor (GPIO).
-digital_sensors = build_digital_sensors()
-
-
 def parse_args(argv=None):
     parser = argparse.ArgumentParser(description="Smart espresso monitor")
     parser.add_argument(
@@ -269,7 +262,9 @@ def main(argv=None):
 
         recorder = CsvRecorder(args.record)
     try:
-        panel = display
+        # Sensors are built here, after ``--sim`` is known. Building them at
+        # import tried the real DHT and ADC drivers before the flag was parsed
+        # and printed a missing-driver warning for a simulator run.
         serve = web_server
         if sim:
             from smart_espresso.sim.machine import SimulatedMachine
@@ -302,7 +297,8 @@ def main(argv=None):
                 )
         else:
             devices = build_analog_devices()
-            digital = digital_sensors
+            digital = build_digital_sensors()
+            panel = build_display()
         se = SmartEspresso(
             analog_devices=devices,
             digital_sensors=digital,
