@@ -349,7 +349,7 @@
     display: flex;
     align-items: center;
     gap: 10px;
-    margin-top: 10px;
+    margin-top: 12px;
   }
 
   .warm-track {
@@ -378,11 +378,12 @@
   /* The reference pull, kept as a chip: dialing in means comparing.
      One line, even if that means the tail yields to an ellipsis. */
   .last-pull {
-    align-self: flex-start;
+    display: inline-block;
     max-width: 100%;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    vertical-align: top;
     font-family: var(--mono);
     font-size: 12px;
     letter-spacing: .06em;
@@ -390,7 +391,7 @@
     border: 1px solid var(--edge);
     border-radius: 999px;
     padding: 4px 10px;
-    margin-top: 12px;
+    margin-top: 16px;
   }
 
   .lamp {
@@ -415,7 +416,7 @@
     flex-direction: column;
     align-items: center;
     text-align: center;
-    margin-top: 14px;
+    margin-top: 12px;
   }
 
   .shot b {
