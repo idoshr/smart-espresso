@@ -71,7 +71,9 @@ class MedianFilterADC(ADCInterface):
         reported until the window is full (a two-tick startup transient).
         """
         if not self._values:
-            return self.adc.read()
+            # No sample yet. Reading the ADC here would be an extra hardware
+            # conversion that is not stored in the window.
+            return 0.0
         if len(self._values) < self.window:
             return self._values[-1]
         return median(self._values)
@@ -80,6 +82,9 @@ class MedianFilterADC(ADCInterface):
     def voltage(self):
         """Median voltage of the recent samples."""
         if not self._voltages:
+            # The wrapped ADC's cached voltage, not a second conversion.
+            # ``filtered_value`` is what must not call ``read()`` on an
+            # empty window.
             return self.adc.voltage
         if len(self._voltages) < self.window:
             return self._voltages[-1]

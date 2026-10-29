@@ -56,6 +56,8 @@ class TestWorkflows(unittest.TestCase):
         self.assertNotIn("[dht]", text)
         self.assertNotIn("Adafruit_DHT==", text)
         self.assertIn("pytest", text)
+        self.assertIn("--cov=smart_espresso", text)
+        self.assertIn("--cov-fail-under=90", text)
 
     def test_lint_runs_pre_commit_on_pull_requests_and_main(self):
         text = (ROOT / ".github" / "workflows" / "linting.yml").read_text()
@@ -64,6 +66,7 @@ class TestWorkflows(unittest.TestCase):
         self.assertIn("- master", text)
         self.assertIn("pip install pre-commit", text)
         self.assertIn("pre-commit run --all-files", text)
+        self.assertIn("mypy smart_espresso main.py", text)
         self.assertNotIn("nox", text)
 
     def test_label_check_workflow_is_gone(self):

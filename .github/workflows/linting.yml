@@ -24,3 +24,7 @@ jobs:
           pip install pre-commit
       - name: Run pre-commit
         run: pre-commit run --all-files --show-diff-on-failure
+      - name: Type check
+        run: |
+          pip install mypy
+          mypy smart_espresso main.py

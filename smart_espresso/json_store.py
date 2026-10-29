@@ -12,6 +12,7 @@ import os
 import shutil
 import tempfile
 import time
+from typing import Optional
 
 
 def quarantine(path: str) -> str:
@@ -79,6 +80,7 @@ def atomic_write_json(path: str, payload) -> None:
     """
     directory = os.path.dirname(path) or "."
     os.makedirs(directory, exist_ok=True)
+    temp_path: Optional[str]
     handle, temp_path = tempfile.mkstemp(dir=directory, prefix=".tmp-")
     try:
         with os.fdopen(handle, "w", encoding="utf-8") as file:

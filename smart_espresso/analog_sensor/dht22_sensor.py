@@ -34,15 +34,19 @@ def _circuitpython_reader(pin: int):
     # pulseio is unreliable on Pi 4 / Bookworm. The bitbang path uses libgpiod.
     device = adafruit_dht.DHT22(gpio, use_pulseio=False)
 
-    def read():
-        # temperature's measure() also fills humidity, and a second property
-        # access inside the library's own 2 s window does not hit the wire.
-        temperature = device.temperature
-        humidity = device.humidity
-        return humidity, temperature
+    class _BoundRead:
+        def __init__(self, device):
+            self.device = device
 
-    read.device = device
-    return read
+        def __call__(self):
+            # temperature's measure() also fills humidity, and a second
+            # property access inside the library's own 2 s window does not
+            # hit the wire.
+            temperature = self.device.temperature
+            humidity = self.device.humidity
+            return humidity, temperature
+
+    return _BoundRead(device)
 
 
 class DHT22Sensor:

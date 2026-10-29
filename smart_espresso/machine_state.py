@@ -1,7 +1,7 @@
 """Classify what the espresso machine is doing from its live sensor readings."""
 import threading
 from time import localtime, monotonic
-from typing import Optional
+from typing import Any, Optional
 
 from smart_espresso.shot_history import ShotHistory
 
@@ -248,10 +248,10 @@ class MachineStateClassifier:
         # cannot wipe the record it is about to save. The usual case opens
         # immediately, before the first curve sample.
         self._open_after = False
-        self._deferred_sample = None
+        self._deferred_sample: Optional[tuple] = None
         # Set when a flow meter is feeding this classifier. Shot seconds and
         # millilitres then come from pulse timestamps, not the 1 s average.
-        self._flow_sensor = None
+        self._flow_sensor: Any = None
         self._shot_pulse_from: Optional[float] = None
         self._last_shot: Optional[dict] = None
         # Newest last; a short memory of recent pulls so the dashboard can
@@ -431,10 +431,12 @@ class MachineStateClassifier:
         """Track the boiler's rate of change (bar/s) with light smoothing."""
         if boiler_bar is None:
             return
-        if self._last_boiler_time is not None:
-            elapsed = now - self._last_boiler_time
+        last_boiler = self._last_boiler
+        last_time = self._last_boiler_time
+        if last_time is not None and last_boiler is not None:
+            elapsed = now - last_time
             if elapsed >= 0.25:  # ignore sub-quarter-second gaps: too noisy
-                rate = (boiler_bar - self._last_boiler) / elapsed
+                rate = (boiler_bar - last_boiler) / elapsed
                 self._boiler_rate += (rate - self._boiler_rate) * 0.4
                 self._last_boiler = boiler_bar
                 self._last_boiler_time = now
@@ -586,6 +588,8 @@ class MachineStateClassifier:
         keep the timer running.
         """
         sensor = self._flow_sensor
+        if sensor is None:
+            return flow_mls
         flowing = (
             sensor.pulses_within(now, self.brew_pulse_window) >= self.brew_pulse_count
         )
@@ -598,6 +602,8 @@ class MachineStateClassifier:
     def _measure_pulses(self, now: float) -> tuple[float, float]:
         sensor = self._flow_sensor
         start = self._shot_pulse_from
+        if sensor is None or start is None:
+            return self._shot_seconds, self._shot_ml
         count = sensor.pulses - sensor.count_before(start)
         if count < 0:
             count = 0

@@ -268,7 +268,7 @@ class ShotHistory:
         self._next_id = 1
         self._active: Optional[_OpenShot] = None
         self._cv = threading.Condition()
-        self._pending = None
+        self._pending: Optional[dict] = None
         self._generation = 0
         self._written = 0
         self._stop = False
@@ -511,8 +511,11 @@ class ShotHistory:
                 payload = self._pending
                 generation = self._generation
                 self._pending = None
+            path = self.state_path
+            if path is None:
+                return
             try:
-                atomic_write_json(self.state_path, payload)
+                atomic_write_json(path, payload)
             except OSError as error:
                 # The previous file is still in place. A later commit retries.
                 print(f"Could not save shot history to {self.state_path}: {error}")
