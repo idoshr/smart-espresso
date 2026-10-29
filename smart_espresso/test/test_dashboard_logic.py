@@ -245,6 +245,33 @@ class TestGlance:
         assert len(set(shapes.values())) == 5
 
 
+class TestTabs:
+    def test_hash_routes_including_a_shot_deep_link(self):
+        assert call("logic.parseRoute('#/shots/42')") == {
+            "tab": "shots",
+            "shotId": "42",
+        }
+        assert call("logic.parseRoute('#/shots')") == {"tab": "shots", "shotId": None}
+        assert call("logic.parseRoute('#/stats')") == {"tab": "stats", "shotId": None}
+        assert call("logic.parseRoute('#/care')") == {"tab": "care", "shotId": None}
+        assert call("logic.parseRoute('')") == {"tab": "now", "shotId": None}
+        assert call("logic.parseRoute('#/nope')") == {"tab": "now", "shotId": None}
+
+    def test_now_strip_keeps_the_last_five(self):
+        summary = call(
+            "logic.recentShotSummary("
+            "[{seconds:1},{seconds:2},{seconds:3},{seconds:4},"
+            "{seconds:5},{seconds:6},{seconds:7}], 5)"
+        )
+        assert [row["seconds"] for row in summary] == [3, 4, 5, 6, 7]
+
+    def test_care_badge_counts_tank_low_and_maintenance(self):
+        assert call("logic.careBadgeCount(true, false)") == 1
+        assert call("logic.careBadgeCount(false, true)") == 1
+        assert call("logic.careBadgeCount(true, true)") == 2
+        assert call("logic.careBadgeCount(false, false)") == 0
+
+
 class TestVerdicts:
     def test_three_verdicts_have_different_shapes_and_words(self):
         fast = call("logic.shotVerdict(22, 25, 30)")
@@ -301,6 +328,9 @@ class TestShippedShell:
         assert "body.stale" not in self.page
 
     def test_offline_banner_is_a_status_with_retry(self):
+        assert 'role="tablist"' in self.page
+        assert 'aria-selected="true"' in self.page
+        assert ">Now<" in self.page
         assert 'id="offline-banner" role="status"' in self.page
         assert "Retry now" in self.page
         assert "Is the Pi on? Same Wi-Fi?" in call("logic.offlineMessage(null, 0)")

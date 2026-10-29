@@ -300,6 +300,30 @@
     };
   }
 
+  const TABS = { now: true, shots: true, stats: true, care: true };
+
+  function parseRoute(hash) {
+    const parts = String(hash || "")
+      .replace(/^#/, "")
+      .split("/")
+      .filter(Boolean);
+    const head = parts[0];
+    if (!TABS[head]) return { tab: "now", shotId: null };
+    const shotId = head === "shots" && parts[1] ? String(parts[1]) : null;
+    return { tab: head, shotId: shotId };
+  }
+
+  function recentShotSummary(history, limit) {
+    const rows = Array.isArray(history) ? history : [];
+    const count = typeof limit === "number" ? limit : 5;
+    if (rows.length <= count) return rows.slice();
+    return rows.slice(rows.length - count);
+  }
+
+  function careBadgeCount(tankLow, maintenanceDue) {
+    return (tankLow ? 1 : 0) + (maintenanceDue ? 1 : 0);
+  }
+
   function nearestTickIndex(centers, x) {
     if (!centers || !centers.length || typeof x !== "number") return -1;
     let best = 0;
@@ -344,6 +368,9 @@
     livePresentation: livePresentation,
     shownState: shownState,
     nearestTickIndex: nearestTickIndex,
+    parseRoute: parseRoute,
+    recentShotSummary: recentShotSummary,
+    careBadgeCount: careBadgeCount,
     READY_MIN_BAR: READY_MIN_BAR,
   };
 });

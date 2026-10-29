@@ -187,9 +187,10 @@
   body {
     margin: 0 auto;
     max-width: 460px;
-    /* Top inset keeps the header clear of the notch in standalone mode. */
-    padding: calc(22px + env(safe-area-inset-top)) 16px
-             calc(30px + env(safe-area-inset-bottom));
+    /* Top inset keeps the header clear of the notch. Bottom inset clears
+       the tab bar and the home indicator. */
+    padding: calc(16px + env(safe-area-inset-top)) 16px
+             calc(48px + 16px + env(safe-area-inset-bottom));
     background: var(--bg);
     color: var(--ink);
     font-family: var(--body);
@@ -201,7 +202,7 @@
     align-items: center;
     justify-content: space-between;
     gap: 12px;
-    margin-bottom: 18px;
+    margin-bottom: 12px;
     padding: 0 2px;
   }
 
@@ -274,6 +275,8 @@
     text-transform: uppercase;
     color: var(--ink-soft);
   }
+
+  a.title { color: inherit; text-decoration: none; }
 
   .note {
     font-family: var(--mono);
@@ -1076,7 +1079,8 @@
   body.glance #skeletons,
   body.glance .last-pull,
   body.glance footer,
-  body.glance .warm {
+  body.glance .warm,
+  body.glance .tabbar {
     display: none !important;
   }
 
@@ -1091,6 +1095,58 @@
 
   body.glance .shot small {
     font-size: clamp(1.15rem, 4.5vh, 8vh);
+  }
+
+  /* Bottom tabs. The home-indicator inset is padding, so the 48 px
+     targets sit above it in the installed app. */
+  .tabbar {
+    position: fixed;
+    z-index: 20;
+    left: 50%;
+    bottom: 0;
+    transform: translateX(-50%);
+    display: flex;
+    width: 100%;
+    max-width: 460px;
+    background: var(--bg);
+    border-top: 1px solid var(--edge);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .tabbar [role="tab"] {
+    position: relative;
+    flex: 1 1 0;
+    min-height: 48px;
+    margin: 0;
+    padding: 6px 4px;
+    border: 0;
+    background: transparent;
+    color: var(--ink-soft);
+    font-family: var(--body);
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .tabbar [aria-selected="true"] { color: var(--ink); }
+
+  .tabbar [role="tab"]:focus-visible {
+    outline: 2px solid var(--ink-soft);
+    outline-offset: -2px;
+  }
+
+  .tab-badge {
+    display: inline-block;
+    min-width: 16px;
+    margin-left: 4px;
+    padding: 0 4px;
+    border-radius: 999px;
+    background: var(--clay-ink);
+    color: var(--bg);
+    font-family: var(--mono);
+    font-size: 11px;
+    line-height: 16px;
+    vertical-align: 1px;
   }
 
   @media (prefers-reduced-motion: reduce) {
@@ -1129,7 +1185,7 @@
   <div class="live" role="status"><span class="dot off" id="dot"></span><span id="conn">connecting…</span></div>
 </header>
 
-<div class="stack">
+<div class="stack" id="panel-now" role="tabpanel" aria-labelledby="tab-now">
   <div class="card state" id="state" data-state="unknown">
     <div class="state-band" id="state-band">
       <span class="lamp" id="lamp"></span>
@@ -1172,46 +1228,6 @@
 
   <div class="rings" id="rings"></div>
 
-  <div class="card" id="pulls-card" hidden>
-    <div class="card-head">
-      <span class="title">Recent shots</span>
-      <span class="note" id="pulls-note" role="status"></span>
-    </div>
-    <div class="pulls-track" id="pulls-track" role="listbox" tabindex="0"
-         aria-label="Recent shots" aria-orientation="horizontal">
-      <u id="pulls-window"></u>
-    </div>
-    <div class="axis"><span>0 s</span><span id="pulls-axis-end">40 s</span></div>
-    <p class="pulls-legend">
-      <span><i class="mark fast" aria-hidden="true"></i> short</span>
-      <span><i class="mark good" aria-hidden="true"></i> on target</span>
-      <span><i class="mark long" aria-hidden="true"></i> long</span>
-    </p>
-  </div>
-
-  <div class="card" id="history-card" hidden>
-    <div class="card-head">
-      <span class="title">Shot history</span>
-      <span class="note" id="history-note"></span>
-    </div>
-    <div class="history-list" id="history-list"></div>
-  </div>
-
-  <div class="card" id="flow-card" hidden>
-    <div class="card-head">
-      <span class="title" id="flow-title">Water used, last 2 min</span>
-      <span class="note" id="flow-window"></span>
-    </div>
-    <div class="figure"><b id="flow-recent">0</b><span>ml</span></div>
-    <div class="meta">
-      <span>now <b id="flow-rate">0.0 ml/s</b></span>
-      <span>all time <b id="flow-total">0 ml</b></span>
-      <span>peak <b id="flow-peak">0.0 ml/s</b></span>
-    </div>
-    <div class="chart" id="flow-chart" aria-hidden="true"></div>
-    <div class="axis"><span id="flow-axis-start">-2:00</span><span>now</span></div>
-  </div>
-
   <div class="card" id="tank-card" hidden>
     <div class="card-head">
       <span class="title">Water tank</span>
@@ -1230,11 +1246,65 @@
     </div>
   </div>
 
+  <div class="card" id="pulls-card" hidden>
+    <div class="card-head">
+      <a class="title" href="#/shots">Recent shots</a>
+      <span class="note" id="pulls-note" role="status"></span>
+    </div>
+    <div class="pulls-track" id="pulls-track" role="listbox" tabindex="0"
+         aria-label="Recent shots" aria-orientation="horizontal">
+      <u id="pulls-window"></u>
+    </div>
+    <div class="axis"><span>0 s</span><span id="pulls-axis-end">40 s</span></div>
+    <p class="pulls-legend">
+      <span><i class="mark fast" aria-hidden="true"></i> short</span>
+      <span><i class="mark good" aria-hidden="true"></i> on target</span>
+      <span><i class="mark long" aria-hidden="true"></i> long</span>
+    </p>
+  </div>
+
+  <div class="card" id="flow-card" hidden>
+    <div class="card-head">
+      <span class="title" id="flow-title">Water used, last 2 min</span>
+      <span class="note" id="flow-window"></span>
+    </div>
+    <div class="figure"><b id="flow-recent">0</b><span>ml</span></div>
+    <div class="meta">
+      <span>now <b id="flow-rate">0.0 ml/s</b></span>
+      <span>all time <b id="flow-total">0 ml</b></span>
+      <span>peak <b id="flow-peak">0.0 ml/s</b></span>
+    </div>
+    <div class="chart" id="flow-chart" aria-hidden="true"></div>
+    <div class="axis"><span id="flow-axis-start">-2:00</span><span>now</span></div>
+  </div>
+
+</div>
+
+<div class="stack" id="panel-shots" role="tabpanel" aria-labelledby="tab-shots" hidden>
+  <div class="card" id="history-card" hidden>
+    <div class="card-head">
+      <span class="title">Shot history</span>
+      <span class="note" id="history-note"></span>
+    </div>
+    <div class="history-list" id="history-list"></div>
+  </div>
+</div>
+
+<div class="stack" id="panel-stats" role="tabpanel" aria-labelledby="tab-stats" hidden></div>
+
+<div class="stack" id="panel-care" role="tabpanel" aria-labelledby="tab-care" hidden>
   <div class="card" id="other-card" hidden>
     <div class="card-head"><span class="title">Room</span></div>
     <div class="rows" id="other-rows"></div>
   </div>
 </div>
+
+<nav class="tabbar" role="tablist" aria-label="Smart Espresso">
+  <button type="button" role="tab" id="tab-now" aria-selected="true" aria-controls="panel-now" tabindex="0">Now</button>
+  <button type="button" role="tab" id="tab-shots" aria-selected="false" aria-controls="panel-shots" tabindex="-1">Shots</button>
+  <button type="button" role="tab" id="tab-stats" aria-selected="false" aria-controls="panel-stats" tabindex="-1">Stats</button>
+  <button type="button" role="tab" id="tab-care" aria-selected="false" aria-controls="panel-care" tabindex="-1">Care<span class="tab-badge" id="care-badge" hidden></span></button>
+</nav>
 
 <footer id="footer">never connected</footer>
 
@@ -1635,9 +1705,10 @@ let pullHistory = [];
 let selectedPull = -1;
 
 function renderPulls(history) {
+  const summary = DashboardLogic.recentShotSummary(history, 5);
   const cardEl = document.getElementById('pulls-card');
-  cardEl.hidden = !history.length;
-  if (!history.length) {
+  cardEl.hidden = !summary.length;
+  if (!summary.length) {
     pullHistory = [];
     selectedPull = -1;
     // Forget the signature too: a pull that reappears with the same
@@ -1650,10 +1721,10 @@ function renderPulls(history) {
   // sequence itself changes (a new pull, or one aging out of the memory).
   // The yield rides along in the signature: two pulls of the same length
   // with different volumes must still redraw the ticks.
-  const sig = history.map(s => `${s.seconds}:${s.ml}`).join(',');
+  const sig = summary.map(s => `${s.seconds}:${s.ml}`).join(',');
   if (sig !== pullsSig) {
     pullsSig = sig;
-    pullHistory = history;
+    pullHistory = summary;
     selectedPull = -1;   // a rebuilt strip has nothing selected
     document.getElementById('pulls-track').removeAttribute('aria-activedescendant');
 
@@ -1661,7 +1732,7 @@ function renderPulls(history) {
 
     const track = document.getElementById('pulls-track');
     track.querySelectorAll('i').forEach(tick => tick.remove());
-    history.forEach((shot, i) => {
+    summary.forEach((shot, i) => {
       const verdict = verdictOf(shot.seconds);
       const tick = document.createElement('i');
       tick.className = `mark ${verdict.key}${i === history.length - 1 ? ' now' : ''}`;
@@ -1686,6 +1757,7 @@ function renderPulls(history) {
   note.textContent = sel
     ? `${sel.seconds.toFixed(0)} s · ${sel.ml.toFixed(0)} ml · ${verdictOf(sel.seconds).label}`
     : `${history.length} shot${history.length === 1 ? '' : 's'}`;
+  // The note keeps the full count. The strip itself is only the last five.
 }
 
 function selectPull(index, toggle) {
@@ -1714,6 +1786,17 @@ const CURVE_FLOOR = { head_bar: 12, boiler_bar: 2, flow_mls: 3 };
 let historySig = '';
 let historyShots = [];
 let selectedShotId = null;
+let pendingShotId = null;
+
+function consumePendingShot() {
+  if (pendingShotId == null || !historyShots.length) return;
+  const shot = historyShots.find(item => String(item.id) === String(pendingShotId));
+  if (!shot) return;
+  pendingShotId = null;
+  selectedShotId = shot.id;
+  paintHistoryList();
+  showShot(shot.id, false);
+}
 const shotCache = new Map();
 let shotLoadToken = 0;
 
@@ -1746,12 +1829,16 @@ function renderHistory(block) {
     count === 1 ? '1 saved' : `${count} saved`;
 
   const sig = recent.map(shot => `${shot.id}:${shot.seconds}:${shot.ml}`).join(',');
-  if (sig === historySig) return;
+  if (sig === historySig) {
+    consumePendingShot();
+    return;
+  }
   historySig = sig;
   historyShots = recent;
   if (!recent.some(shot => shot.id === selectedShotId)) selectedShotId = null;
   paintHistoryList();
   if (selectedShotId != null) showShot(selectedShotId, false);
+  consumePendingShot();
 }
 
 function paintHistoryList() {
@@ -1962,6 +2049,7 @@ function renderTank(tank) {
   const warn = document.getElementById('tank-warn');
   warn.hidden = !tank.low;
   warn.textContent = tank.empty ? 'Tank is empty' : 'Time to refill';
+  paintCareBadge(tank.low);
 }
 
 // ---- pour chart ----------------------------------------------------------
@@ -2056,6 +2144,7 @@ function render(data) {
   const tankCard = document.getElementById('tank-card');
   tankCard.hidden = !DashboardLogic.sensorCardVisible(true, !!data.tank);
   if (data.tank) renderTank(data.tank);
+  else paintCareBadge(false);
 
   const otherCard = document.getElementById('other-card');
   otherCard.hidden = !data.other.length;
@@ -2342,6 +2431,60 @@ if ('wakeLock' in navigator) wakeBtn.hidden = false;
 // Axis labels are derived from the scale, never hardcoded, so they follow
 // it when the extraction window moves.
 document.getElementById('pulls-axis-end').textContent = `${SHOT_SCALE} s`;
+
+const TAB_IDS = ['now', 'shots', 'stats', 'care'];
+
+function showTab(name) {
+  TAB_IDS.forEach(tab => {
+    const on = tab === name;
+    document.getElementById('panel-' + tab).hidden = !on;
+    const button = document.getElementById('tab-' + tab);
+    button.setAttribute('aria-selected', String(on));
+    button.tabIndex = on ? 0 : -1;
+  });
+}
+
+function paintCareBadge(tankLow) {
+  const count = DashboardLogic.careBadgeCount(!!tankLow, false);
+  const badge = document.getElementById('care-badge');
+  badge.hidden = count === 0;
+  badge.textContent = count ? String(count) : '';
+}
+
+function applyRoute() {
+  const route = DashboardLogic.parseRoute(location.hash);
+  showTab(route.tab);
+  if (route.shotId != null) {
+    pendingShotId = route.shotId;
+    consumePendingShot();
+  }
+}
+
+TAB_IDS.forEach(tab => {
+  document.getElementById('tab-' + tab).addEventListener('click', () => {
+    const next = '#/' + tab;
+    if (location.hash === next) applyRoute();
+    else location.hash = next;
+  });
+});
+
+document.querySelector('.tabbar').addEventListener('keydown', (event) => {
+  const tabs = TAB_IDS.map(id => document.getElementById('tab-' + id));
+  const index = tabs.indexOf(document.activeElement);
+  if (index < 0) return;
+  let next = -1;
+  if (event.key === 'ArrowRight') next = (index + 1) % tabs.length;
+  else if (event.key === 'ArrowLeft') next = (index + tabs.length - 1) % tabs.length;
+  else if (event.key === 'Home') next = 0;
+  else if (event.key === 'End') next = tabs.length - 1;
+  else return;
+  event.preventDefault();
+  tabs[next].focus();
+  tabs[next].click();
+});
+
+window.addEventListener('hashchange', applyRoute);
+applyRoute();
 
 // One target for the whole strip. A tap (or the arrow keys) resolves to
 // the nearest pull, including when the marks sit closer than a thumb.
