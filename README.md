@@ -301,23 +301,24 @@ It shows:
 - **Machine state** (see below) as a full-width block you can read from
   across the kitchen: a 44 px label on a solid colour, with one secondary
   line (how long it has been ready, or boiler pressure against 0.8 bar
-  while it warms, plus a thin progress bar). While a shot is pulled, a
-  live timer shows yield and ratio; if you scroll away, a compact timer
+  while it warms, plus a thin progress bar). While a shot runs, a
+  live timer shows the yield; if you scroll away, a compact timer
   pins to the top edge. Entering the 25–30 s window buzzes once and
   flashes the card (the flash is skipped when the system asks for less
-  motion). Holding **awake** — or long-pressing the state card — switches
-  to glance mode: only that state and, during a shot, the timer.
-- **Today's pulls** in the header, so a glance answers how many shots the
+  motion). Holding **Keep screen on** — or long-pressing the state
+  card — switches to glance mode: only that state and, during a shot,
+  the timer.
+- **Today's shots** in the header, so a glance answers how many shots the
   machine has seen today (restored from the shot log after a restart, and
   reset at local midnight)
 - **Head pressure** and **Boiler pressure** on manometer dials, in bar,
   scaled to the working range with the target band marked and an
   over-pressure zone in red
-- **Recent pulls** as a strip. A filled dot is on target, an open left
+- **Recent shots** as a strip. A filled dot is on target, an open left
   chevron is fast, and a filled right chevron is long — the legend under
-  the strip uses the same shapes. A tap selects the nearest pull, even
+  the strip uses the same shapes. A tap selects the nearest shot, even
   when the marks sit on top of each other
-- **Shot history**: the pulls saved on the Pi, each with the time of day,
+- **Shot history**: the shots saved on the Pi, each with the time of day,
   the duration, the volume, and the verdict in words (fast, on target,
   long). Tap one to chart its head pressure and flow (and the boiler,
   when that sensor is fitted)
@@ -345,8 +346,9 @@ If three polls in a row fail, a banner says the machine can't be
 reached, how old the last reading is, and offers **Retry now**. Retry
 polls immediately and starts the backoff over; it does not pretend the
 outage is over. Readings already on screen stay at full contrast with a
-**stale** tag, and the shot timer does not keep counting. **Tank
-filled** cannot reset the count while the machine is unreachable, and a
+**Last seen** tag that names the age of that reading, and the shot
+timer does not keep counting. **Tank filled** cannot reset the count
+while the machine is unreachable, and a
 failed reset explains why in a toast. To add your own badge,
 drop `logo.svg` into `smart_espresso/web/static/` and put an
 `<img src="/logo.svg">` in the header of
@@ -359,12 +361,12 @@ from the live readings, in this priority order:
 
 | State | Condition | Meaning |
 |-------|-----------|---------|
-| `brewing` | 2 pulses within 1 s, or flow ≥ 0.3 ml/s without a meter; or head ≥ 4.5 bar; or head ≥ 2 bar within 5 s of flow | "Pulling shot" |
+| `brewing` | 2 pulses within 1 s, or flow ≥ 0.3 ml/s without a meter; or head ≥ 4.5 bar; or head ≥ 2 bar within 5 s of flow | "Brewing a shot" |
 | `steaming` | Boiler falling faster than 0.02 bar/s | "Steaming milk" |
 | `off` | Boiler < 0.15 bar | "Resting" — machine is not heating |
 | `heating` | Boiler < 0.8 bar | "Warming up" |
 | `overpressure` | Boiler > 1.6 bar | "Pressure high" — check the pressurestat |
-| `ready` | Boiler in the 0.8–1.6 bar band | "Ready to pull" |
+| `ready` | Boiler in the 0.8–1.6 bar band | "Ready for a shot" |
 
 A state must hold for 0.8 s before it is published, so one noisy ADC sample
 cannot make the dashboard flicker; `brewing` is the exception and is published
@@ -378,15 +380,15 @@ seconds run from the first of those pulses to the last, and a gap longer
 than 1 s is left out. Recorded millilitres are the pulses in that span,
 including the ones just before the state changed. The 1 s average is what
 the flow chart and Home Assistant show. Pump-level head pressure, or
-brew-band pressure within 5 s of flow, also publishes "Pulling shot". A
+brew-band pressure within 5 s of flow, also publishes "Brewing a shot". A
 saved shot also needs at least 2 s of flow, 5 ml, and a head peak at the
 brew threshold (2 bar). A flush or
 rinse with no brew pressure, and a backflush that barely moves water, update
 the tank and are not shots. A pause that stays above 0.5 bar is the same
-shot when flow returns within 10 s. Once the head vents, the next pull is a
+shot when flow returns within 10 s. Once the head vents, the next one is a
 new shot. The dashboard marks the 25–30 s window on the shot timer, so you
-can see a pull running fast or long while it happens. Saved rows keep that
-verdict in words, not only in colour. That same pull is appended to the shot
+can see a shot running fast or long while it happens. Saved rows keep that
+verdict in words, not only in colour. That same shot is appended to the shot
 history below.
 
 ### Shot history
@@ -450,7 +452,7 @@ An unknown id answers `404`.
 ### Water Tank
 
 [`water_tank.py`](smart_espresso/water_tank.py) subtracts the flow sensor's
-lifetime volume from a baseline, so _used_ is the water drawn since the tank
+lifetime volume from a baseline, so _used_ is the water used since the tank
 was last filled. Pressing **Tank filled** (a two-tap confirm, so a stray tap
 cannot wipe the count) calls `POST /api/tank/reset`, which moves the baseline
 to the current total.
@@ -469,7 +471,7 @@ The page polls `GET /api/status` once per second:
   "flow": [{"name": "Brew", "recent_ml": 36.0, "total_ml": 128.4,
             "flow_rate_lpm": 0.108, "flow_rate_mls": 1.8, "sample_hz": 200.0,
             "window_seconds": 120.0, "chart": [0.0, 1.2]}],
-  "machine": {"state": "brewing", "label": "Pulling shot", "severity": "active",
+  "machine": {"state": "brewing", "label": "Brewing a shot", "severity": "active",
               "since_seconds": 12.4, "boiler_rate": 0.0,
               "shot": {"seconds": 12.4, "ml": 22.1},
               "last_shot": {"seconds": 27.0, "ml": 38.4},

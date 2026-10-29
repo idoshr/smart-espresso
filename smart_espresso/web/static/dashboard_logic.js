@@ -221,6 +221,35 @@
 
   // Centers and the tap are in the same coordinate space. Equal distances
   // keep the earlier tick, so a point dead-centre never jumps to the right.
+  // The stale tag names the real age of the last applied reading.
+  function staleTagText(lastSeenAt, now) {
+    if (lastSeenAt == null || typeof now !== "number") return "Last seen —";
+    const ago = Math.max(0, Math.round((now - lastSeenAt) / 1000));
+    return "Last seen " + ago + " s ago";
+  }
+
+  // A flush is water moving without brew-band head pressure. It must not
+  // wear the shot label, the 25–30 s target, or the ratio.
+  const BREW_HEAD_BAR = 2;
+
+  function isFlush(machine, headBar) {
+    if (!machine || machine.state !== "brewing") return false;
+    if (typeof headBar !== "number" || !isFinite(headBar)) return false;
+    return headBar < BREW_HEAD_BAR;
+  }
+
+  function livePresentation(machine, headBar) {
+    if (isFlush(machine, headBar)) {
+      return { label: "Flushing", showShot: false, showTarget: false };
+    }
+    const shot = !!(machine && machine.shot);
+    return {
+      label: machine && machine.label ? machine.label : "",
+      showShot: shot,
+      showTarget: shot,
+    };
+  }
+
   function nearestTickIndex(centers, x) {
     if (!centers || !centers.length || typeof x !== "number") return -1;
     let best = 0;
@@ -259,6 +288,9 @@
     clearShotWindow: clearShotWindow,
     showOverBand: showOverBand,
     shotVerdict: shotVerdict,
+    staleTagText: staleTagText,
+    isFlush: isFlush,
+    livePresentation: livePresentation,
     nearestTickIndex: nearestTickIndex,
     READY_MIN_BAR: READY_MIN_BAR,
   };

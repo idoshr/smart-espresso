@@ -128,6 +128,24 @@ class TestGlance:
         eta = call("logic.warmingEtaSeconds(0.6, 150)")
         assert eta is not None and eta > 0
 
+    def test_stale_tag_names_the_real_age(self):
+        assert call("logic.staleTagText(1000, 13000)") == "Last seen 12 s ago"
+        assert call("logic.staleTagText(null, 13000)") == "Last seen —"
+
+    def test_a_flush_is_not_presented_as_a_shot(self):
+        flushing = call(
+            "logic.livePresentation("
+            "{state:'brewing', label:'Brewing a shot', shot:{seconds:4, ml:24}}, 0.4)"
+        )
+        assert flushing == {"label": "Flushing", "showShot": False, "showTarget": False}
+        shot = call(
+            "logic.livePresentation("
+            "{state:'brewing', label:'Brewing a shot', shot:{seconds:12, ml:18}}, 9)"
+        )
+        assert shot["label"] == "Brewing a shot"
+        assert shot["showShot"] is True
+        assert shot["showTarget"] is True
+
     def test_over_band_hides_until_the_reading_nears_it(self):
         assert call("logic.showOverBand(0, 8)") is False
         assert call("logic.showOverBand(7.1, 8)") is False

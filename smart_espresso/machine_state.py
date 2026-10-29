@@ -22,11 +22,11 @@ class MachineState:
     LABELS = {
         OFF: "Resting",
         HEATING: "Warming up",
-        READY: "Ready to pull",
-        BREWING: "Pulling shot",
+        READY: "Ready for a shot",
+        BREWING: "Brewing a shot",
         STEAMING: "Steaming milk",
         OVERPRESSURE: "Pressure high",
-        UNKNOWN: "No reading",
+        UNKNOWN: "No sensor reading",
     }
 
     # Rendered as a colour/severity band in the UI.

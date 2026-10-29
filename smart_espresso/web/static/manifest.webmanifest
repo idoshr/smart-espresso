@@ -1,6 +1,6 @@
 {
-  "name": "Espresso Bar Status",
-  "short_name": "Espresso",
+  "name": "Smart Espresso",
+  "short_name": "Smart Espresso",
   "id": "/",
   "start_url": "/",
   "display": "standalone",
