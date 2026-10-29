@@ -354,13 +354,18 @@ class TestShotSheet:
         assert "sheet-skel" in self.page
         assert "focus({ preventScroll: true })" in self.page
 
-    def test_share_notes_and_hints_keep_a_slot(self):
-        assert ">Dose and notes<" in self.page
-        assert ">Hints<" in self.page
+    def test_share_keeps_a_slot_and_ratio_stays_off_the_sheet(self):
         assert ">Share<" in self.page
-        assert 'id="sheet-notes" disabled' in self.page
-        assert 'id="sheet-hints" disabled' in self.page
         assert 'id="sheet-share" disabled' in self.page
+        assert ">Dose and notes<" not in self.page
+        assert ">Hints<" not in self.page
+        assert ">Ratio<" not in self.page
+        assert ">Yield<" not in self.page
+        assert ">Peak bar<" not in self.page
+        assert ">Water used<" in self.page
+        assert ">Peak pressure<" in self.page
+        assert "TODO(#26)" in self.page
+        assert "TODO(#27)" in self.page
 
     def test_one_chart_shares_time_and_shades_the_window(self):
         model = call(

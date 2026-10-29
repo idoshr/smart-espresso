@@ -785,8 +785,7 @@
   }
 
   /* Shot detail is a sheet over the page, so the list underneath does not
-     jump when a row opens. Dose, ratio, notes, hints and share keep their
-     places until those features exist. */
+     jump when a row opens. Share keeps its place until that feature exists. */
   .shot-sheet {
     position: fixed;
     inset: 0;
@@ -1431,8 +1430,8 @@
     </div>
     <div class="sheet-scroll" id="sheet-body"></div>
     <div class="sheet-actions">
-      <button type="button" class="sheet-slot" id="sheet-notes" disabled>Dose and notes</button>
-      <button type="button" class="sheet-slot" id="sheet-hints" disabled>Hints</button>
+      <!-- TODO(#26): dose and notes editor. -->
+      <!-- TODO(#27): hint card. -->
       <button type="button" class="sheet-slot" id="sheet-share" disabled>Share</button>
     </div>
   </div>
@@ -2288,6 +2287,7 @@ function paintShot(detail, shot) {
   } else {
     chart = `<p class="history-meta" id="sheet-summary">${escapeHtml(summary)}</p>`;
   }
+  // TODO(#26): ratio stays off this sheet until a dose is stored.
   detail.innerHTML =
     `<div class="sheet-hero">` +
     `<div><b id="sheet-duration">${escapeHtml(DashboardLogic.secondsText(seconds))}</b>` +
@@ -2295,9 +2295,8 @@ function paintShot(detail, shot) {
     `<span class="verdict-chip ${verdict.key}">${escapeHtml(verdict.label)}</span></div>` +
     `<div class="sheet-grid">` +
     `<div><span>Dose</span><b>${missing}</b></div>` +
-    `<div><span>Yield</span><b>${escapeHtml(ml.toFixed(1))} ml</b></div>` +
-    `<div><span>Ratio</span><b>${missing}</b></div>` +
-    `<div><span>Peak bar</span><b>${escapeHtml(peak)}</b></div>` +
+    `<div><span>Water used</span><b>${escapeHtml(ml.toFixed(1))} ml</b></div>` +
+    `<div><span>Peak pressure</span><b>${escapeHtml(peak)}</b></div>` +
     `</div>${chart}`;
   if (openCurve) drawScrub(openCurve.index);
 }
