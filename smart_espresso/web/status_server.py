@@ -180,112 +180,24 @@ class StatusServer:
         instead of the previous sample.
         """
         now = monotonic()
-        pressure = []
-        flow = []
-        other = []
-        head_bar = None
-        boiler_bar = None
-        total_ml = 0.0
-        flow_rate_mls = 0.0
-        saw_flow = False
-        saw_flow_ok = False
-        flow_sensor = None
-
-        for sensor in sensors:
-            name = getattr(sensor, "name", "sensor")
-            ok = _reading_ok(health, name)
-            health_fields = _health_fields(health, name)
-            if isinstance(sensor, PressureAnalogSensor):
-                bar = sensor.bar if ok else None
-                pressure.append(
-                    {
-                        "name": name,
-                        "bar": None if bar is None else round(bar, 2),
-                        "max_bar": round(sensor.max_pressure_mpa * 10, 1),
-                        "health": health_fields,
-                    }
-                )
-                if not ok:
-                    if "boiler" in name.lower() or "steam" in name.lower():
-                        boiler_bar = None
-                    continue
-                if "boiler" in name.lower() or "steam" in name.lower():
-                    boiler_bar = bar
-                elif head_bar is None:
-                    head_bar = bar
-            elif isinstance(sensor, WaterFlowAnalogSensor):
-                saw_flow = True
-                if not ok:
-                    flow.append(
-                        {
-                            "name": name,
-                            "total_ml": None,
-                            "flow_rate_lpm": None,
-                            "flow_rate_mls": None,
-                            "sample_hz": _rounded_hz(sensor.sample_hz),
-                            "health": health_fields,
-                        }
-                    )
-                    continue
-                saw_flow_ok = True
-                if flow_sensor is None:
-                    flow_sensor = sensor
-                liters = sensor.liter
-                self._record_flow(name, now, liters)
-                sensor_ml = liters * 1000
-                sensor_mls = sensor.flow_rate * 1000 / 60
-                total_ml += sensor_ml
-                flow_rate_mls += sensor_mls
-                flow.append(
-                    {
-                        "name": name,
-                        "total_ml": round(sensor_ml, 1),
-                        "flow_rate_lpm": round(sensor.flow_rate, 3),
-                        "flow_rate_mls": round(sensor_mls, 1),
-                        "sample_hz": _rounded_hz(sensor.sample_hz),
-                        "health": health_fields,
-                    }
-                )
-            else:
-                other.append(
-                    {
-                        "name": name,
-                        "message": sensor_text(sensor, ok),
-                        "health": health_fields,
-                    }
-                )
-
-        # A failed flow sensor must not report a lifetime total of 0: the
-        # tank would treat that as a reset and the next good sample as a
-        # full tank of new water.
-        flow_failed = saw_flow and not saw_flow_ok
-        if flow_failed:
-            classifier_flow = None
-            classifier_total = None
-            flow_sensor = None
-        else:
-            classifier_flow = flow_rate_mls
-            classifier_total = total_ml
-
-        # Both keep their own lock, so they are updated outside self._lock:
-        # nesting would drag the tank's disk write into every reader's path.
-        # flow_rate_mls above is the 1 s average for the chart. The classifier
-        # times the shot from the meter's pulses when flow_sensor is set.
+        readings = collect_sensor_readings(sensors, health)
         self.classifier.update(
-            head_bar,
-            boiler_bar,
-            classifier_flow,
-            classifier_total,
-            flow_sensor=flow_sensor,
+            readings["head_bar"],
+            readings["boiler_bar"],
+            readings["flow_mls"],
+            readings["total_ml"],
+            flow_sensor=readings["flow_sensor"],
         )
-        if not flow_failed:
-            self.tank.update(total_ml)
+        if readings["tank_ml"] is not None:
+            self.tank.update(readings["tank_ml"])
+        for name, liters in readings["flow_points"]:
+            self._record_flow(name, now, liters)
 
         with self._lock:
             self._snapshot = {
-                "pressure": pressure,
-                "flow": flow,
-                "other": other,
+                "pressure": readings["pressure"],
+                "flow": readings["flow"],
+                "other": readings["other"],
                 "uptime": round(now - self._started_at, 1),
             }
 
@@ -435,6 +347,117 @@ def _rounded_hz(sample_hz: Optional[float]):
     if sample_hz is None:
         return None
     return round(sample_hz, 1)
+
+
+def collect_sensor_readings(sensors, health) -> dict:
+    """Turn one render tick into classifier and tank inputs.
+
+    Shared by the status server and a headless ``SmartEspresso`` so
+    ``WEB_ENABLE=false`` still tracks state, the tank and shot history.
+    """
+    pressure = []
+    flow = []
+    other = []
+    head_bar = None
+    boiler_bar = None
+    total_ml = 0.0
+    flow_rate_mls = 0.0
+    saw_flow = False
+    saw_flow_ok = False
+    flow_sensor = None
+    flow_points = []
+
+    for sensor in sensors:
+        name = getattr(sensor, "name", "sensor")
+        ok = _reading_ok(health, name)
+        health_fields = _health_fields(health, name)
+        if isinstance(sensor, PressureAnalogSensor):
+            bar = sensor.bar if ok else None
+            pressure.append(
+                {
+                    "name": name,
+                    "bar": None if bar is None else round(bar, 2),
+                    "max_bar": round(sensor.max_pressure_mpa * 10, 1),
+                    "health": health_fields,
+                }
+            )
+            if not ok:
+                if "boiler" in name.lower() or "steam" in name.lower():
+                    boiler_bar = None
+                continue
+            if "boiler" in name.lower() or "steam" in name.lower():
+                boiler_bar = bar
+            elif head_bar is None:
+                head_bar = bar
+        elif isinstance(sensor, WaterFlowAnalogSensor):
+            saw_flow = True
+            if not ok:
+                flow.append(
+                    {
+                        "name": name,
+                        "total_ml": None,
+                        "flow_rate_lpm": None,
+                        "flow_rate_mls": None,
+                        "sample_hz": _rounded_hz(sensor.sample_hz),
+                        "health": health_fields,
+                    }
+                )
+                continue
+            saw_flow_ok = True
+            if flow_sensor is None:
+                flow_sensor = sensor
+            liters = sensor.liter
+            flow_points.append((name, liters))
+            sensor_ml = liters * 1000
+            sensor_mls = sensor.flow_rate * 1000 / 60
+            total_ml += sensor_ml
+            flow_rate_mls += sensor_mls
+            flow.append(
+                {
+                    "name": name,
+                    "total_ml": round(sensor_ml, 1),
+                    "flow_rate_lpm": round(sensor.flow_rate, 3),
+                    "flow_rate_mls": round(sensor_mls, 1),
+                    "sample_hz": _rounded_hz(sensor.sample_hz),
+                    "health": health_fields,
+                }
+            )
+        else:
+            other.append(
+                {
+                    "name": name,
+                    "message": sensor_text(sensor, ok),
+                    "health": health_fields,
+                }
+            )
+
+    # A failed flow sensor must not report a lifetime total of 0: the
+    # tank would treat that as a reset and the next good sample as a
+    # full tank of new water.
+    flow_failed = saw_flow and not saw_flow_ok
+    if flow_failed:
+        classifier_flow = None
+        classifier_total = None
+        flow_sensor = None
+        tank_ml = None
+    else:
+        classifier_flow = flow_rate_mls
+        classifier_total = total_ml
+        tank_ml = total_ml
+
+    return {
+        "pressure": pressure,
+        "flow": flow,
+        "other": other,
+        "head_bar": head_bar,
+        "boiler_bar": boiler_bar,
+        "flow_mls": classifier_flow,
+        "total_ml": classifier_total,
+        "tank_ml": tank_ml,
+        "flow_sensor": flow_sensor,
+        "flow_failed": flow_failed,
+        "flow_points": flow_points,
+    }
 
 
 def _parse_limit(raw: Optional[str]):

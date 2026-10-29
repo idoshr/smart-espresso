@@ -179,6 +179,21 @@ class WaterTank:
             "refills": refills,
         }
 
+    def save(self) -> None:
+        """Write the counter immediately, ignoring ``save_interval``.
+
+        Shutdown calls this so the last seconds of a pour are not left only
+        in memory. An unchanged counter is not rewritten.
+        """
+        with self._lock:
+            unchanged = (
+                self._used_ml == self._saved_used_ml
+                and self._refills == self._saved_refills
+            )
+        if unchanged:
+            return
+        self._save()
+
     def _maybe_save(self) -> None:
         """Persist at most every save_interval, and only when something moved."""
         with self._lock:

@@ -123,14 +123,25 @@ pip3 install -e .
 
 ## Running on boot
 
-`deploy/smart-espresso.service` restarts the monitor if it ever exits.
-Copy it to `/etc/systemd/system/`, point `ExecStart` and `WorkingDirectory`
-at this checkout, and put secrets such as `HA_TOKEN` in
-`/etc/smart-espresso.env` (mode `0600`). Then:
+`deploy/smart-espresso.service` is a systemd unit with `Restart=always`
+and `RestartSec=2`, so the monitor comes back if it exits. `Type=notify`
+and `WatchdogSec=30` expect a ready ping and a watchdog ping from the
+render loop about every 10 s. `After=time-sync.target` and
+`Wants=time-sync.target` order startup after the time-sync service,
+because the Pi has no battery-backed clock.
+
+Copy the unit to `/etc/systemd/system/`, point `ExecStart` and
+`WorkingDirectory` at this checkout, and put secrets such as `HA_TOKEN`
+in `/etc/smart-espresso.env` (mode `0600`). Then:
 
 ```bash
 sudo systemctl enable --now smart-espresso.service
 ```
+
+SIGINT and SIGTERM flush the tank, close an open pull, and stop the flow
+sampler and DHT threads before the process exits. `WEB_ENABLE=false` still
+tracks machine state, the tank and shot history; only the HTTP server is
+absent.
 
 ## Configuration
 
@@ -297,7 +308,8 @@ It shows:
   motion). Holding **awake** — or long-pressing the state card — switches
   to glance mode: only that state and, during a shot, the timer.
 - **Today's pulls** in the header, so a glance answers how many shots the
-  machine has seen today (in memory; resets when the machine restarts)
+  machine has seen today (restored from the shot log after a restart, and
+  reset at local midnight)
 - **Head pressure** and **Boiler pressure** on manometer dials, in bar,
   scaled to the working range with the target band marked and an
   over-pressure zone in red
@@ -390,6 +402,11 @@ rinse, or backflush is left out. Each record stores:
 - headline peaks for head pressure, boiler pressure and flow
 - the curves, sampled about four times a second: head pressure, boiler
   pressure when that sensor is fitted, and flow rate
+- `clock_synced`: false when the wall clock was still before 2020, which
+  is what a Pi with no RTC reports until the clock is set
+
+A shot marked that way is re-stamped if the clock then steps forward by
+30 seconds or more while this process is running.
 
 `samples[].t` is elapsed time from the start of the pull, pauses included,
 so the chart shows the pressure profile as it happened. The duration above

@@ -4,6 +4,7 @@ import os
 from smart_espresso.analog_sensor.analog_sensor import MedianFilterADC
 from smart_espresso.analog_sensor.pressure_analog_sensor import PressureAnalogSensor
 from smart_espresso.analog_sensor.water_flow_sensor import WaterFlowAnalogSensor
+from smart_espresso.machine_state import MachineStateClassifier
 from smart_espresso.shot_history import DEFAULT_STATE_PATH as DEFAULT_SHOT_HISTORY_PATH
 from smart_espresso.shot_history import ShotHistory
 from smart_espresso.smart_espresso import SmartEspresso
@@ -299,12 +300,46 @@ def main(argv=None):
             devices = build_analog_devices()
             digital = build_digital_sensors()
             panel = build_display()
+        if serve is None:
+            # The dashboard is off, but the machine, tank and shot log still
+            # run. Sim uses its own files so it does not clobber the Pi's.
+            if sim:
+                tank_path = os.environ.get(
+                    "WATER_TANK_STATE", "~/.smart_espresso/sim_water_tank.json"
+                )
+                shot_path = os.environ.get(
+                    "SHOT_HISTORY_STATE",
+                    "~/.smart_espresso/sim_shot_history.json",
+                )
+            else:
+                tank_path = os.environ.get("WATER_TANK_STATE", DEFAULT_STATE_PATH)
+                shot_path = os.environ.get(
+                    "SHOT_HISTORY_STATE", DEFAULT_SHOT_HISTORY_PATH
+                )
+            tank = WaterTank(
+                capacity_ml=float(os.environ.get("WATER_TANK_ML", 2000)),
+                state_path=tank_path,
+            )
+            history = ShotHistory(
+                state_path=shot_path,
+                max_shots=int(
+                    os.environ.get("SHOT_HISTORY_MAX", ShotHistory.MAX_SHOTS)
+                ),
+            )
+            classifier = MachineStateClassifier(shot_history=history)
+        else:
+            tank = serve.tank
+            history = serve.shot_history
+            classifier = serve.classifier
         se = SmartEspresso(
             analog_devices=devices,
             digital_sensors=digital,
             client_ha=client_ha,
             display=panel,
             web_server=serve,
+            tank=tank,
+            shot_history=history,
+            classifier=classifier,
         )
         se.run()
     finally:
