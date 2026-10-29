@@ -61,6 +61,8 @@ jobs:
           print("core dependencies installed without Pi libraries")
           print(flask.__name__, PIL.__name__, requests.__name__)
           PY
+      - name: Install shellcheck
+        run: sudo apt-get update && sudo apt-get install -y shellcheck
       - name: Install test and device libraries
         run: pip install -e ".[test,pi]"
       - name: Run tests

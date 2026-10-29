@@ -97,18 +97,34 @@ output) → A2. See the usage example below.
 ## Installation
 
 smart-espresso is not published on PyPI yet. `pip install smart-espresso`
-fails. Clone the repository and install from that checkout.
-
-On a Raspberry Pi, install the hardware extras from the clone. The `dht`
-extra is separate: it is `adafruit-circuitpython-dht` (Blinka, and libgpiod
-on the Pi) and is imported only when a DHT22 is constructed. The core
-package and CI do not install it. A machine that only serves the dashboard
-can install the core package, with no GPIO or ADC libraries.
+fails. On a Raspberry Pi, one command clones the repo, creates a virtualenv,
+installs the `[pi,dht]` extras, and starts the unit file from
+`deploy/smart-espresso.service` on boot:
 
 ```bash
-# Enable interfaces
-sudo raspi-config  # Enable I2C and/or SPI
+curl -fsSL https://raw.githubusercontent.com/idoshr/smart-espresso/main/scripts/install.sh | sudo bash
+```
 
+Run that command again to upgrade in place. It recopies
+`deploy/smart-espresso.service`, reloads systemd, and waits until
+`systemctl is-active smart-espresso` reports `active` (a `Type=notify`
+unit stays `activating` until the process is ready). The installer does
+not print `/etc/smart-espresso.env`. Add `HA_TOKEN` there yourself; an
+existing file is left unchanged. From a checkout you already have:
+
+```bash
+sudo ./scripts/install.sh
+```
+
+`sudo ./scripts/install.sh --dry-run` prints the plan and changes nothing.
+I2C and SPI are still turned on by hand with `sudo raspi-config`.
+
+The `dht` extra is `adafruit-circuitpython-dht` (Blinka, and libgpiod on
+the Pi) and is imported only when a DHT22 is constructed. The core package
+and CI do not install it. A machine that only serves the dashboard can
+install the core package, with no GPIO or ADC libraries.
+
+```bash
 git clone https://github.com/idoshr/smart-espresso.git
 cd smart-espresso
 
@@ -123,10 +139,11 @@ pip3 install -e .
 
 ## Running on boot
 
-`deploy/smart-espresso.service` restarts the monitor if it ever exits.
-Copy it to `/etc/systemd/system/`, point `ExecStart` and `WorkingDirectory`
-at this checkout, and put secrets such as `HA_TOKEN` in
-`/etc/smart-espresso.env` (mode `0600`). Then:
+The install script above is the supported way to boot the monitor. It
+installs this repo's `deploy/smart-espresso.service` and enables it.
+To do that by hand, copy that file to `/etc/systemd/system/`, point
+`ExecStart` and `WorkingDirectory` at this checkout, and put secrets such
+as `HA_TOKEN` in `/etc/smart-espresso.env` (mode `0600`). Then:
 
 ```bash
 sudo systemctl enable --now smart-espresso.service
