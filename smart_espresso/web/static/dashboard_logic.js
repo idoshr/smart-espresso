@@ -300,6 +300,57 @@
     };
   }
 
+  // Highest severity first. Maintenance waits for #28. Overpressure
+  // cannot be snoozed. Tank empty replaces tank low.
+  function alertMessages(input) {
+    const flags = input || {};
+    const items = [];
+    if (flags.overpressure) {
+      items.push({
+        id: "overpressure",
+        role: "alert",
+        title: "Pressure high. Check the pressurestat.",
+        action: "",
+        snooze: false,
+      });
+    }
+    if (flags.tankEmpty) {
+      items.push({
+        id: "tank-empty",
+        role: "alert",
+        title: "Tank is empty",
+        action: "I refilled the tank",
+        snooze: true,
+      });
+    } else if (flags.tankLow) {
+      items.push({
+        id: "tank-low",
+        role: "status",
+        title: "Time to refill",
+        action: "I refilled the tank",
+        snooze: true,
+      });
+    }
+    return items.slice(0, 2);
+  }
+
+  function visibleAlerts(messages, snoozed) {
+    const held = snoozed || {};
+    return (messages || []).filter((item) => !item.snooze || !held[item.id]).slice(0, 2);
+  }
+
+  function pruneSnooze(snoozed, activeIds) {
+    const active = {};
+    (activeIds || []).forEach((id) => {
+      active[id] = true;
+    });
+    const next = {};
+    Object.keys(snoozed || {}).forEach((id) => {
+      if (active[id]) next[id] = true;
+    });
+    return next;
+  }
+
   function nearestTickIndex(centers, x) {
     if (!centers || !centers.length || typeof x !== "number") return -1;
     let best = 0;
@@ -343,6 +394,9 @@
     isFlush: isFlush,
     livePresentation: livePresentation,
     shownState: shownState,
+    alertMessages: alertMessages,
+    visibleAlerts: visibleAlerts,
+    pruneSnooze: pruneSnooze,
     nearestTickIndex: nearestTickIndex,
     READY_MIN_BAR: READY_MIN_BAR,
   };

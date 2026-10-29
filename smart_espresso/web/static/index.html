@@ -567,6 +567,51 @@
     color: var(--clay-ink);
   }
 
+  /* One slot under the header. Icon plus words, so the warning is not
+     only a colour on the state card. */
+  .alerts { display: flex; flex-direction: column; gap: 8px; }
+  .alert {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 10px;
+    padding: 12px 14px;
+    border-radius: 14px;
+    background: var(--clay-soft);
+    border: 1px solid var(--clay-ink);
+    color: var(--ink);
+  }
+  .alert-icon {
+    width: 22px;
+    height: 22px;
+    flex: none;
+    color: var(--clay-ink);
+  }
+  .alert-icon svg { width: 100%; height: 100%; display: block; }
+  .alert-title {
+    margin: 0;
+    flex: 1 1 140px;
+    font-size: 15px;
+    font-weight: 600;
+    line-height: 1.3;
+  }
+  .alert-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+  .alert-snooze {
+    min-height: 44px;
+    padding: 8px 4px;
+    background: transparent;
+    border: none;
+    color: var(--ink);
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .alert-action:focus-visible,
+  .alert-snooze:focus-visible {
+    outline: 2px solid var(--ink-soft);
+    outline-offset: 2px;
+  }
+
   button.reset {
     font-family: var(--body);
     font-size: 13.5px;
@@ -1129,6 +1174,7 @@
 </header>
 
 <div class="stack">
+  <div class="alerts" id="alerts" hidden></div>
   <div class="card state" id="state" data-state="unknown">
     <div class="state-band" id="state-band">
       <span class="lamp" id="lamp"></span>
@@ -2040,6 +2086,77 @@ function renderToday(today) {
     : 'No shots yet today';
 }
 
+const ALERT_SNOOZE_KEY = 'espresso-alert-snooze';
+const ALERT_ICONS = {
+  overpressure:
+    '<path d="M12 4.5 21 19.5H3z"/><path d="M12 10.2v4M12 16.8v.4"/>',
+  'tank-empty':
+    '<path d="M12 3.5c3 4 5 6.2 5 9.2a5 5 0 0 1-10 0c0-3 2-5.2 5-9.2z"/>',
+  'tank-low':
+    '<path d="M12 3.5c3 4 5 6.2 5 9.2a5 5 0 0 1-10 0c0-3 2-5.2 5-9.2z"/>',
+};
+
+let lastTank = null;
+let alertSig = '';
+
+function readSnooze() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(ALERT_SNOOZE_KEY) || '{}');
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch (err) {
+    return {};
+  }
+}
+
+function writeSnooze(map) {
+  localStorage.setItem(ALERT_SNOOZE_KEY, JSON.stringify(map));
+}
+
+function syncAlertAction() {
+  const label = resetButton.textContent;
+  const armed = resetButton.classList.contains('armed');
+  document.querySelectorAll('.alert-action').forEach(button => {
+    button.textContent = label;
+    button.classList.toggle('armed', armed);
+  });
+}
+
+function paintAlerts(machine, tank) {
+  const host = document.getElementById('alerts');
+  const messages = DashboardLogic.alertMessages({
+    overpressure: !!(machine && machine.state === 'overpressure'),
+    tankEmpty: !!(tank && tank.empty),
+    tankLow: !!(tank && tank.low),
+  });
+  const pruned = DashboardLogic.pruneSnooze(
+    readSnooze(), messages.map(item => item.id),
+  );
+  writeSnooze(pruned);
+  const shown = DashboardLogic.visibleAlerts(messages, pruned);
+  const sig = shown.map(item => item.id).join('|');
+  if (sig === alertSig) {
+    syncAlertAction();
+    return;
+  }
+  alertSig = sig;
+  host.hidden = !shown.length;
+  host.innerHTML = shown.map(item => {
+    const action = item.action
+      ? `<button type="button" class="reset alert-action">${escapeHtml(item.action)}</button>`
+      : '';
+    const snooze = item.snooze
+      ? '<button type="button" class="alert-snooze">Snooze</button>'
+      : '';
+    return `<div class="alert" role="${item.role}" data-id="${escapeHtml(item.id)}">` +
+      `<span class="alert-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" ` +
+      `stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">` +
+      `${ALERT_ICONS[item.id] || ''}</svg></span>` +
+      `<p class="alert-title">${escapeHtml(item.title)}</p>` +
+      `<div class="alert-actions">${action}${snooze}</div></div>`;
+  }).join('');
+  syncAlertAction();
+}
+
 function render(data) {
   renderState(data.machine, data.pressure);
   renderRings(data.pressure);
@@ -2055,6 +2172,8 @@ function render(data) {
   const tankCard = document.getElementById('tank-card');
   tankCard.hidden = !DashboardLogic.sensorCardVisible(true, !!data.tank);
   if (data.tank) renderTank(data.tank);
+  lastTank = data.tank || null;
+  paintAlerts(data.machine, lastTank);
 
   const otherCard = document.getElementById('other-card');
   otherCard.hidden = !data.other.length;
@@ -2158,6 +2277,7 @@ resetButton.addEventListener('click', async () => {
   if (!resetButton.classList.contains('armed')) {
     resetButton.classList.add('armed');
     resetButton.textContent = 'Tap to confirm';
+    syncAlertAction();
     if (navigator.vibrate) navigator.vibrate(10);
     armedTimer = setTimeout(disarmReset, 5000);
     return;
@@ -2182,7 +2302,11 @@ resetButton.addEventListener('click', async () => {
       disarmReset();
       return;
     }
-    renderTank(await res.json());
+    const tank = await res.json();
+    renderTank(tank);
+    lastTank = tank;
+    alertSig = '';
+    paintAlerts(lastMachine, lastTank);
   } catch (err) {
     showToast(DashboardLogic.resetFailureToast(null, null));
     disarmReset();
@@ -2192,7 +2316,24 @@ resetButton.addEventListener('click', async () => {
 function disarmReset() {
   resetButton.classList.remove('armed');
   resetButton.textContent = 'I refilled the tank';
+  syncAlertAction();
 }
+
+document.getElementById('alerts').addEventListener('click', (event) => {
+  const snooze = event.target.closest('.alert-snooze');
+  if (snooze) {
+    const card = snooze.closest('.alert');
+    const map = readSnooze();
+    map[card.getAttribute('data-id')] = true;
+    writeSnooze(map);
+    alertSig = '';
+    paintAlerts(lastMachine, lastTank);
+    return;
+  }
+  const action = event.target.closest('.alert-action');
+  if (!action || !DashboardLogic.tankPostAllowed(connected)) return;
+  resetButton.click();
+});
 
 // ---- polling, with a backoff so a down machine is not hammered ----------
 

@@ -326,3 +326,47 @@ class TestShippedShell:
         assert "verdict.label" in self.page
         assert "setAttribute('role', 'button')" not in self.page
         assert 'role="listbox"' in self.page
+
+
+class TestAlertBanner:
+    """Tank low used to be a hint inside the tank card, below the fold."""
+
+    def setup_method(self):
+        self.page = (
+            Path(__file__).resolve().parents[1] / "web" / "static" / "index.html"
+        ).read_text(encoding="utf-8")
+
+    def test_the_banner_sits_above_the_state_card(self):
+        assert self.page.index('id="alerts"') < self.page.index('id="state"')
+        assert "espresso-alert-snooze" in self.page
+        assert ">Snooze<" in self.page
+        assert 'role="${item.role}"' in self.page
+
+    def test_overpressure_outranks_a_low_tank_and_cannot_be_snoozed(self):
+        messages = call(
+            "logic.alertMessages({overpressure: true, tankLow: true, tankEmpty: false})"
+        )
+        assert [item["id"] for item in messages] == ["overpressure", "tank-low"]
+        assert messages[0]["role"] == "alert"
+        assert messages[0]["snooze"] is False
+        assert messages[0]["title"] == "Pressure high. Check the pressurestat."
+        assert messages[1]["title"] == "Time to refill"
+        assert messages[1]["action"] == "I refilled the tank"
+        shown = call(
+            "logic.visibleAlerts(%s, {overpressure: true, 'tank-low': true})"
+            % json.dumps(messages)
+        )
+        assert [item["id"] for item in shown] == ["overpressure"]
+
+    def test_an_empty_tank_replaces_tank_low(self):
+        messages = call("logic.alertMessages({tankEmpty: true, tankLow: true})")
+        assert [item["id"] for item in messages] == ["tank-empty"]
+        assert messages[0]["role"] == "alert"
+        assert messages[0]["title"] == "Tank is empty"
+
+    def test_a_cleared_alert_drops_its_snooze(self):
+        kept = call(
+            'logic.pruneSnooze({"tank-low": true, "tank-empty": true}, ["tank-low"])'
+        )
+        assert kept == {"tank-low": True}
+        assert call("logic.pruneSnooze({'tank-low': true}, [])") == {}
