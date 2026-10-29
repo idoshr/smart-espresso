@@ -356,7 +356,7 @@ class TestSensorLayout:
             ' ["Boiler", "Room"])'
         )
         assert missing == [{"name": "Head", "key": "ADC_TYPE"}]
-        assert call("logic.targetLabel(25, 30)") == "Target 25 to 30 s, from config"
+        assert call("logic.targetLabel(25, 30)") == "Aiming for 25 to 30 s"
 
     def test_the_shot_hint_follows_the_configured_window(self):
         text = call(

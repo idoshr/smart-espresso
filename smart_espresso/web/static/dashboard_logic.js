@@ -320,7 +320,7 @@
   }
 
   function targetLabel(low, high) {
-    return "Target " + low + " to " + high + " s, from config";
+    return "Aiming for " + low + " to " + high + " s";
   }
 
   function nearestTickIndex(centers, x) {
