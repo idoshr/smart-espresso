@@ -174,7 +174,7 @@
     steaming: "Steaming milk",
     overpressure: "Pressure high. Check the pressurestat.",
     unknown: "No sensor reading",
-    flushing: "Flushing",
+    flushing: "Water running",
   };
 
   function durationLine(state, sinceSeconds) {
@@ -290,7 +290,7 @@
 
   function livePresentation(machine, headBar) {
     if (isFlush(machine, headBar)) {
-      return { label: "Flushing", showShot: false, showTarget: false };
+      return { label: "Water running", showShot: false, showTarget: false };
     }
     const shot = !!(machine && machine.shot);
     return {

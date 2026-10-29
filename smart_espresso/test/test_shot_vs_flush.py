@@ -165,7 +165,7 @@ class TestFlushFeedsTheTank(unittest.TestCase):
         self.assertLess(head_bar, 2.0)
         self.assertEqual(flushing["machine"]["state"], "brewing")
         presented = _live_presentation(flushing["machine"], head_bar)
-        self.assertEqual(presented["label"], "Flushing")
+        self.assertEqual(presented["label"], "Water running")
         self.assertFalse(presented["showShot"])
         self.assertFalse(presented["showTarget"])
         self.assertNotIn("shot", presented["label"].lower())

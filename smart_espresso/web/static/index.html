@@ -1365,7 +1365,7 @@ function headBar(pressure) {
 function renderState(machine, pressure) {
   lastMachine = machine;
   const presentation = DashboardLogic.livePresentation(machine, headBar(pressure));
-  flushDisplay = presentation.label === 'Flushing';
+  flushDisplay = presentation.label === 'Water running';
   const stateName = GLYPHS[machine.state] ? machine.state : 'unknown';
   const card = document.getElementById('state');
   card.dataset.state = stateName;
@@ -1449,7 +1449,7 @@ function renderState(machine, pressure) {
 
   const boilerBar = DashboardLogic.boilerReading(pressure);
   const detailMachine = flushDisplay
-    ? Object.assign({}, machine, { shot: null })
+    ? Object.assign({}, machine, { shot: null, state: 'flushing' })
     : machine;
   document.getElementById('state-detail').textContent =
     DashboardLogic.heroDetail(detailMachine, boilerBar);

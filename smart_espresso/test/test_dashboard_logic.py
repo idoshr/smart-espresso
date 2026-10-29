@@ -149,7 +149,11 @@ class TestGlance:
             "logic.livePresentation("
             "{state:'brewing', label:'Pulling a shot', shot:{seconds:4, ml:24}}, 0.4)"
         )
-        assert flushing == {"label": "Flushing", "showShot": False, "showTarget": False}
+        assert flushing == {
+            "label": "Water running",
+            "showShot": False,
+            "showTarget": False,
+        }
         shot = call(
             "logic.livePresentation("
             "{state:'brewing', label:'Pulling a shot', shot:{seconds:12, ml:18}}, 9)"
