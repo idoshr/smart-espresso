@@ -314,6 +314,179 @@
     return best;
   }
 
+  function round1(value) {
+    return Math.round(value * 10) / 10;
+  }
+
+  function secondsText(value) {
+    if (typeof value !== "number" || !isFinite(value)) return "—";
+    const whole = Math.abs(value - Math.round(value)) < 0.05;
+    const text = whole ? String(Math.round(value)) : value.toFixed(1);
+    return text + " s";
+  }
+
+  function seriesMax(values, floor, peak) {
+    let high = typeof peak === "number" && isFinite(peak) ? peak : 0;
+    (values || []).forEach((value) => {
+      if (typeof value === "number" && isFinite(value)) high = Math.max(high, value);
+    });
+    if (high <= floor) return floor;
+    return Math.ceil(high);
+  }
+
+  // One chart: head pressure on the left, flow on the right, one time axis.
+  // The 25 to 30 s window is shaded only where the shot actually overlaps it.
+  function shotCurve(samples, options) {
+    const opts = options || {};
+    const width = opts.width || 320;
+    const height = opts.height || 128;
+    const pad = typeof opts.pad === "number" ? opts.pad : 8;
+    const windowLow = typeof opts.windowLow === "number" ? opts.windowLow : 25;
+    const windowHigh = typeof opts.windowHigh === "number" ? opts.windowHigh : 30;
+    const pressureFloor = typeof opts.pressureFloor === "number" ? opts.pressureFloor : 12;
+    const flowFloor = typeof opts.flowFloor === "number" ? opts.flowFloor : 3;
+    const list = Array.isArray(samples) ? samples : [];
+    let tMax = 0;
+    list.forEach((sample) => {
+      if (sample && typeof sample.t === "number" && isFinite(sample.t)) {
+        tMax = Math.max(tMax, sample.t);
+      }
+    });
+    if (tMax <= 0) tMax = 0.001;
+    const pressureMax = seriesMax(
+      list.map((sample) => sample && sample.head_bar),
+      pressureFloor,
+      opts.peakHead
+    );
+    const flowMax = seriesMax(
+      list.map((sample) => sample && sample.flow_mls),
+      flowFloor,
+      opts.peakFlow
+    );
+    const innerW = width - pad * 2;
+    const innerH = height - pad * 2;
+    function xOf(t) {
+      return pad + (t / tMax) * innerW;
+    }
+    function yOf(value, max) {
+      const clamped = Math.max(0, Math.min(max, value));
+      return pad + (1 - clamped / max) * innerH;
+    }
+    function series(key, max) {
+      const points = [];
+      list.forEach((sample, index) => {
+        if (!sample || typeof sample.t !== "number" || !isFinite(sample.t)) return;
+        const value = sample[key];
+        if (typeof value !== "number" || !isFinite(value)) return;
+        points.push([round1(xOf(sample.t)), round1(yOf(value, max)), index]);
+      });
+      return points;
+    }
+    let band = null;
+    if (windowHigh > windowLow && tMax > windowLow) {
+      const start = Math.max(0, windowLow);
+      const end = Math.min(tMax, windowHigh);
+      if (end > start) band = { x0: round1(xOf(start)), x1: round1(xOf(end)) };
+    }
+    return {
+      width: width,
+      height: height,
+      pad: pad,
+      tMax: tMax,
+      pressureMax: pressureMax,
+      flowMax: flowMax,
+      pressure: series("head_bar", pressureMax),
+      flow: series("flow_mls", flowMax),
+      window: band,
+    };
+  }
+
+  function chartX(model, t) {
+    if (!model || !model.tMax) return model ? model.pad : 0;
+    const span = model.width - model.pad * 2;
+    return round1(model.pad + (t / model.tMax) * span);
+  }
+
+  function sampleAt(samples, t) {
+    if (!Array.isArray(samples) || !samples.length || typeof t !== "number" || !isFinite(t)) {
+      return null;
+    }
+    let best = -1;
+    let bestDist = Infinity;
+    for (let i = 0; i < samples.length; i++) {
+      const sample = samples[i];
+      const elapsed = sample && typeof sample.t === "number" ? sample.t : NaN;
+      if (!isFinite(elapsed)) continue;
+      const dist = Math.abs(elapsed - t);
+      if (dist < bestDist) {
+        bestDist = dist;
+        best = i;
+      }
+    }
+    if (best < 0) return null;
+    const sample = samples[best];
+    return {
+      index: best,
+      t: sample.t,
+      bar: typeof sample.head_bar === "number" ? sample.head_bar : null,
+      flow: typeof sample.flow_mls === "number" ? sample.flow_mls : null,
+    };
+  }
+
+  function stepSampleIndex(length, index, delta) {
+    if (!length || length < 1) return -1;
+    const start = typeof index === "number" && index >= 0 ? index : 0;
+    const next = start + (delta < 0 ? -1 : 1);
+    if (next < 0) return 0;
+    if (next >= length) return length - 1;
+    return next;
+  }
+
+  // ids are newest first, matching the status summary.
+  function adjacentShotId(ids, id, toward) {
+    if (!Array.isArray(ids)) return null;
+    const index = ids.indexOf(id);
+    if (index < 0) return null;
+    const next = toward === "newer" ? index - 1 : index + 1;
+    if (next < 0 || next >= ids.length) return null;
+    return ids[next];
+  }
+
+  function scrubText(point) {
+    if (!point) return "";
+    const bar = point.bar == null ? "—" : Number(point.bar).toFixed(1) + " bar";
+    const flow = point.flow == null ? "—" : Number(point.flow).toFixed(1) + " ml/s";
+    return secondsText(point.t) + " · " + bar + " · " + flow;
+  }
+
+  function shotCurveSummary(shot, windowLow, windowHigh) {
+    const samples = shot && Array.isArray(shot.samples) ? shot.samples : [];
+    if (!samples.length) return "This shot was saved without a curve.";
+    const low = typeof windowLow === "number" ? windowLow : 25;
+    const high = typeof windowHigh === "number" ? windowHigh : 30;
+    let tMax = 0;
+    samples.forEach((sample) => {
+      if (sample && typeof sample.t === "number" && isFinite(sample.t)) {
+        tMax = Math.max(tMax, sample.t);
+      }
+    });
+    const seconds = Number(shot.seconds);
+    let text = "Head pressure and flow";
+    if (isFinite(seconds)) text += " over " + secondsText(seconds);
+    const peaks = [];
+    if (typeof shot.peak_head_bar === "number" && isFinite(shot.peak_head_bar)) {
+      peaks.push(shot.peak_head_bar.toFixed(1) + " bar");
+    }
+    if (typeof shot.peak_flow_mls === "number" && isFinite(shot.peak_flow_mls)) {
+      peaks.push(shot.peak_flow_mls.toFixed(1) + " ml/s");
+    }
+    if (peaks.length) text += ". Peak " + peaks.join(", ");
+    if (tMax > low && Math.min(tMax, high) > low) {
+      text += ". " + low + " to " + high + " s is shaded";
+    }
+    return text + ".";
+  }
+
   return {
     pillText: pillText,
     footerText: footerText,
@@ -344,6 +517,14 @@
     livePresentation: livePresentation,
     shownState: shownState,
     nearestTickIndex: nearestTickIndex,
+    shotCurve: shotCurve,
+    chartX: chartX,
+    sampleAt: sampleAt,
+    stepSampleIndex: stepSampleIndex,
+    adjacentShotId: adjacentShotId,
+    scrubText: scrubText,
+    shotCurveSummary: shotCurveSummary,
+    secondsText: secondsText,
     READY_MIN_BAR: READY_MIN_BAR,
   };
 });

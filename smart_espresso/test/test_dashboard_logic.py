@@ -326,3 +326,99 @@ class TestShippedShell:
         assert "verdict.label" in self.page
         assert "setAttribute('role', 'button')" not in self.page
         assert 'role="listbox"' in self.page
+
+
+SAMPLES = [
+    {"t": 0, "head_bar": 0, "flow_mls": 0},
+    {"t": 10, "head_bar": 6, "flow_mls": 1},
+    {"t": 20, "head_bar": 9, "flow_mls": 2},
+    {"t": 28, "head_bar": 8, "flow_mls": 1.5},
+]
+
+
+class TestShotSheet:
+    """The detail used to expand inside the list and scroll it."""
+
+    def setup_method(self):
+        self.page = (
+            Path(__file__).resolve().parents[1] / "web" / "static" / "index.html"
+        ).read_text(encoding="utf-8")
+
+    def test_opening_a_shot_does_not_scroll_the_list(self):
+        assert 'id="shot-sheet"' in self.page
+        assert 'role="dialog"' in self.page
+        assert 'aria-modal="true"' in self.page
+        assert "history-detail" not in self.page
+        assert "scrollIntoView" not in self.page
+        assert "Reading the curve" not in self.page
+        assert "sheet-skel" in self.page
+        assert "focus({ preventScroll: true })" in self.page
+
+    def test_share_notes_and_hints_keep_a_slot(self):
+        assert ">Dose and notes<" in self.page
+        assert ">Hints<" in self.page
+        assert ">Share<" in self.page
+        assert 'id="sheet-notes" disabled' in self.page
+        assert 'id="sheet-hints" disabled' in self.page
+        assert 'id="sheet-share" disabled' in self.page
+
+    def test_one_chart_shares_time_and_shades_the_window(self):
+        model = call(
+            "logic.shotCurve(%s, {peakHead: 9, peakFlow: 2, windowLow: 25, windowHigh: 30})"
+            % json.dumps(SAMPLES)
+        )
+        assert model["pressureMax"] == 12
+        assert model["flowMax"] == 3
+        assert model["tMax"] == 28
+        assert model["pressure"][2][0] == model["flow"][2][0]
+        assert model["pressure"][2][2] == 2
+        assert model["window"]["x0"] == call("logic.chartX(%s, 25)" % json.dumps(model))
+        assert model["window"]["x1"] == model["pressure"][-1][0]
+        short = call(
+            "logic.shotCurve([{t:0,head_bar:1,flow_mls:0.2},{t:20,head_bar:8,flow_mls:1}],"
+            " {windowLow: 25, windowHigh: 30})"
+        )
+        assert short["window"] is None
+
+    def test_scrub_stays_on_the_earlier_sample_when_distances_match(self):
+        samples = [
+            {"t": 10, "head_bar": 8, "flow_mls": 1},
+            {"t": 12, "head_bar": 9, "flow_mls": 2},
+        ]
+        point = call("logic.sampleAt(%s, 11)" % json.dumps(samples))
+        assert point["index"] == 0
+        assert point["bar"] == 8
+        assert call("logic.stepSampleIndex(4, 0, -1)") == 0
+        assert call("logic.stepSampleIndex(4, 3, 1)") == 3
+        assert call("logic.stepSampleIndex(4, 1, 1)") == 2
+        assert (
+            call("logic.scrubText({t: 12.4, bar: 8.2, flow: 1.8})")
+            == "12.4 s · 8.2 bar · 1.8 ml/s"
+        )
+
+    def test_previous_and_next_follow_newest_first(self):
+        assert call('logic.adjacentShotId([3, 2, 1], 2, "newer")') == 3
+        assert call('logic.adjacentShotId([3, 2, 1], 2, "older")') == 1
+        assert call('logic.adjacentShotId([3, 2, 1], 3, "newer")') is None
+        assert call('logic.adjacentShotId([3, 2, 1], 1, "older")') is None
+
+    def test_chart_summary_names_the_shaded_window(self):
+        shot = {
+            "seconds": 28,
+            "peak_head_bar": 9.1,
+            "peak_flow_mls": 1.8,
+            "samples": SAMPLES,
+        }
+        text = call("logic.shotCurveSummary(%s, 25, 30)" % json.dumps(shot))
+        assert text == (
+            "Head pressure and flow over 28 s. Peak 9.1 bar, 1.8 ml/s. "
+            "25 to 30 s is shaded."
+        )
+        empty = call("logic.shotCurveSummary({samples: []}, 25, 30)")
+        assert empty == "This shot was saved without a curve."
+        short = dict(
+            shot, seconds=20, samples=[{"t": 20, "head_bar": 8, "flow_mls": 1}]
+        )
+        short_text = call("logic.shotCurveSummary(%s, 25, 30)" % json.dumps(short))
+        assert "shaded" not in short_text
+        assert short_text.endswith(".")

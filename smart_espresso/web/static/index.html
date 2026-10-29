@@ -784,7 +784,189 @@
     white-space: nowrap;
   }
 
-  .history-detail { padding: 2px 4px 4px; }
+  /* Shot detail is a sheet over the page, so the list underneath does not
+     jump when a row opens. Dose, ratio, notes, hints and share keep their
+     places until those features exist. */
+  .shot-sheet {
+    position: fixed;
+    inset: 0;
+    z-index: 40;
+    background: var(--bg);
+    display: flex;
+    justify-content: center;
+  }
+
+  .shot-sheet-panel {
+    width: min(100%, 460px);
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    padding: calc(8px + env(safe-area-inset-top)) 16px
+             calc(12px + env(safe-area-inset-bottom));
+  }
+
+  .sheet-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  .sheet-nav {
+    min-height: 44px;
+    min-width: 44px;
+    padding: 8px 4px;
+    background: transparent;
+    border: none;
+    color: var(--ink);
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .sheet-nav:disabled { color: var(--ink-faint); cursor: default; }
+
+  .sheet-nav:focus-visible,
+  .sheet-slot:focus-visible,
+  .sheet-retry:focus-visible {
+    outline: 2px solid var(--ink-soft);
+    outline-offset: 2px;
+  }
+
+  .sheet-scroll {
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+  }
+
+  .sheet-hero {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 12px;
+    margin-top: 8px;
+  }
+
+  .sheet-hero b {
+    display: block;
+    font-family: var(--display);
+    font-size: 56px;
+    font-weight: 600;
+    letter-spacing: -.03em;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .sheet-yield {
+    margin-top: 6px;
+    font-family: var(--mono);
+    font-size: 14px;
+    color: var(--ink);
+  }
+
+  .verdict-chip {
+    display: inline-block;
+    margin-bottom: 8px;
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: .06em;
+    color: var(--ink-soft);
+    border: 1px solid var(--edge);
+    border-radius: 999px;
+    padding: 4px 10px;
+    white-space: nowrap;
+  }
+
+  .verdict-chip.fast { color: var(--fast-ink); }
+  .verdict-chip.good { color: var(--matcha-ink); }
+  .verdict-chip.long { color: var(--clay-ink); }
+
+  .sheet-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px 16px;
+    margin-top: 18px;
+  }
+
+  .sheet-grid span {
+    display: block;
+    font-size: 12px;
+    color: var(--ink-soft);
+  }
+
+  .sheet-grid b {
+    display: block;
+    margin-top: 2px;
+    font-family: var(--mono);
+    font-weight: 500;
+    font-size: 16px;
+  }
+
+  .sheet-chart {
+    margin-top: 8px;
+    touch-action: none;
+  }
+
+  .sheet-chart:focus-visible {
+    outline: 2px solid var(--ink-soft);
+    outline-offset: 3px;
+    border-radius: 8px;
+  }
+
+  .sheet-skel-chart { width: 100%; height: 140px; margin-top: 18px; }
+
+  .sheet-actions {
+    display: flex;
+    gap: 8px;
+    padding-top: 12px;
+  }
+
+  .sheet-slot {
+    flex: 1;
+    min-height: 44px;
+    padding: 8px 6px;
+    border-radius: 12px;
+    border: 1px dashed var(--edge);
+    background: transparent;
+    color: var(--ink-faint);
+    font: inherit;
+    font-size: 13px;
+    font-weight: 600;
+  }
+
+  .sheet-slot:disabled { cursor: default; }
+
+  .sheet-retry {
+    width: 100%;
+    margin-top: 24px;
+    min-height: 44px;
+    padding: 0;
+    border: none;
+    background: transparent;
+    color: var(--ink);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .sr {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  body.sheet-open {
+    position: fixed;
+    left: 0;
+    right: 0;
+    width: 100%;
+  }
 
   .history-meta {
     font-size: 13px;
@@ -818,6 +1000,9 @@
     stroke-linecap: round;
   }
   .curve .dot { stroke: none; }
+  .curve .window { fill: var(--matcha-soft); }
+  .curve .cross { stroke: var(--ink); stroke-width: 1.25; }
+
   .curve .guide {
     stroke: var(--ink-faint);
     stroke-width: 1;
@@ -1075,7 +1260,8 @@
   body.glance #skeletons,
   body.glance .last-pull,
   body.glance footer,
-  body.glance .warm {
+  body.glance .warm,
+  body.glance #shot-sheet {
     display: none !important;
   }
 
@@ -1232,6 +1418,23 @@
   <div class="card" id="other-card" hidden>
     <div class="card-head"><span class="title">Room</span></div>
     <div class="rows" id="other-rows"></div>
+  </div>
+</div>
+
+<div id="shot-sheet" class="shot-sheet" role="dialog" aria-modal="true"
+     aria-label="Shot" hidden>
+  <div class="shot-sheet-panel">
+    <div class="sheet-bar">
+      <button type="button" class="sheet-nav" id="sheet-prev">Previous</button>
+      <button type="button" class="sheet-nav" id="sheet-close">Close</button>
+      <button type="button" class="sheet-nav" id="sheet-next">Next</button>
+    </div>
+    <div class="sheet-scroll" id="sheet-body"></div>
+    <div class="sheet-actions">
+      <button type="button" class="sheet-slot" id="sheet-notes" disabled>Dose and notes</button>
+      <button type="button" class="sheet-slot" id="sheet-hints" disabled>Hints</button>
+      <button type="button" class="sheet-slot" id="sheet-share" disabled>Share</button>
+    </div>
   </div>
 </div>
 
@@ -1705,11 +1908,6 @@ function selectPull(index, toggle) {
 // second, on-demand read of one shot, so opening the page still does not
 // pull a curve for every pull the machine has ever saved.
 
-const CURVE_WIDTH = 320, CURVE_HEIGHT = 96, CURVE_PAD = 6;
-// Fixed floors keep one shot comparable with the next. A peak past the
-// floor scales that chart up; it does not squash the others.
-const CURVE_FLOOR = { head_bar: 12, boiler_bar: 2, flow_mls: 3 };
-
 let historySig = '';
 let historyShots = [];
 let selectedShotId = null;
@@ -1736,7 +1934,8 @@ function renderHistory(block) {
     card.hidden = true;
     historySig = '';
     historyShots = [];
-    selectedShotId = null;
+    if (!document.getElementById('shot-sheet').hidden) closeSheet();
+    else selectedShotId = null;
     return;
   }
   card.hidden = false;
@@ -1745,12 +1944,15 @@ function renderHistory(block) {
     count === 1 ? '1 saved' : `${count} saved`;
 
   const sig = recent.map(shot => `${shot.id}:${shot.seconds}:${shot.ml}`).join(',');
-  if (sig === historySig) return;
+  const same = sig === historySig;
   historySig = sig;
   historyShots = recent;
-  if (!recent.some(shot => shot.id === selectedShotId)) selectedShotId = null;
-  paintHistoryList();
-  if (selectedShotId != null) showShot(selectedShotId, false);
+  if (selectedShotId != null && !recent.some(shot => shot.id === selectedShotId)) {
+    closeSheet();
+    return;
+  }
+  if (!same) paintHistoryList();
+  if (!document.getElementById('shot-sheet').hidden) syncSheetNav();
 }
 
 function paintHistoryList() {
@@ -1761,8 +1963,9 @@ function paintHistoryList() {
     const button = document.createElement('button');
     button.type = 'button';
     button.className = `shot-row${selected ? ' sel' : ''}`;
-    button.setAttribute('aria-pressed', String(selected));
-    button.setAttribute('aria-expanded', String(selected));
+    button.dataset.shotId = String(shot.id);
+    button.setAttribute('aria-haspopup', 'dialog');
+    if (selected) button.setAttribute('aria-current', 'true');
 
     const verdict = verdictOf(Number(shot.seconds));
     const mark = document.createElement('span');
@@ -1779,87 +1982,214 @@ function paintHistoryList() {
       `${Number(shot.seconds).toFixed(0)} s · ${Number(shot.ml).toFixed(0)} ml · ${verdict.label}`;
 
     button.append(mark, when, stats);
-    button.addEventListener('click', () => toggleShot(shot.id));
+    button.addEventListener('click', () => openShot(shot.id));
     list.appendChild(button);
-
-    if (selected) {
-      const detail = document.createElement('div');
-      detail.className = 'history-detail';
-      detail.id = 'history-detail';
-      list.appendChild(detail);
-    }
   });
 }
 
-function toggleShot(id) {
-  selectedShotId = selectedShotId === id ? null : id;
-  paintHistoryList();
-  if (selectedShotId != null) showShot(selectedShotId, true);
+let sheetScrollY = 0;
+let openCurve = null;
+let sheetPointer = null;
+
+function lockScroll() {
+  sheetScrollY = window.scrollY || 0;
+  document.body.style.top = `-${sheetScrollY}px`;
+  document.body.classList.add('sheet-open');
 }
 
-async function showShot(id, scroll) {
-  const detail = document.getElementById('history-detail');
-  if (!detail) return;
+function unlockScroll() {
+  document.body.classList.remove('sheet-open');
+  document.body.style.top = '';
+  window.scrollTo(0, sheetScrollY);
+}
+
+function syncSheetNav() {
+  const ids = historyShots.map(shot => shot.id);
+  const prev = DashboardLogic.adjacentShotId(ids, selectedShotId, 'older');
+  const next = DashboardLogic.adjacentShotId(ids, selectedShotId, 'newer');
+  document.getElementById('sheet-prev').disabled = prev == null;
+  document.getElementById('sheet-next').disabled = next == null;
+}
+
+function openShot(id) {
+  const sheet = document.getElementById('shot-sheet');
+  const wasOpen = !sheet.hidden;
+  selectedShotId = id;
+  paintHistoryList();
+  syncSheetNav();
+  if (!wasOpen) {
+    lockScroll();
+    sheet.hidden = false;
+  }
+  showShot(id);
+  if (!wasOpen) document.getElementById('sheet-close').focus();
+}
+
+function closeSheet() {
+  const sheet = document.getElementById('shot-sheet');
+  if (sheet.hidden) {
+    selectedShotId = null;
+    return;
+  }
+  const id = selectedShotId;
+  sheet.hidden = true;
+  sheet.removeAttribute('aria-busy');
+  unlockScroll();
+  selectedShotId = null;
+  openCurve = null;
+  paintHistoryList();
+  const row = document.querySelector(
+    `button.shot-row[data-shot-id="${CSS.escape(String(id))}"]`,
+  );
+  if (row) row.focus({ preventScroll: true });
+}
+
+function moveSheet(toward) {
+  const ids = historyShots.map(shot => shot.id);
+  const id = DashboardLogic.adjacentShotId(ids, selectedShotId, toward);
+  if (id == null) return;
+  openShot(id);
+}
+
+function sheetFocusables() {
+  return [...document.querySelectorAll('#shot-sheet button, #shot-sheet [tabindex="0"]')]
+    .filter(el => !el.disabled && !el.closest('[hidden]'));
+}
+
+function onSheetKey(event) {
+  if (event.key === 'Escape') {
+    event.preventDefault();
+    closeSheet();
+    return;
+  }
+  const chart = event.target.closest && event.target.closest('.sheet-chart');
+  if (chart && openCurve && openCurve.samples.length) {
+    if (event.key === 'ArrowLeft' || event.key === 'ArrowRight' ||
+        event.key === 'Home' || event.key === 'End') {
+      event.preventDefault();
+      let index = openCurve.index;
+      if (event.key === 'Home') index = 0;
+      else if (event.key === 'End') index = openCurve.samples.length - 1;
+      else {
+        index = DashboardLogic.stepSampleIndex(
+          openCurve.samples.length,
+          index,
+          event.key === 'ArrowRight' ? 1 : -1,
+        );
+      }
+      drawScrub(index);
+      return;
+    }
+  }
+  if (event.key !== 'Tab') return;
+  const items = sheetFocusables();
+  if (!items.length) return;
+  const first = items[0];
+  const last = items[items.length - 1];
+  if (event.shiftKey && document.activeElement === first) {
+    event.preventDefault();
+    last.focus();
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault();
+    first.focus();
+  }
+}
+
+function scrubFromEvent(chart, event) {
+  if (!openCurve) return;
+  const rect = chart.getBoundingClientRect();
+  const ratio = rect.width ? (event.clientX - rect.left) / rect.width : 0;
+  const clamped = Math.max(0, Math.min(1, ratio));
+  const point = DashboardLogic.sampleAt(openCurve.samples, clamped * openCurve.model.tMax);
+  if (point) drawScrub(point.index);
+}
+
+function onSheetPointerDown(event) {
+  const chart = event.target.closest && event.target.closest('.sheet-chart');
+  if (chart && openCurve) {
+    sheetPointer = { mode: 'scrub', pointerId: event.pointerId };
+    if (chart.setPointerCapture) chart.setPointerCapture(event.pointerId);
+    scrubFromEvent(chart, event);
+    return;
+  }
+  sheetPointer = {
+    mode: 'swipe',
+    x: event.clientX,
+    y: event.clientY,
+    pointerId: event.pointerId,
+  };
+}
+
+function onSheetPointerMove(event) {
+  if (!sheetPointer || sheetPointer.pointerId !== event.pointerId) return;
+  if (sheetPointer.mode !== 'scrub') return;
+  const chart = document.querySelector('#sheet-body .sheet-chart');
+  if (chart) scrubFromEvent(chart, event);
+}
+
+function onSheetPointerUp(event) {
+  if (!sheetPointer || sheetPointer.pointerId !== event.pointerId) return;
+  if (sheetPointer.mode === 'swipe') {
+    const dx = event.clientX - sheetPointer.x;
+    const dy = event.clientY - sheetPointer.y;
+    if (Math.abs(dx) >= 48 && Math.abs(dx) > Math.abs(dy)) {
+      moveSheet(dx < 0 ? 'older' : 'newer');
+    }
+  }
+  sheetPointer = null;
+}
+
+function bindSheet() {
+  const sheet = document.getElementById('shot-sheet');
+  document.getElementById('sheet-close').addEventListener('click', closeSheet);
+  document.getElementById('sheet-prev').addEventListener('click', () => moveSheet('older'));
+  document.getElementById('sheet-next').addEventListener('click', () => moveSheet('newer'));
+  sheet.addEventListener('keydown', onSheetKey);
+  const body = document.getElementById('sheet-body');
+  body.addEventListener('pointerdown', onSheetPointerDown);
+  body.addEventListener('pointermove', onSheetPointerMove);
+  body.addEventListener('pointerup', onSheetPointerUp);
+  body.addEventListener('pointercancel', onSheetPointerUp);
+}
+
+async function showShot(id) {
+  const body = document.getElementById('sheet-body');
+  const sheet = document.getElementById('shot-sheet');
   const token = ++shotLoadToken;
   const cached = shotCache.get(id);
   if (cached) {
-    paintShot(detail, cached);
-    if (scroll) revealShot(detail);
+    paintShot(body, cached);
+    sheet.removeAttribute('aria-busy');
     return;
   }
-  detail.innerHTML = '<div class="history-meta">Reading the curve…</div>';
-  if (scroll) revealShot(detail);
+  sheet.setAttribute('aria-busy', 'true');
+  openCurve = null;
+  body.innerHTML =
+    '<div class="sheet-skel" aria-hidden="true">' +
+    '<div class="sk sk-figure"></div>' +
+    '<div class="sk sk-line"></div>' +
+    '<div class="sk sheet-skel-chart"></div></div>';
   try {
     const res = await fetch(`/api/shots/${encodeURIComponent(id)}`, { cache: 'no-store' });
     if (!res.ok) throw new Error(res.status);
     const shot = await res.json();
     shotCache.set(id, shot);
     if (token !== shotLoadToken || selectedShotId !== id) return;
-    paintShot(detail, shot);
-    if (scroll) revealShot(detail);
+    paintShot(body, shot);
+    sheet.removeAttribute('aria-busy');
   } catch (err) {
     if (token !== shotLoadToken || selectedShotId !== id) return;
-    detail.innerHTML = '<div class="history-meta">Couldn\'t load this shot. Tap to try again.</div>';
+    sheet.removeAttribute('aria-busy');
+    openCurve = null;
+    body.innerHTML =
+      '<button type="button" class="sheet-retry" id="sheet-retry">' +
+      'Couldn\'t load this shot. Tap to try again.</button>';
+    document.getElementById('sheet-retry').addEventListener('click', () => showShot(id));
   }
-}
-
-function revealShot(detail) {
-  const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  detail.scrollIntoView({ block: 'nearest', behavior: reduce ? 'auto' : 'smooth' });
-}
-
-function curveMax(samples, key, floor, peak) {
-  let high = typeof peak === 'number' ? peak : 0;
-  samples.forEach(sample => {
-    if (typeof sample[key] === 'number') high = Math.max(high, sample[key]);
-  });
-  return high <= floor ? floor : Math.ceil(high);
 }
 
 function formatScale(value) {
   return Number.isInteger(value) ? String(value) : value.toFixed(1);
-}
-
-function secondsLabel(value) {
-  const text = Math.abs(value - Math.round(value)) < 0.05
-    ? String(Math.round(value))
-    : value.toFixed(1);
-  return `${text} s`;
-}
-
-function curvePoints(samples, key, yMax) {
-  const tMax = Math.max(...samples.map(sample => Number(sample.t) || 0), 0.001);
-  const innerW = CURVE_WIDTH - CURVE_PAD * 2;
-  const innerH = CURVE_HEIGHT - CURVE_PAD * 2;
-  const points = [];
-  samples.forEach(sample => {
-    const value = sample[key];
-    if (typeof value !== 'number' || Number.isNaN(value)) return;
-    const x = CURVE_PAD + (sample.t / tMax) * innerW;
-    const y = CURVE_PAD + (1 - Math.max(0, Math.min(yMax, value)) / yMax) * innerH;
-    points.push([x, y]);
-  });
-  return points;
 }
 
 function linePath(points) {
@@ -1868,75 +2198,111 @@ function linePath(points) {
     .join(' ');
 }
 
-function chartBlock(title, samples, key, klass, yMax, unit, guide) {
-  const points = curvePoints(samples, key, yMax);
-  const end = secondsLabel(samples.length ? samples[samples.length - 1].t : 0);
-  const base = (CURVE_HEIGHT - CURVE_PAD).toFixed(1);
-  let guideLine = '';
-  if (guide != null && guide > 0 && guide < yMax) {
-    const y = CURVE_PAD + (1 - guide / yMax) * (CURVE_HEIGHT - CURVE_PAD * 2);
-    guideLine =
-      `<line class="guide" x1="${CURVE_PAD}" y1="${y.toFixed(1)}" ` +
-      `x2="${CURVE_WIDTH - CURVE_PAD}" y2="${y.toFixed(1)}"/>`;
+function placeDot(id, series, index) {
+  const dot = document.getElementById(id);
+  if (!dot) return;
+  const point = series.find(item => item[2] === index);
+  if (!point) {
+    dot.setAttribute('visibility', 'hidden');
+    return;
   }
-  const drawn = linePath(points);
-  const fill = points.length
-    ? `${drawn} L${points[points.length - 1][0].toFixed(1)} ${base} ` +
-      `L${points[0][0].toFixed(1)} ${base} Z`
-    : '';
-  const dot = points.length === 1
-    ? `<circle class="${klass} dot" cx="${points[0][0].toFixed(1)}" cy="${points[0][1].toFixed(1)}" r="3.5"/>`
-    : '';
-  const note = guide != null ? '9 bar guide' : `0–${formatScale(yMax)} ${unit}`;
-  return `
-    <div class="curve-label"><span>${title}</span><span>${note}</span></div>
-    <svg class="curve" viewBox="0 0 ${CURVE_WIDTH} ${CURVE_HEIGHT}" role="img"
-         aria-label="${title}, ${note}">
-      <line class="base" x1="${CURVE_PAD}" y1="${base}" x2="${CURVE_WIDTH - CURVE_PAD}" y2="${base}"/>
-      ${guideLine}
-      ${fill ? `<path class="${klass} fill" d="${fill}"/>` : ''}
-      ${drawn ? `<path class="${klass} line" d="${drawn}"/>` : ''}
-      ${dot}
-    </svg>
-    <div class="axis"><span>0 s</span><span>${end}</span></div>`;
+  dot.setAttribute('visibility', 'visible');
+  dot.setAttribute('cx', point[0]);
+  dot.setAttribute('cy', point[1]);
+}
+
+function drawScrub(index) {
+  if (!openCurve || !openCurve.samples.length) return;
+  const next = Math.max(0, Math.min(openCurve.samples.length - 1, index));
+  openCurve.index = next;
+  const sample = openCurve.samples[next];
+  const model = openCurve.model;
+  const x = DashboardLogic.chartX(model, sample.t);
+  const cross = document.getElementById('sheet-cross');
+  if (cross) {
+    cross.setAttribute('x1', x);
+    cross.setAttribute('x2', x);
+    cross.setAttribute('y1', model.pad);
+    cross.setAttribute('y2', model.height - model.pad);
+  }
+  placeDot('sheet-head-dot', model.pressure, next);
+  placeDot('sheet-flow-dot', model.flow, next);
+  const readout = document.getElementById('sheet-readout');
+  if (readout) {
+    readout.textContent = DashboardLogic.scrubText({
+      t: sample.t,
+      bar: typeof sample.head_bar === 'number' ? sample.head_bar : null,
+      flow: typeof sample.flow_mls === 'number' ? sample.flow_mls : null,
+    });
+  }
 }
 
 function paintShot(detail, shot) {
   const samples = Array.isArray(shot.samples) ? shot.samples : [];
   const seconds = Number(shot.seconds);
   const ml = Number(shot.ml);
-  const bits = [
-    shotWhen(shot.started_at),
-    `${seconds.toFixed(1)} s`,
-    `${ml.toFixed(1)} ml`,
-    verdictOf(seconds).label,
-  ];
-  if (typeof shot.peak_head_bar === 'number') bits.push(`${shot.peak_head_bar.toFixed(1)} bar`);
-  if (typeof shot.peak_flow_mls === 'number') bits.push(`${shot.peak_flow_mls.toFixed(1)} ml/s`);
-  let charts = '';
+  const verdict = verdictOf(seconds);
+  const missing = DashboardLogic.formatReading(null, 0);
+  const peak = typeof shot.peak_head_bar === 'number'
+    ? `${shot.peak_head_bar.toFixed(1)} bar`
+    : missing;
+  const summary = DashboardLogic.shotCurveSummary(shot, SHOT_WINDOW[0], SHOT_WINDOW[1]);
+  let chart = '';
+  openCurve = null;
   if (samples.length) {
-    charts = chartBlock(
-      'Head pressure', samples, 'head_bar', 'head',
-      curveMax(samples, 'head_bar', CURVE_FLOOR.head_bar, shot.peak_head_bar),
-      'bar', 9,
-    );
-    if (samples.some(sample => typeof sample.boiler_bar === 'number')) {
-      charts += chartBlock(
-        'Boiler', samples, 'boiler_bar', 'boiler',
-        curveMax(samples, 'boiler_bar', CURVE_FLOOR.boiler_bar, shot.peak_boiler_bar),
-        'bar', null,
-      );
-    }
-    charts += chartBlock(
-      'Flow', samples, 'flow_mls', 'flow',
-      curveMax(samples, 'flow_mls', CURVE_FLOOR.flow_mls, shot.peak_flow_mls),
-      'ml/s', null,
-    );
+    const model = DashboardLogic.shotCurve(samples, {
+      peakHead: shot.peak_head_bar,
+      peakFlow: shot.peak_flow_mls,
+      windowLow: SHOT_WINDOW[0],
+      windowHigh: SHOT_WINDOW[1],
+    });
+    openCurve = { samples, model, index: samples.length - 1 };
+    const pressure = linePath(model.pressure);
+    const flow = linePath(model.flow);
+    const band = model.window
+      ? `<rect class="window" x="${model.window.x0}" y="${model.pad}" ` +
+        `width="${Math.max(0, model.window.x1 - model.window.x0)}" ` +
+        `height="${model.height - model.pad * 2}"/>`
+      : '';
+    const end = DashboardLogic.secondsText(model.tMax);
+    chart = `
+      <div class="curve-label">
+        <span>0 to ${formatScale(model.pressureMax)} bar</span>
+        <span>0 to ${formatScale(model.flowMax)} ml/s</span>
+      </div>
+      <div class="sheet-chart" tabindex="0" role="group" aria-labelledby="sheet-summary">
+        <svg class="curve" viewBox="0 0 ${model.width} ${model.height}" aria-hidden="true">
+          <line class="base" x1="${model.pad}" y1="${model.height - model.pad}"
+                x2="${model.width - model.pad}" y2="${model.height - model.pad}"/>
+          ${band}
+          ${pressure ? `<path class="head line" d="${pressure}"/>` : ''}
+          ${flow ? `<path class="flow line" d="${flow}"/>` : ''}
+          <line class="cross" id="sheet-cross" x1="0" y1="0" x2="0" y2="0"/>
+          <circle class="head dot" id="sheet-head-dot" r="3.5" visibility="hidden"/>
+          <circle class="flow dot" id="sheet-flow-dot" r="3.5" visibility="hidden"/>
+        </svg>
+      </div>
+      <div class="axis"><span>0 s</span><span>${end}</span></div>
+      <p class="history-meta" id="sheet-readout" aria-live="polite"></p>
+      <p class="sr" id="sheet-summary">${escapeHtml(summary)}</p>`;
   } else {
-    charts = '<div class="history-meta">This shot was saved without a curve.</div>';
+    chart = `<p class="history-meta" id="sheet-summary">${escapeHtml(summary)}</p>`;
   }
-  detail.innerHTML = `<div class="history-meta">${bits.map(escapeHtml).join(' · ')}</div>${charts}`;
+  detail.innerHTML =
+    `<div class="sheet-hero">` +
+    `<div><b id="sheet-duration">${escapeHtml(DashboardLogic.secondsText(seconds))}</b>` +
+    `<div class="sheet-yield">${escapeHtml(ml.toFixed(1))} ml</div></div>` +
+    `<span class="verdict-chip ${verdict.key}">${escapeHtml(verdict.label)}</span></div>` +
+    `<div class="sheet-grid">` +
+    `<div><span>Dose</span><b>${missing}</b></div>` +
+    `<div><span>Yield</span><b>${escapeHtml(ml.toFixed(1))} ml</b></div>` +
+    `<div><span>Ratio</span><b>${missing}</b></div>` +
+    `<div><span>Peak bar</span><b>${escapeHtml(peak)}</b></div>` +
+    `</div>${chart}`;
+  if (openCurve) drawScrub(openCurve.index);
 }
+
+bindSheet();
 
 // ---- tank ----------------------------------------------------------------
 
