@@ -467,12 +467,54 @@
   }
 
   /* ---- pressure rings ---- */
-  .rings { display: flex; flex-wrap: wrap; gap: 12px; }
-  .rings > * { flex: 1 1 45%; min-width: 45%; padding: 14px 12px 12px; }
+  /* Width follows the count. A 45% floor wraps a third dial onto its own
+     full-width row between 360 and 430 px. */
+  .rings { display: flex; flex-wrap: wrap; gap: 12px; align-items: stretch; }
+  .rings > .card {
+    flex: 1 1 calc(50% - 12px);
+    min-width: 0;
+    max-width: calc(50% - 6px);
+    padding: 14px 12px 12px;
+  }
+  .rings.one > .card {
+    flex-basis: 100%;
+    max-width: 100%;
+    display: grid;
+    grid-template-columns: 1.15fr 0.85fr;
+    align-items: center;
+    column-gap: 8px;
+  }
+  .rings.one .card-head { grid-column: 1 / -1; }
+  .rings.one .ring { grid-column: 1; }
+  .rings.one .ring-read { grid-column: 2; margin-top: 0; text-align: left; }
+  .rings.one .ring-foot { grid-column: 1 / -1; }
+  .rings.row > .card {
+    flex: 1 1 calc(33.333% - 12px);
+    max-width: calc(33.333% - 8px);
+    padding: 10px 6px 8px;
+  }
+  .rings.row .ring-read b { font-size: 18px; }
+  .card.dial-fault { border-style: dashed; }
+  .row.dial-fault {
+    border: 1px dashed var(--ink-faint);
+    border-radius: 8px;
+    padding-left: 8px;
+    padding-right: 8px;
+  }
 
-  /* Very narrow phones: one dial per row beats two cramped ones. */
-  @media (max-width: 340px) {
-    .rings > * { flex-basis: 100%; min-width: 100%; }
+  .missing-list { display: flex; flex-direction: column; gap: 12px; }
+  .sensor-missing p { margin: 8px 0 0; font-size: 14px; }
+  .sensor-key {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--ink-soft);
+  }
+  .sensor-missing a { color: var(--ink); }
+
+  .pulls-target {
+    margin: 8px 0 0;
+    font-size: 12px;
+    color: var(--ink-soft);
   }
 
   .ring { width: 100%; height: auto; display: block; }
@@ -1170,6 +1212,8 @@
   <!-- end skeletons -->
 
   <div class="rings" id="rings"></div>
+  <div class="missing-list" id="missing-sensors" hidden></div>
+  <p class="pulls-target" id="shot-target" hidden></p>
 
   <div class="card" id="pulls-card" hidden>
     <div class="card-head">
@@ -1248,11 +1292,18 @@ const GUIDES = {
             caption: '9 bar is the sweet spot' },
   boiler: { band: [0.8, 1.4], accent: 'var(--matcha-ink)', soft: 'var(--matcha-soft)',
             caption: 'steam holds near 1 bar' },
+  room:   { band: [18, 24], accent: 'var(--water-ink)', soft: 'var(--water-soft)' },
 };
 
 const SHOT_WINDOW = [25, 30];   // seconds: a well-paced double
 const SHOT_SCALE = 40;          // seconds shown by the shot progress track
 const DOSE_G = 18;              // the double basket's dose; ratio is a guide, not a law
+// Replaced by /api/status config when the server sends one.
+let shotWindow = SHOT_WINDOW.slice();
+let shotScale = SHOT_SCALE;
+let doseG = DOSE_G;
+let rangeFactor = 1.75;
+let serverGuides = null;
 
 // Dials are scaled to the working range, not the sensor's ceiling: each
 // dial spans ~1.75x its target band's top, so the sweet spot lands near
@@ -1294,19 +1345,30 @@ const escapeHtml = value => String(value).replace(
 );
 
 function guideFor(name) {
-  const key = name.toLowerCase();
-  return GUIDES[Object.keys(GUIDES).find(k => key.includes(k))] || {};
+  const key = String(name || '').toLowerCase();
+  const match = Object.keys(GUIDES).find(k => key.includes(k));
+  const local = (match && GUIDES[match]) || {};
+  const remote = serverGuides && match ? serverGuides[match] : null;
+  if (!remote) return local;
+  const band = remote.band || local.band;
+  let caption = local.caption || '';
+  const sameBand = local.band && band && local.band[0] === band[0] && local.band[1] === band[1];
+  if (band && (!sameBand || !caption)) {
+    caption = `${band[0]} to ${band[1]} ${remote.unit || ''}`.trim();
+  }
+  return Object.assign({}, local, { band, caption });
 }
 
 // The bar range a dial actually shows: the target band's top times the
 // range factor, capped by the sensor's own ceiling (never beyond it).
 function dialMaxFor(sensor) {
   const guide = guideFor(sensor.name);
+  const ceiling = sensor.max || sensor.max_bar || 1;
   if (guide.band) {
-    const span = guide.band[1] * RING_RANGE_FACTOR;
-    return Math.min(sensor.max_bar || span, span);
+    const span = guide.band[1] * rangeFactor;
+    return Math.min(ceiling, span);
   }
-  return sensor.max_bar || 1;
+  return ceiling;
 }
 
 function polar(radius, degrees) {
@@ -1328,22 +1390,40 @@ function arcPath(radius, fromDeg, toDeg) {
 // Brew ratio against the basket's dose: 36 ml from 18 g reads as 1:2.
 // TODO(#26): show this once a real dose is stored. Hidden until then.
 function ratioText(ml) {
-  const ratio = ml / DOSE_G;
+  const ratio = ml / doseG;
   return `1:${ratio % 1 ? ratio.toFixed(1) : ratio.toFixed(0)}`;
 }
 
 // Where a pull of this length lands against the target window.
 function verdictOf(seconds) {
-  return DashboardLogic.shotVerdict(seconds, SHOT_WINDOW[0], SHOT_WINDOW[1]);
+  return DashboardLogic.shotVerdict(seconds, shotWindow[0], shotWindow[1]);
 }
 
 // The target window drawn on both the live shot track and the history
 // strip; one helper keeps them honest when the window or scale moves.
 function windowStyle() {
   return {
-    left: `${SHOT_WINDOW[0] / SHOT_SCALE * 100}%`,
-    width: `${(SHOT_WINDOW[1] - SHOT_WINDOW[0]) / SHOT_SCALE * 100}%`,
+    left: `${shotWindow[0] / shotScale * 100}%`,
+    width: `${(shotWindow[1] - shotWindow[0]) / shotScale * 100}%`,
   };
+}
+
+function applyDashboardConfig(config) {
+  if (!config) return;
+  if (Array.isArray(config.shot_window) && config.shot_window.length === 2) {
+    shotWindow = config.shot_window.map(Number);
+  }
+  if (typeof config.shot_scale === 'number') shotScale = config.shot_scale;
+  if (typeof config.dose_g === 'number') doseG = config.dose_g;
+  if (typeof config.range_factor === 'number') rangeFactor = config.range_factor;
+  if (config.guides) serverGuides = config.guides;
+  const end = document.getElementById('pulls-axis-end');
+  if (end) end.textContent = `${shotScale} s`;
+  const target = document.getElementById('shot-target');
+  if (target) {
+    target.hidden = false;
+    target.textContent = DashboardLogic.targetLabel(shotWindow[0], shotWindow[1]);
+  }
 }
 
 // ---- state card ----------------------------------------------------------
@@ -1391,8 +1471,8 @@ function renderState(machine, pressure) {
   const shotSeconds = document.getElementById('shot-seconds');
   if (presentation.showShot && machine.shot) {
     const inWindow =
-      machine.shot.seconds >= SHOT_WINDOW[0] &&
-      machine.shot.seconds <= SHOT_WINDOW[1];
+      machine.shot.seconds >= shotWindow[0] &&
+      machine.shot.seconds <= shotWindow[1];
     // Same transition as the buzz: not on the first sighting (the page
     // may have loaded mid-window), and only once per shot. The flash is
     // the visual half of that cue; reduced motion skips it.
@@ -1419,7 +1499,7 @@ function renderState(machine, pressure) {
     document.getElementById('shot-ml').textContent =
       `${machine.shot.ml.toFixed(0)} ml`;
     document.getElementById('shot-progress').style.width =
-      `${Math.min(100, machine.shot.seconds / SHOT_SCALE * 100)}%`;
+      `${Math.min(100, machine.shot.seconds / shotScale * 100)}%`;
     const windowEl = document.getElementById('shot-window');
     if (presentation.showTarget) Object.assign(windowEl.style, windowStyle());
     else windowEl.style.width = '0';
@@ -1452,7 +1532,7 @@ function renderState(machine, pressure) {
     ? Object.assign({}, machine, { shot: null, state: 'flushing' })
     : machine;
   document.getElementById('state-detail').textContent =
-    DashboardLogic.heroDetail(detailMachine, boilerBar);
+    DashboardLogic.heroDetail(detailMachine, boilerBar, shotWindow[0], shotWindow[1]);
   paintWarm(machine, boilerBar);
 
   syncBrewbar();
@@ -1528,16 +1608,41 @@ if ('IntersectionObserver' in window) {
 const ringEls = new Map();
 let ringsKey = '';
 
-function buildRings(pressure) {
-  ringsKey = pressure.map(s => `${s.name}@${s.max_bar}`).join('|');
+function collectDials(data) {
+  const dials = ((data && data.pressure) || []).map(sensor => ({
+    id: `p:${sensor.name}@${sensor.max_bar}`,
+    name: sensor.name,
+    value: sensor.bar,
+    max: sensor.max_bar,
+    unit: 'bar',
+    fault: DashboardLogic.readingFaulted(sensor, 'bar'),
+  }));
+  ((data && data.other) || []).forEach(sensor => {
+    if (!Object.prototype.hasOwnProperty.call(sensor, 'celsius')) return;
+    const name = sensor.name === 'Environment' ? 'Room' : sensor.name;
+    const fault = sensor.celsius == null || (sensor.health && sensor.health.ok === false);
+    dials.push({
+      id: `t:${name}`,
+      name,
+      value: sensor.celsius,
+      max: 50,
+      unit: '°C',
+      fault,
+    });
+  });
+  return dials;
+}
+
+function buildRings(dials) {
+  ringsKey = dials.map(sensor => sensor.id).join('|');
   ringEls.clear();
-  document.getElementById('rings').innerHTML = pressure.map(sensor => {
-    const max = sensor.max_bar || 1;
+  document.getElementById('rings').innerHTML = dials.map(sensor => {
     const dial = dialMaxFor(sensor);
     const guide = guideFor(sensor.name);
     const accent = guide.accent || 'var(--water)';
     const soft = guide.soft || 'var(--water-soft)';
     const label = escapeHtml(sensor.name);
+    const unit = escapeHtml(sensor.unit);
 
     // The target band rides on the same track as the reading. Past its
     // top (only when the dial is cropped below the sensor ceiling) a clay
@@ -1561,7 +1666,7 @@ function buildRings(pressure) {
       <div class="card-head" style="justify-content:center;margin-bottom:2px">
         <span class="title">${label}</span>
       </div>
-      <svg class="ring" viewBox="0 0 120 100" role="img" aria-label="${label} 0 bar">
+      <svg class="ring" viewBox="0 0 120 100" role="img" aria-label="${label}">
         <path d="${arcPath(R - 7, angleFor(0), angleFor(1))}" fill="none" stroke="${soft}"
               stroke-width="9" stroke-linecap="round"/>
         <path class="ring-value" d="${arcPath(R - 7, angleFor(0), angleFor(1))}" fill="none"
@@ -1571,60 +1676,94 @@ function buildRings(pressure) {
               style="transition:stroke-dashoffset .3s ease"/>
         ${band}
       </svg>
-      <div class="ring-read"><b>0.0</b><span>BAR</span></div>
-      <div class="ring-foot">${guide.caption || `up to ${max} bar`}</div>
+      <div class="ring-read"><b>0.0</b><span>${unit}</span></div>
+      <div class="ring-foot">${escapeHtml(guide.caption || '')}</div>
     </div>`;
   }).join('');
 
   const cards = document.getElementById('rings').children;
-  pressure.forEach((sensor, i) => {
+  dials.forEach((sensor, i) => {
     const guide = guideFor(sensor.name);
     ringEls.set(i, {
+      card: cards[i],
       value: cards[i].querySelector('.ring-value'),
       read: cards[i].querySelector('.ring-read b'),
+      unit: cards[i].querySelector('.ring-read span'),
       svg: cards[i].querySelector('svg'),
       dial: dialMaxFor(sensor),
       accent: guide.accent || 'var(--water-ink)',
       over: cards[i].querySelector('.ring-over'),
-      // The band's top (or null): the render path reads the overshoot
-      // threshold from here instead of re-scanning GUIDES per sample.
       bandFrom: guide.band ? guide.band[0] : null,
       bandTop: guide.band ? guide.band[1] : null,
     });
   });
 }
 
-function renderRings(pressure) {
-  const key = pressure.map(s => `${s.name}@${s.max_bar}`).join('|');
-  if (key !== ringsKey) buildRings(pressure);
+function renderRings(data) {
+  const dials = collectDials(data);
+  const host = document.getElementById('rings');
+  const layout = DashboardLogic.gaugeLayout(dials.length);
+  host.classList.remove('one', 'pair', 'row');
+  if (layout) host.classList.add(layout);
+  const key = dials.map(sensor => sensor.id).join('|');
+  if (key !== ringsKey) buildRings(dials);
 
-  pressure.forEach((sensor, i) => {
+  dials.forEach((sensor, i) => {
     const el = ringEls.get(i);
     if (!el) return;
-    if (DashboardLogic.readingFaulted(sensor, 'bar')) {
+    el.card.classList.toggle('dial-fault', sensor.fault);
+    if (sensor.fault) {
       el.value.style.visibility = 'hidden';
-      el.read.textContent = '—';
+      el.read.textContent = 'No sensor reading';
+      el.unit.textContent = '';
       if (el.over) el.over.style.visibility = 'hidden';
-      el.svg.setAttribute('aria-label', `${sensor.name} no reading`);
+      el.svg.setAttribute('aria-label', `${sensor.name} No sensor reading`);
       return;
     }
-    const ratio = Math.max(0, Math.min(1, sensor.bar / el.dial));
+    const reading = Number(sensor.value);
+    const ratio = Math.max(0, Math.min(1, reading / el.dial));
     el.value.setAttribute('stroke-dashoffset', (1 - ratio).toFixed(4));
     el.value.style.visibility = ratio > 0 ? 'visible' : 'hidden';
-    // Past the band's top the fill itself turns clay: the geometry says
-    // "high", the colour says "high is wrong".
-    const over = el.bandTop != null && sensor.bar > el.bandTop;
+    const over = el.bandTop != null && reading > el.bandTop;
     el.value.setAttribute('stroke', over ? 'var(--clay-ink)' : el.accent);
-    // At rest the clay "past the band" arc reads as a warning. Keep it
-    // hidden until the needle is actually near the band.
     if (el.over) {
-      const show = DashboardLogic.showOverBand(sensor.bar, el.bandFrom);
+      const show = DashboardLogic.showOverBand(reading, el.bandFrom);
       el.over.style.visibility = show ? 'visible' : 'hidden';
     }
-    el.read.textContent = DashboardLogic.formatReading(sensor.bar, 1);
+    el.unit.textContent = sensor.unit;
+    el.read.textContent = DashboardLogic.formatReading(reading, 1);
     el.svg.setAttribute('aria-label',
-      `${sensor.name} ${DashboardLogic.formatReading(sensor.bar, 1)} bar`);
+      `${sensor.name} ${DashboardLogic.formatReading(reading, 1)} ${sensor.unit}`);
   });
+}
+
+function presentSensorNames(data) {
+  const names = [];
+  ((data && data.pressure) || []).forEach(sensor => names.push(sensor.name));
+  ((data && data.flow) || []).forEach(sensor => names.push(sensor.name));
+  ((data && data.other) || []).forEach(sensor => {
+    names.push(sensor.name === 'Environment' ? 'Room' : sensor.name);
+  });
+  return names;
+}
+
+function paintMissing(config, data) {
+  const host = document.getElementById('missing-sensors');
+  const expected = config && config.expected;
+  const missing = DashboardLogic.missingSensors(expected, presentSensorNames(data));
+  host.hidden = !missing.length;
+  if (!missing.length) {
+    host.innerHTML = '';
+    return;
+  }
+  const href = escapeHtml((config && config.readme) || '');
+  host.innerHTML = missing.map(item => `
+    <div class="card sensor-missing">
+      <div class="card-head"><span class="title">${escapeHtml(item.name)}</span></div>
+      <p>${escapeHtml(item.name)} is missing.</p>
+      <p class="sensor-key">${escapeHtml(item.key)}</p>
+      <a href="${href}">Troubleshooting</a>
+    </div>`).join('');
 }
 
 // ---- recent pulls --------------------------------------------------------
@@ -1664,7 +1803,7 @@ function renderPulls(history) {
       const verdict = verdictOf(shot.seconds);
       const tick = document.createElement('i');
       tick.className = `mark ${verdict.key}${i === history.length - 1 ? ' now' : ''}`;
-      const along = Math.max(0, Math.min(1, shot.seconds / SHOT_SCALE));
+      const along = Math.max(0, Math.min(1, shot.seconds / shotScale));
       tick.style.left = `${along * 100}%`;
       tick.style.marginLeft = '-8px';
       // The mark is not a target (overlapping ticks used to steal the tap).
@@ -2041,8 +2180,10 @@ function renderToday(today) {
 }
 
 function render(data) {
+  applyDashboardConfig(data.config);
   renderState(data.machine, data.pressure);
-  renderRings(data.pressure);
+  renderRings(data);
+  paintMissing(data.config, data);
   renderPulls(data.machine.history || []);
   renderHistory(data.shots);
   renderToday(data.machine && data.machine.today);
@@ -2062,7 +2203,8 @@ function render(data) {
     document.getElementById('other-rows').innerHTML = data.other
       .map(s => {
         const name = s.name === 'Environment' ? 'Room' : s.name;
-        return `<div class="row"><span>${escapeHtml(name)}</span><span class="v">${escapeHtml(s.message)}</span></div>`;
+        const fault = s.health && s.health.ok === false;
+        return `<div class="row${fault ? ' dial-fault' : ''}"><span>${escapeHtml(name)}</span><span class="v">${escapeHtml(s.message)}</span></div>`;
       })
       .join('');
   }
@@ -2340,7 +2482,7 @@ if ('wakeLock' in navigator) wakeBtn.hidden = false;
 
 // Axis labels are derived from the scale, never hardcoded, so they follow
 // it when the extraction window moves.
-document.getElementById('pulls-axis-end').textContent = `${SHOT_SCALE} s`;
+document.getElementById('pulls-axis-end').textContent = `${shotScale} s`;
 
 // One target for the whole strip. A tap (or the arrow keys) resolves to
 // the nearest pull, including when the marks sit closer than a thumb.
@@ -2349,7 +2491,7 @@ pullsTrack.addEventListener('click', (event) => {
   if (!pullHistory.length) return;
   const rect = pullsTrack.getBoundingClientRect();
   const centers = pullHistory.map(shot => {
-    const along = Math.max(0, Math.min(1, shot.seconds / SHOT_SCALE));
+    const along = Math.max(0, Math.min(1, shot.seconds / shotScale));
     return rect.left + along * rect.width;
   });
   const index = DashboardLogic.nearestTickIndex(centers, event.clientX);

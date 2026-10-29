@@ -1,4 +1,5 @@
 """Small Flask web dashboard exposing live machine status over the local network."""
+import math
 import os
 import threading
 from time import monotonic
@@ -248,6 +249,7 @@ class StatusServer:
         # In memory, same as the machine and tank blocks. The curves are
         # not included; a tap on the dashboard fetches those by id.
         snapshot["shots"] = self.shot_history.status_summary(limit=self.RECENT_SHOTS)
+        snapshot["config"] = dashboard_config()
         return snapshot
 
     def _window_stats(
@@ -306,6 +308,89 @@ class StatusServer:
         self._thread = threading.Thread(target=_serve, daemon=True)
         self._thread.start()
         print(f"Status web server listening on http://{self.host}:{self.port}")
+
+
+def _number(raw, default: Optional[float]) -> Optional[float]:
+    """A finite number from config, or the default when the value is unusable."""
+    if isinstance(raw, bool) or raw is None:
+        return default
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        return default
+    if not math.isfinite(value):
+        return default
+    if value == int(value):
+        return int(value)
+    return value
+
+
+def _band(raw, default):
+    """``8,10`` becomes ``[8, 10]``. Anything else keeps the default band."""
+    if not isinstance(raw, str) or "," not in raw:
+        return [default[0], default[1]]
+    parts = raw.split(",", 1)
+    low = _number(parts[0].strip(), None)
+    high = _number(parts[1].strip(), None)
+    if low is None or high is None or high <= low:
+        return [default[0], default[1]]
+    return [low, high]
+
+
+def dashboard_config(environ=None) -> dict:
+    """Dial bands, the shot window and the dose, as the dashboard should draw them.
+
+    Defaults match the page that used to hardcode these. ``SHOT_WINDOW_LOW``
+    and ``SHOT_WINDOW_HIGH`` are seconds. ``HEAD_BAND`` and ``BOILER_BAND``
+    are ``low,high`` in bar. ``DOSE_G`` is grams. The page still hides the
+    ratio until a real dose is stored.
+    """
+    env = os.environ if environ is None else environ
+    low = _number(env.get("SHOT_WINDOW_LOW"), 25)
+    high = _number(env.get("SHOT_WINDOW_HIGH"), 30)
+    if low is None or high is None or high <= low:
+        low, high = 25, 30
+    scale = max(40, int(math.ceil(high / 5.0) * 5))
+    dose = _number(env.get("DOSE_G"), 18)
+    if dose is None:
+        dose = 18
+    return {
+        "shot_window": [low, high],
+        "shot_scale": scale,
+        "dose_g": dose,
+        "range_factor": 1.75,
+        "guides": {
+            "head": {"band": _band(env.get("HEAD_BAND"), (8, 10)), "unit": "bar"},
+            "boiler": {
+                "band": _band(env.get("BOILER_BAND"), (0.8, 1.4)),
+                "unit": "bar",
+            },
+            "room": {"band": [18, 24], "unit": "°C"},
+        },
+        "expected": [
+            {"name": "Head", "kind": "pressure", "key": "ADC_TYPE"},
+            {"name": "Boiler", "kind": "pressure", "key": "ADC_TYPE"},
+            {"name": "Brew", "kind": "flow", "key": "FLOW_SAMPLE_INTERVAL"},
+            {"name": "Room", "kind": "temperature", "key": "DHT_ENABLE"},
+        ],
+        "readme": (
+            "https://github.com/idoshr/smart-espresso/blob/main/README.md"
+            "#troubleshooting"
+        ),
+    }
+
+
+def _celsius(value):
+    """A temperature in °C, or None when the sensor has no fresh sample."""
+    if isinstance(value, bool) or value is None:
+        return None
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(number):
+        return None
+    return round(number, 1)
 
 
 def sensor_text(sensor, ok: bool) -> str:
@@ -425,13 +510,14 @@ def collect_sensor_readings(sensors, health) -> dict:
                 }
             )
         else:
-            other.append(
-                {
-                    "name": name,
-                    "message": sensor_text(sensor, ok),
-                    "health": health_fields,
-                }
-            )
+            entry = {
+                "name": name,
+                "message": sensor_text(sensor, ok),
+                "health": health_fields,
+            }
+            if hasattr(sensor, "temperature"):
+                entry["celsius"] = _celsius(sensor.temperature)
+            other.append(entry)
 
     # A failed flow sensor must not report a lifetime total of 0: the
     # tank would treat that as a reset and the next good sample as a

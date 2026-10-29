@@ -184,11 +184,13 @@
     return name + " for " + dur;
   }
 
-  function heroDetail(machine, boilerBar) {
+  function heroDetail(machine, boilerBar, windowLow, windowHigh) {
+    const low = typeof windowLow === "number" ? windowLow : 25;
+    const high = typeof windowHigh === "number" ? windowHigh : 30;
     if (machine.shot) {
       const seconds = machine.shot.seconds;
-      if (seconds < 25) return "Aiming for 25 to 30 s";
-      if (seconds <= 30) return "On target";
+      if (seconds < low) return "Aiming for " + low + " to " + high + " s";
+      if (seconds <= high) return "On target";
       return "Running long";
     }
     if (machine.state === "heating" && typeof boilerBar === "number") {
@@ -300,6 +302,27 @@
     };
   }
 
+  // one wide dial, a side-by-side pair, or a compact row. Three at 45%
+  // wraps the last dial onto a full-width row.
+  function gaugeLayout(count) {
+    if (!count) return "";
+    if (count === 1) return "one";
+    if (count === 2) return "pair";
+    return "row";
+  }
+
+  function missingSensors(expected, presentNames) {
+    const present = {};
+    (presentNames || []).forEach((name) => {
+      if (name) present[name] = true;
+    });
+    return (expected || []).filter((item) => item && item.name && !present[item.name]);
+  }
+
+  function targetLabel(low, high) {
+    return "Target " + low + " to " + high + " s, from config";
+  }
+
   function nearestTickIndex(centers, x) {
     if (!centers || !centers.length || typeof x !== "number") return -1;
     let best = 0;
@@ -343,6 +366,9 @@
     isFlush: isFlush,
     livePresentation: livePresentation,
     shownState: shownState,
+    gaugeLayout: gaugeLayout,
+    missingSensors: missingSensors,
+    targetLabel: targetLabel,
     nearestTickIndex: nearestTickIndex,
     READY_MIN_BAR: READY_MIN_BAR,
   };

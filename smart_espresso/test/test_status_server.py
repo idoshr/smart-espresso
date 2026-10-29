@@ -56,6 +56,30 @@ def pulse(sensor, adc, clock, count, server=None, step=0.1):
             clock.advance(step)
 
 
+class TestDashboardConfig(unittest.TestCase):
+    def test_shot_window_and_bands_come_from_the_environment(self):
+        from smart_espresso.web.status_server import dashboard_config
+
+        cfg = dashboard_config(
+            {
+                "SHOT_WINDOW_LOW": "20",
+                "SHOT_WINDOW_HIGH": "24",
+                "DOSE_G": "16",
+                "HEAD_BAND": "7,9",
+                "BOILER_BAND": "bad",
+            }
+        )
+        self.assertEqual(cfg["shot_window"], [20, 24])
+        self.assertEqual(cfg["dose_g"], 16)
+        self.assertEqual(cfg["shot_scale"], 40)
+        self.assertEqual(cfg["guides"]["head"]["band"], [7, 9])
+        self.assertEqual(cfg["guides"]["boiler"]["band"], [0.8, 1.4])
+        self.assertIn("#troubleshooting", cfg["readme"])
+        self.assertEqual(len(cfg["expected"]), 4)
+        swapped = dashboard_config({"SHOT_WINDOW_LOW": "40", "SHOT_WINDOW_HIGH": "10"})
+        self.assertEqual(swapped["shot_window"], [25, 30])
+
+
 class TestStatusServer(unittest.TestCase):
     def setUp(self):
         self.clock = FakeClock()
@@ -158,6 +182,11 @@ class TestStatusServer(unittest.TestCase):
                 }
             ],
         )
+
+    def test_payload_includes_dashboard_config(self):
+        cfg = self.server.status_payload()["config"]
+        self.assertEqual(cfg["shot_window"], [25, 30])
+        self.assertEqual(cfg["dose_g"], 18)
 
     def test_payload_carries_machine_state_and_tank(self):
         head = PressureAnalogSensor(adc=FakeADC(2.5), name="Head", max_pressure_mpa=2.0)

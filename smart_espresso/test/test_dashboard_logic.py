@@ -326,3 +326,41 @@ class TestShippedShell:
         assert "verdict.label" in self.page
         assert "setAttribute('role', 'button')" not in self.page
         assert 'role="listbox"' in self.page
+
+
+class TestSensorLayout:
+    """Three dials used to wrap the last one to a full-width row."""
+
+    def setup_method(self):
+        self.page = (
+            Path(__file__).resolve().parents[1] / "web" / "static" / "index.html"
+        ).read_text(encoding="utf-8")
+
+    def test_three_dials_share_the_row(self):
+        assert "min-width: 45%" not in self.page
+        assert ".rings.row" in self.page
+        assert "33.333%" in self.page
+        assert "dial-fault" in self.page
+        assert "No sensor reading" in self.page
+
+    def test_layout_follows_the_sensor_count(self):
+        assert call("logic.gaugeLayout(1)") == "one"
+        assert call("logic.gaugeLayout(2)") == "pair"
+        assert call("logic.gaugeLayout(3)") == "row"
+        assert call("logic.gaugeLayout(0)") == ""
+
+    def test_a_missing_sensor_keeps_its_config_key(self):
+        missing = call(
+            "logic.missingSensors("
+            '[{name:"Head", key:"ADC_TYPE"}, {name:"Boiler", key:"ADC_TYPE"}],'
+            ' ["Boiler", "Room"])'
+        )
+        assert missing == [{"name": "Head", "key": "ADC_TYPE"}]
+        assert call("logic.targetLabel(25, 30)") == "Target 25 to 30 s, from config"
+
+    def test_the_shot_hint_follows_the_configured_window(self):
+        text = call(
+            "logic.heroDetail({state:'brewing', since_seconds:10, "
+            "shot:{seconds:10, ml:5}}, null, 20, 24)"
+        )
+        assert text == "Aiming for 20 to 24 s"

@@ -166,6 +166,12 @@ export SHOT_HISTORY_MAX="200"      # Completed shots kept on disk
 export DHT_ENABLE="True"          # Ambient DHT22/AM2302 sensor (GPIO)
 export DHT_PIN="4"                # BCM pin number for the DHT22
 
+export SHOT_WINDOW_LOW="25"       # Shot target window, seconds
+export SHOT_WINDOW_HIGH="30"
+export DOSE_G="18"                # Basket dose in grams
+export HEAD_BAND="8,10"           # Head dial band, bar
+export BOILER_BAND="0.8,1.4"      # Boiler dial band, bar
+
 export FLOW_SAMPLE_INTERVAL="0.005"  # Flow pulse sampling period, seconds
 ```
 
