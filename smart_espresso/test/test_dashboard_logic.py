@@ -326,3 +326,27 @@ class TestShippedShell:
         assert "verdict.label" in self.page
         assert "setAttribute('role', 'button')" not in self.page
         assert 'role="listbox"' in self.page
+
+
+def _css_rule(page, selector):
+    match = re.search(re.escape(selector) + r"\s*\{([^}]*)\}", page)
+    assert match, selector
+    return match.group(1)
+
+
+class TestLastShotChip:
+    """The chip is an inline span on main, so its box rules do nothing."""
+
+    def setup_method(self):
+        self.page = (
+            Path(__file__).resolve().parents[1] / "web" / "static" / "index.html"
+        ).read_text(encoding="utf-8")
+
+    def test_chip_stays_inside_the_card_and_clears_the_track(self):
+        chip = _css_rule(self.page, ".last-pull")
+        assert "display: inline-block" in chip
+        assert "max-width: 100%" in chip
+        assert "text-overflow: ellipsis" in chip
+        assert "margin-top: 16px" in chip
+        assert "margin-top: 12px" in _css_rule(self.page, ".warm")
+        assert "margin-top: 12px" in _css_rule(self.page, ".shot")
