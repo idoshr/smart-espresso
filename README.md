@@ -289,7 +289,7 @@ from the live readings, in this priority order:
 
 | State | Condition | Meaning |
 |-------|-----------|---------|
-| `brewing` | Flow ≥ 0.3 ml/s, head ≥ 4.5 bar, or head ≥ 2 bar within 5 s of flow | "Pulling shot" |
+| `brewing` | 2 pulses within 1 s, or flow ≥ 0.3 ml/s without a meter; or head ≥ 4.5 bar; or head ≥ 2 bar within 5 s of flow | "Pulling shot" |
 | `steaming` | Boiler falling faster than 0.02 bar/s | "Steaming milk" |
 | `off` | Boiler < 0.15 bar | "Resting" — machine is not heating |
 | `heating` | Boiler < 0.8 bar | "Warming up" |
@@ -301,10 +301,16 @@ cannot make the dashboard flicker; `brewing` is the exception and is published
 immediately, so the shot timer starts on time. Every threshold is a constructor
 argument on `MachineStateClassifier` if your machine runs different pressures.
 
-While brewing, the classifier times the shot and measures its volume. Water
-moving, pump-level head pressure, or brew-band pressure within 5 s of flow
-publishes "Pulling shot" immediately. A saved shot also needs at least 2 s
-of flow, 5 ml, and a head peak at the brew threshold (2 bar). A flush or
+While brewing, the classifier times the shot and measures its volume. With
+a flow meter, water is moving when 2 pulses arrive within 1 s. That does
+not depend on pulses per litre, so one noise pulse is not flow. Recorded
+seconds run from the first of those pulses to the last, and a gap longer
+than 1 s is left out. Recorded millilitres are the pulses in that span,
+including the ones just before the state changed. The 1 s average is what
+the flow chart and Home Assistant show. Pump-level head pressure, or
+brew-band pressure within 5 s of flow, also publishes "Pulling shot". A
+saved shot also needs at least 2 s of flow, 5 ml, and a head peak at the
+brew threshold (2 bar). A flush or
 rinse with no brew pressure, and a backflush that barely moves water, update
 the tank and are not shots. A pause that stays above 0.5 bar is the same
 shot when flow returns within 10 s. Once the head vents, the next pull is a

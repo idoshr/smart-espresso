@@ -51,10 +51,10 @@ class TestSensorFaults(unittest.TestCase):
         updates = {"n": 0, "last": None}
         real = server.classifier.update
 
-        def spy(head, boiler, flow=0.0, total=0.0):
+        def spy(head, boiler, flow=0.0, total=0.0, flow_sensor=None):
             updates["n"] += 1
             updates["last"] = (head, boiler, flow, total)
-            return real(head, boiler, flow, total)
+            return real(head, boiler, flow, total, flow_sensor=flow_sensor)
 
         server.classifier.update = spy
         app = SmartEspresso(
