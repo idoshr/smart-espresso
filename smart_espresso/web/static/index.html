@@ -221,6 +221,26 @@
     margin-top: 4px;
   }
 
+  /* The today line stays in the header only when the viewport is wide
+     enough. The column itself is 460 px, so this is a viewport query.
+     On a phone the same words move into the state card. */
+  @media (max-width: 999px) {
+    header .tagline { display: none !important; }
+    header h1 { white-space: nowrap; }
+  }
+
+  @media (min-width: 1000px) {
+    header { flex-wrap: wrap; }
+    header h1 { margin-right: auto; }
+    /* The column is 460 px, so the today line takes the next row
+       rather than squeezing in beside the connection pill. */
+    header .tagline { flex-basis: 100%; margin-top: 6px; }
+    #tagline-card { display: none !important; }
+  }
+
+  #tagline-card { margin: 0 0 10px; }
+  #tagline-card:empty { display: none; }
+
   .live {
     display: flex;
     align-items: center;
@@ -1067,6 +1087,7 @@
 
   body.glance header h1,
   body.glance header .tagline,
+  body.glance #tagline-card,
   body.glance #rings,
   body.glance #pulls-card,
   body.glance #history-card,
@@ -1117,16 +1138,14 @@
 </div>
 
 <header>
-  <div>
-    <h1>Smart Espresso</h1>
-    <div class="tagline" id="tagline"></div>
-  </div>
+  <h1>Smart Espresso</h1>
   <button class="live" id="wake" type="button" title="Keep screen on"
           aria-pressed="false" hidden><span class="dot"></span><span
       id="wake-text">Keep screen on</span></button>
   <!-- Connecting, not live: the shell is often cached and painted before
        /api/status has ever answered. A green "live" here is a lie. -->
   <div class="live" role="status"><span class="dot off" id="dot"></span><span id="conn">connecting…</span></div>
+  <div class="tagline" id="tagline"></div>
 </header>
 
 <div class="stack">
@@ -1140,6 +1159,7 @@
       </div>
     </div>
     <div class="state-body">
+      <div class="tagline" id="tagline-card"></div>
       <div class="state-detail" id="state-detail">waiting for the machine</div>
       <div class="warm" id="warm" hidden>
         <div class="warm-track" aria-hidden="true"><i id="warm-fill"></i></div>
@@ -2035,10 +2055,11 @@ function volText(ml) {
 // "how many shots has the machine seen today".
 function renderToday(today) {
   if (!today) return;   // an older server payload: keep the static line
-  const el = document.getElementById('tagline');
-  el.textContent = today.shots > 0
+  const text = today.shots > 0
     ? `${today.shots} shot${today.shots === 1 ? '' : 's'} · ${volText(today.ml)} today`
     : 'No shots yet today';
+  document.getElementById('tagline').textContent = text;
+  document.getElementById('tagline-card').textContent = text;
 }
 
 function render(data) {

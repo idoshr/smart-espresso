@@ -350,3 +350,27 @@ class TestLastShotChip:
         assert "margin-top: 16px" in chip
         assert "margin-top: 12px" in _css_rule(self.page, ".warm")
         assert "margin-top: 12px" in _css_rule(self.page, ".shot")
+
+
+class TestPhoneHeader:
+    """On a phone the today line wraps the header to four lines."""
+
+    def setup_method(self):
+        self.page = (
+            Path(__file__).resolve().parents[1] / "web" / "static" / "index.html"
+        ).read_text(encoding="utf-8")
+
+    def test_today_line_moves_into_the_state_card_on_a_phone(self):
+        assert 'id="tagline-card"' in self.page
+        phone = re.search(r"@media \(max-width: 999px\)\s*\{([^}]*)\}", self.page)
+        assert phone is not None
+        assert "header .tagline" in phone.group(1)
+        assert "display: none" in phone.group(1)
+        wide_at = self.page.find("@media (min-width: 1000px)")
+        assert wide_at > 0
+        wide = self.page[wide_at : wide_at + 400]
+        assert "#tagline-card" in wide
+        assert "display: none" in wide
+        # One sentence, written to both slots. No second wording.
+        assert "getElementById('tagline-card').textContent = text" in self.page
+        assert "getElementById('tagline').textContent = text" in self.page
