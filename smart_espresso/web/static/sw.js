@@ -6,6 +6,7 @@ const CACHE = 'espresso-shell-v11';
 const SHELL = [
   '/',
   '/dashboard_logic.js',
+  '/fonts/manrope.woff2',
   '/manifest.webmanifest',
   '/icon.svg',
   '/icon-192.png',
@@ -45,30 +46,6 @@ self.addEventListener('fetch', (event) => {
 
   // Live readings only: a cached status response is a lie.
   if (url.origin === self.location.origin && url.pathname.startsWith('/api/')) return;
-
-  // Webfonts: the machine's network may have no internet, so once a font
-  // is in the cache it is served from there and never re-fetched — which
-  // is exactly why a bad response must never enter the cache.
-  if (url.hostname === 'fonts.googleapis.com' || url.hostname === 'fonts.gstatic.com') {
-    event.respondWith(
-      caches.match(request).then(
-        (hit) =>
-          hit ||
-          fetch(request).then((response) => {
-            if (!response.ok) return response;
-            const copy = response.clone();
-            // Anchor the write to the response we hand back, so the worker
-            // cannot be terminated before the font is in the cache.
-            return caches
-              .open(CACHE)
-              .then((cache) => cache.put(request, copy))
-              .catch(() => {}) // a failed put must not surface as a rejection
-              .then(() => response);
-          })
-      )
-    );
-    return;
-  }
 
   // Page loads: try the network so deploys show up, fall back to the
   // cached shell when the machine cannot answer.

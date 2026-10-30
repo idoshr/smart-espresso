@@ -224,18 +224,14 @@ class TestGlance:
             "buzzedInWindow": False,
         }
 
-    def test_state_bands_are_distinct_colours(self):
+    def test_state_is_a_pill_and_glyphs_stay_distinct(self):
         page = (
             Path(__file__).resolve().parents[1] / "web" / "static" / "index.html"
         ).read_text(encoding="utf-8")
-        colors = dict(
-            re.findall(
-                r"--state-(off|heating|ready|brewing|steaming):\s*(#[0-9A-Fa-f]{6})",
-                page,
-            )
-        )
-        assert set(colors) == {"off", "heating", "ready", "brewing", "steaming"}
-        assert len(set(colors.values())) == 5
+        # Colour means live, not a band per state. The five glyphs still differ.
+        assert "--state-off:" not in page
+        assert "presentation.label === 'Pulling a shot'" in page
+        assert "presentation.label === 'Water running'" in page
         glyphs = re.findall(
             r"(off|heating|ready|brewing|steaming):\s+'([^']+)'",
             page,

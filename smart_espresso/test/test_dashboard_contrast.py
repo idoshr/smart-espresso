@@ -1,37 +1,48 @@
-"""Contrast of the dashboard colour tokens, light and dark.
+"""Contrast of the warm-neutral dashboard tokens.
 
-Parses the custom properties in ``index.html`` and checks the pairs the
-page actually paints. Large type is not given a lower bar: the small
-labels are the ones that failed, so every text pair is held to 4.5:1
-and every mark (dot, tick, arc, graph line) to 3:1.
+Look C uses five colours in each scheme. Text has to clear 4.5:1. The
+pill puts the card colour on the accent, which clears that bar. The page
+colour on the accent does not, so it is not used for type. Tracks are the
+page colour on a card on purpose, and are not held to 3:1.
 """
 
-import colorsys
 import re
 from pathlib import Path
 
 PAGE = Path(__file__).resolve().parents[1] / "web" / "static" / "index.html"
+WORKER = Path(__file__).resolve().parents[1] / "web" / "static" / "sw.js"
 
-TEXT = (
-    "ink",
-    "ink-soft",
-    "ink-faint",
-    "crema-ink",
-    "matcha-ink",
-    "water-ink",
-    "clay-ink",
-    "fast-ink",
-)
-SURFACES = (
-    "bg",
-    "card",
-    "crema-soft",
-    "matcha-soft",
-    "water-soft",
-    "clay-soft",
-)
-MARKS = ("matcha-ink", "crema-ink", "water-ink", "clay-ink", "fast-ink", "ink-faint")
-STATES = ("off", "heating", "ready", "brewing", "steaming", "overpressure", "unknown")
+LIGHT = {
+    "bg": "#F2EBE1",
+    "card": "#FBF8F3",
+    "ink": "#3A2A20",
+    "mute": "#735E4D",
+    "acc": "#B04F26",
+}
+DARK = {
+    "bg": "#1B1511",
+    "card": "#271F19",
+    "ink": "#F2E8DC",
+    "mute": "#B5A08C",
+    "acc": "#E58A5C",
+}
+
+# Rounded to two decimals. Card on accent is the pill. Page on accent is
+# under 4.5 and must not be the pill text.
+LIGHT_RATIOS = {
+    ("ink", "bg"): 11.58,
+    ("ink", "card"): 12.94,
+    ("mute", "bg"): 5.16,
+    ("mute", "card"): 5.77,
+    ("card", "acc"): 4.97,
+}
+DARK_RATIOS = {
+    ("ink", "bg"): 14.93,
+    ("ink", "card"): 13.39,
+    ("mute", "bg"): 7.20,
+    ("mute", "card"): 6.46,
+    ("card", "acc"): 6.27,
+}
 
 
 def _lin(channel):
@@ -55,25 +66,6 @@ def contrast(foreground, background):
     return (lighter + 0.05) / (darker + 0.05)
 
 
-def _hsv(color):
-    hex_color = color.lstrip("#")
-    red = int(hex_color[0:2], 16) / 255
-    green = int(hex_color[2:4], 16) / 255
-    blue = int(hex_color[4:6], 16) / 255
-    return colorsys.rgb_to_hsv(red, green, blue)
-
-
-def states_separated(first, second):
-    """Hue separates saturated bands. A grey has no hue, so lightness must."""
-    hue_a, sat_a, _ = _hsv(first)
-    hue_b, sat_b, _ = _hsv(second)
-    hue = 0
-    if sat_a >= 0.18 and sat_b >= 0.18:
-        degrees = abs(hue_a - hue_b) * 360
-        hue = min(degrees, 360 - degrees)
-    return hue >= 40 or contrast(first, second) >= 1.5
-
-
 def _declarations(css, marker):
     rest = css.split(marker, 1)[1]
     start = 0
@@ -92,101 +84,78 @@ def _declarations(css, marker):
         start = closed + 1
 
 
-def _themes(css):
-    light = _declarations(css, "/* theme:light */")
-    dark = dict(light)
-    dark.update(_declarations(css, "/* theme:dark */"))
-    contrast_light = dict(light)
-    contrast_light.update(_declarations(css, "/* theme:contrast-light */"))
-    contrast_dark = dict(dark)
-    contrast_dark.update(_declarations(css, "/* theme:contrast-light */"))
-    contrast_dark.update(_declarations(css, "/* theme:contrast-dark */"))
-    return {
-        "light": light,
-        "dark": dark,
-        "contrast-light": contrast_light,
-        "contrast-dark": contrast_dark,
-    }
-
-
-def _pairs(theme):
-    text = []
-    for name in TEXT:
-        for surface in SURFACES:
-            text.append((name, surface, 4.5))
-    for state in STATES:
-        text.append(("state-%s-ink" % state, "state-%s" % state, 4.5))
-    # Armed reset: page background colour sitting on the clay ink.
-    text.append(("bg", "clay-ink", 4.5))
-    marks = []
-    for name in MARKS:
-        marks.append((name, "card", 3.0))
-        marks.append((name, "bg", 3.0))
-    return text, marks
-
-
-def _lamp_pairs(scheme):
-    """Colour the brew-bar lamp actually paints on the card.
-
-    Light schemes use the solid band. Dark schemes use the band's ink:
-    the solids were picked for white type and vanish on a dark card.
-    """
-    pairs = []
-    for state in STATES:
-        if scheme in ("dark", "contrast-dark"):
-            pairs.append(("state-%s-ink" % state, "card", 3.0))
-        else:
-            pairs.append(("state-%s" % state, "card", 3.0))
-    return pairs
+def _rule(css, selector):
+    match = re.search(re.escape(selector) + r"\s*\{([^}]*)\}", css)
+    assert match, selector
+    return match.group(1)
 
 
 class TestDashboardContrast:
     def setup_method(self):
         self.css = PAGE.read_text(encoding="utf-8")
-        self.themes = _themes(self.css)
+        self.worker = WORKER.read_text(encoding="utf-8")
 
-    def test_dark_token_blocks_match(self):
+    def test_each_scheme_has_exactly_five_colours(self):
+        light = _declarations(self.css, "/* theme:light */")
+        assert light == LIGHT
         first = self.css.split("/* theme:dark */", 1)[1]
-        # The second marker is the explicit data-theme block.
         second_at = first.find("/* theme:dark */")
         assert second_at > 0
-        first_decl = _declarations(
+        media = _declarations(
             "/* theme:dark */" + first[:second_at], "/* theme:dark */"
         )
-        second_decl = _declarations(first[second_at:], "/* theme:dark */")
-        assert first_decl == second_decl
+        explicit = _declarations(first[second_at:], "/* theme:dark */")
+        assert media == explicit == DARK
+        # No sixth colour hiding in a contrast theme or a leftover hex.
+        hexes = set(re.findall(r"#[0-9A-Fa-f]{3,8}", self.css))
+        assert hexes == set(LIGHT.values()) | set(DARK.values())
 
-    def test_text_and_marks_in_every_scheme(self):
+    def test_text_pairs_clear_aa_and_match_the_palette(self):
         failures = []
-        for scheme, tokens in self.themes.items():
-            text, marks = _pairs(tokens)
-            for foreground, background, minimum in text + marks + _lamp_pairs(scheme):
+        for scheme, tokens, expected in (
+            ("light", LIGHT, LIGHT_RATIOS),
+            ("dark", DARK, DARK_RATIOS),
+        ):
+            for (foreground, background), want in expected.items():
                 ratio = contrast(tokens[foreground], tokens[background])
-                if ratio < minimum:
+                if round(ratio, 2) != want or ratio < 4.5:
                     failures.append(
-                        "%s %s on %s is %.2f (need %.1f)"
-                        % (scheme, foreground, background, ratio, minimum)
+                        "%s %s on %s is %.2f (want %.2f)"
+                        % (scheme, foreground, background, ratio, want)
                     )
         assert failures == []
+        # Ink on the accent fails AA. The pill must not use it.
+        assert contrast(LIGHT["ink"], LIGHT["acc"]) < 4.5
+        assert contrast(DARK["ink"], DARK["acc"]) < 4.5
 
-    def test_state_bands_are_distinct_in_every_scheme(self):
-        failures = []
-        for scheme, tokens in self.themes.items():
-            for index, left in enumerate(STATES):
-                for right in STATES[index + 1 :]:
-                    first = tokens["state-%s" % left]
-                    second = tokens["state-%s" % right]
-                    if not states_separated(first, second):
-                        failures.append(
-                            "%s %s %s vs %s %s" % (scheme, left, first, right, second)
-                        )
-        assert failures == []
+    def test_live_state_is_a_pill_and_quiet_states_are_neutral(self):
+        quiet = _rule(self.css, ".state-label")
+        live = _rule(self.css, ".state.live .state-label")
+        assert "background: var(--bg)" in quiet
+        assert "color: var(--ink)" in quiet
+        assert "background: var(--acc)" in live
+        assert "color: var(--card)" in live
+        assert "Pulling a shot" in self.css
+        assert "Steaming milk" in self.css
+        assert "Water running" in self.css
+        assert "classList.remove('live')" in self.css
+        assert "repeating-linear-gradient" not in self.css
+        assert "fonts.googleapis.com" not in self.css
+        assert "box-shadow" not in self.css
+        assert "#C4841A" not in self.css
+        assert "#5E3A86" not in self.css
+        assert "#1E2924" not in self.css
 
-    def test_a_missing_sensor_is_striped_and_the_lamp_is_only_a_pulse(self):
-        assert '[data-state="unknown"] .state-band' in self.css
-        assert "repeating-linear-gradient" in self.css
-        assert ".state-band > .lamp { display: none; }" in self.css
-        assert ".state-band > .lamp.pulse { display: block; }" in self.css
+    def test_manrope_is_self_hosted_and_cached_with_the_shell(self):
+        assert 'url("/fonts/manrope.woff2")' in self.css
+        assert "Manrope" in self.css
+        assert "fonts.googleapis.com" not in self.worker
+        assert "fonts.gstatic.com" not in self.worker
+        assert "/fonts/manrope.woff2" in self.worker
+        assert "espresso-shell-v11" in self.worker
+        font = PAGE.parent / "fonts" / "manrope.woff2"
+        assert font.is_file()
+        assert font.read_bytes()[:4] == b"wOF2"
 
     def test_labels_are_at_least_11px(self):
         sizes = [
