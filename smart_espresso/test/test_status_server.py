@@ -218,6 +218,11 @@ class TestStatusServer(unittest.TestCase):
         self.assertEqual(logic.status_code, 200)
         self.assertIn(b"pillText", logic.data)
 
+        font = client.get("/fonts/manrope.woff2")
+        self.assertEqual(font.status_code, 200)
+        self.assertIn("woff2", font.content_type)
+        self.assertTrue(font.data.startswith(b"wOF2"))
+
     def test_completed_pull_is_listed_with_curves(self):
         # The classifier keeps its own clock. Share the test clock so the
         # shot timer, the flow-rate window and the curve samples agree.

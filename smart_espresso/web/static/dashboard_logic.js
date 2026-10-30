@@ -13,7 +13,7 @@
   // The pill may say "live" only after a status payload has been applied.
   // Before that, "offline" would pretend a reading once existed.
   function pillText(connected, lastSeenAt) {
-    if (connected) return "live";
+    if (connected) return "Live";
     if (lastSeenAt == null) return "connecting…";
     return "offline";
   }
@@ -163,25 +163,30 @@
     return whole + " s";
   }
 
-  // One secondary line. Shot copy wins while a pull is running; heating
-  // names the boiler against the ready threshold; ready names the time in
-  // state. A later temperature or ready-alert can append to this string.
-  const STATE_NAMES = {
-    off: "Off",
-    heating: "Warming up",
-    ready: "Ready to pull",
-    brewing: "Pulling a shot",
-    steaming: "Steaming milk",
-    overpressure: "Pressure high. Check the pressurestat.",
-    unknown: "No sensor reading",
-    flushing: "Water running",
-  };
-
+  // The pill already names the state. This line only says how long.
   function durationLine(state, sinceSeconds) {
-    const dur = formatSpokenDuration(sinceSeconds);
-    if (state === "ready") return "Ready for " + dur;
-    const name = STATE_NAMES[state] || "Off";
-    return name + " for " + dur;
+    return "for " + formatSpokenDuration(sinceSeconds);
+  }
+
+  // The machine label is one sentence. The pill only needs the short name,
+  // and the check belongs on the line under the duration.
+  function pillLabel(label) {
+    if (!label) return "";
+    if (label.indexOf("Pressure high") === 0) return "Pressure high";
+    return label;
+  }
+
+  function pillKind(label) {
+    const text = pillLabel(label);
+    if (text === "Pulling a shot" || text === "Steaming milk" || text === "Water running") {
+      return "live";
+    }
+    if (text === "Pressure high") return "alert";
+    if (text === "Ready to pull") return "ready";
+    if (text === "No sensor reading") return "unknown";
+    if (text === "Warming up") return "heating";
+    if (text === "Off") return "off";
+    return "quiet";
   }
 
   function heroDetail(machine, boilerBar) {
@@ -193,8 +198,15 @@
     }
     if (machine.state === "heating" && typeof boilerBar === "number") {
       const eta = formatEta(warmingEtaSeconds(boilerBar, machine.since_seconds));
-      const base = "Warming up · " + boilerBar.toFixed(1) + " of 0.8 bar";
-      return eta ? base + " · " + eta : base;
+      const base = boilerBar.toFixed(1) + " of 0.8 bar";
+      return eta ? base + " · " + eta + " to go" : base;
+    }
+    if (machine.state === "overpressure") {
+      return (
+        "for " +
+        formatSpokenDuration(machine.since_seconds) +
+        "\nCheck the pressurestat"
+      );
     }
     return durationLine(machine.state, machine.since_seconds);
   }
@@ -333,6 +345,8 @@
     warmingEtaSeconds: warmingEtaSeconds,
     formatEta: formatEta,
     heroDetail: heroDetail,
+    pillLabel: pillLabel,
+    pillKind: pillKind,
     glanceOn: glanceOn,
     noteShotWindow: noteShotWindow,
     clearShotWindow: clearShotWindow,

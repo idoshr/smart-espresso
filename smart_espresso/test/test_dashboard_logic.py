@@ -27,10 +27,10 @@ def call(expression):
 class TestConnectionCopy:
     def test_pill_stays_connecting_until_a_reading_exists(self):
         assert call("logic.pillText(false, null)") == "connecting…"
-        assert call("logic.pillText(false, null)") != "live"
+        assert call("logic.pillText(false, null)") != "Live"
 
     def test_pill_is_live_only_while_connected(self):
-        assert call("logic.pillText(true, 1000)") == "live"
+        assert call("logic.pillText(true, 1000)") == "Live"
 
     def test_pill_is_offline_after_a_reading_was_lost(self):
         assert call("logic.pillText(false, 1000)") == "offline"
@@ -110,9 +110,9 @@ class TestOfflineRules:
         )
 
     def test_shot_timer_does_not_advance_while_offline(self):
-        assert call("logic.displayedShotText(false, '12s', '13s')") == "12s"
-        assert call("logic.displayedShotText(true, '12s', '13s')") == "13s"
-        assert call("logic.displayedShotText(false, null, '4s')") == "4s"
+        assert call("logic.displayedShotText(false, '12 s', '13 s')") == "12 s"
+        assert call("logic.displayedShotText(true, '12 s', '13 s')") == "13 s"
+        assert call("logic.displayedShotText(false, null, '4 s')") == "4 s"
 
     def test_skeletons_only_before_the_first_payload(self):
         assert call("logic.showSkeletons(false)") is True
@@ -124,12 +124,71 @@ class TestGlance:
         ready = call(
             "logic.heroDetail({state:'ready', since_seconds:600, shot:null}, 1.1)"
         )
-        assert ready == "Ready for 10 min"
+        assert ready == "for 10 min"
         heating = call(
-            "logic.heroDetail({state:'heating', since_seconds:150, shot:null}, 0.6)"
+            "logic.heroDetail({state:'heating', since_seconds:30, shot:null}, 0.3)"
         )
-        assert heating.startswith("Warming up · 0.6 of 0.8 bar")
-        assert "about" in heating and "min" in heating
+        assert heating == "0.3 of 0.8 bar · about 2 min to go"
+
+    def test_each_state_has_its_own_pill_class(self):
+        assert call("logic.pillKind('Off')") == "off"
+        assert call("logic.pillKind('Warming up')") == "heating"
+        assert call("logic.pillKind('Ready to pull')") == "ready"
+        assert call("logic.pillKind('Pulling a shot')") == "live"
+        assert call("logic.pillKind('Steaming milk')") == "live"
+        assert call("logic.pillKind('Water running')") == "live"
+        assert call("logic.pillKind('No sensor reading')") == "unknown"
+        assert (
+            call("logic.pillKind('Pressure high. Check the pressurestat.')") == "alert"
+        )
+        assert call("logic.pillLabel('Pressure high. Check the pressurestat.')") == (
+            "Pressure high"
+        )
+        assert call("logic.pillKind('connecting…')") == "quiet"
+
+    def test_pressure_high_puts_the_check_on_its_own_line(self):
+        detail = call(
+            "logic.heroDetail({state:'overpressure', since_seconds:4, shot:null}, 1.9)"
+        )
+        assert detail == "for 4 s\nCheck the pressurestat"
+        assert "Pressure high" not in detail
+        assert "pressurestat. for" not in detail
+
+    def test_detail_never_repeats_the_pill(self):
+        assert (
+            call(
+                "logic.heroDetail({state:'flushing', since_seconds:26, shot:null}, null)"
+            )
+            == "for 26 s"
+        )
+        assert (
+            call("logic.heroDetail({state:'off', since_seconds:4, shot:null}, null)")
+            == "for 4 s"
+        )
+        assert (
+            call("logic.heroDetail({state:'steaming', since_seconds:26, shot:null}, 1)")
+            == "for 26 s"
+        )
+        assert (
+            call(
+                "logic.heroDetail({state:'unknown', since_seconds:8, shot:null}, null)"
+            )
+            == "for 8 s"
+        )
+        aiming = call(
+            "logic.heroDetail({state:'brewing', since_seconds:12, shot:{seconds:12}}, null)"
+        )
+        assert aiming == "Aiming for 25 to 30 s"
+        for phrase in (
+            "Water running",
+            "Warming up",
+            "Off for",
+            "Ready for",
+            "Steaming milk",
+            "No sensor reading",
+            "Pressure high for",
+        ):
+            assert phrase not in aiming
 
     def test_warming_bar_and_eta_need_a_real_slope(self):
         assert call("logic.warmingProgress(0.4)") == 0.5
@@ -224,18 +283,15 @@ class TestGlance:
             "buzzedInWindow": False,
         }
 
-    def test_state_bands_are_distinct_colours(self):
+    def test_state_is_a_pill_and_glyphs_stay_distinct(self):
         page = (
             Path(__file__).resolve().parents[1] / "web" / "static" / "index.html"
         ).read_text(encoding="utf-8")
-        colors = dict(
-            re.findall(
-                r"--state-(off|heating|ready|brewing|steaming):\s*(#[0-9A-Fa-f]{6})",
-                page,
-            )
-        )
-        assert set(colors) == {"off", "heating", "ready", "brewing", "steaming"}
-        assert len(set(colors.values())) == 5
+        # Colour means live, not a band per state. The five glyphs still differ.
+        assert "--state-off:" not in page
+        assert "applyPill(card, presentation.label)" in page
+        assert call("logic.pillKind('Pulling a shot')") == "live"
+        assert call("logic.pillKind('Water running')") == "live"
         glyphs = re.findall(
             r"(off|heating|ready|brewing|steaming):\s+'([^']+)'",
             page,
@@ -293,7 +349,8 @@ class TestShippedShell:
         assert 'id="tank-card" hidden' in self.page
 
     def test_connecting_screen_has_skeletons_and_no_live_lamp(self):
-        assert 'id="state-label" aria-live="polite">Connecting…' in self.page
+        assert 'id="state-label" aria-live="polite"' in self.page
+        assert 'id="state-label-text">Connecting…' in self.page
         start = self.page.index('id="skeletons"')
         end = self.page.index("<!-- end skeletons -->")
         block = self.page[start:end]
@@ -350,3 +407,61 @@ class TestLastShotChip:
         assert "margin-top: 16px" in chip
         assert "margin-top: 12px" in _css_rule(self.page, ".warm")
         assert "margin-top: 12px" in _css_rule(self.page, ".shot")
+
+
+class TestWording:
+    def setup_method(self):
+        self.page = (
+            Path(__file__).resolve().parents[1] / "web" / "static" / "index.html"
+        ).read_text(encoding="utf-8")
+
+    def test_units_are_spaced_and_pressure_says_bar(self):
+        assert 'id="shot-seconds">0 s<' in self.page
+        assert 'id="bb-time">0 s<' in self.page
+        assert "${machine.shot.seconds.toFixed(0)} s" in self.page
+        assert "${Math.floor(seconds)} s" in self.page
+        assert ">BAR<" not in self.page
+        assert "<span>bar</span>" in self.page
+
+    def test_live_pill_and_last_shot_chip_are_sentence_case(self):
+        assert "Last shot ${last.seconds.toFixed(0)} s" in self.page
+        assert "last shot ${" not in self.page
+        assert call("logic.pillText(true, 1000)") == "Live"
+
+    def test_only_the_timer_stays_centred_during_a_shot(self):
+        state = _css_rule(self.page, ".state")
+        assert "align-items: stretch" in state
+        assert "text-align: left" in state
+        assert "text-align: left" in _css_rule(self.page, ".state-detail")
+        assert "justify-content: flex-start" in _css_rule(self.page, ".state-band")
+        assert "text-align: center" in _css_rule(self.page, ".shot")
+        assert "font-variant-numeric: tabular-nums" in _css_rule(self.page, ".shot b")
+        assert "font-variant-numeric: tabular-nums" in _css_rule(
+            self.page, ".ring-read b"
+        )
+        assert "font-variant-numeric: tabular-nums" in _css_rule(self.page, ".figure b")
+        # The connection pill shares the class live. Unscoped, it centers the card.
+        assert re.search(r"(^|\n)\s*\.live\s*\{", self.page) is None
+        assert "header .live {" in self.page
+
+    def test_only_shot_history_shows_a_count(self):
+        assert "history.length} shot" not in self.page
+        assert "`${count} saved`" in self.page
+        assert "'1 saved'" in self.page
+
+    def test_warming_pill_has_an_espresso_ring(self):
+        assert call("logic.pillKind('Warming up')") == "heating"
+        heating = _css_rule(self.page, ".state.heating .state-label")
+        assert "border-color: var(--ink)" in heating
+        ring = _css_rule(self.page, ".state.heating .state-label::before")
+        assert "border-radius: 50%" in ring
+        assert "background: transparent" in ring
+
+    def test_alert_mark_is_hidden_from_the_name_and_titles_are_sentence_case(self):
+        assert 'class="alert-mark"' in self.page
+        assert 'aria-hidden="true"' in self.page
+        assert ">!</span>" in self.page
+        assert "#FFB09A" in self.page
+        assert "#F08A6B" not in self.page
+        assert "text-transform: uppercase" not in _css_rule(self.page, ".title")
+        assert 'content: "−"' in _css_rule(self.page, ".mark.fast::before")
