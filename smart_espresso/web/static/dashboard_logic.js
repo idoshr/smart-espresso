@@ -13,7 +13,7 @@
   // The pill may say "live" only after a status payload has been applied.
   // Before that, "offline" would pretend a reading once existed.
   function pillText(connected, lastSeenAt) {
-    if (connected) return "live";
+    if (connected) return "Live";
     if (lastSeenAt == null) return "connecting…";
     return "offline";
   }

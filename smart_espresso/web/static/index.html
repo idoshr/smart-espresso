@@ -962,7 +962,7 @@
 <div class="brewbar" id="brewbar" aria-hidden="true">
   <span class="lamp" id="bb-lamp"></span>
   <span class="bb-label" id="bb-label">Pulling a shot</span>
-  <b class="bb-time" id="bb-time">0s</b>
+  <b class="bb-time" id="bb-time">0 s</b>
   <span class="stale-tag" id="bb-stale" hidden>Last seen</span>
   <span class="bb-ml" id="bb-ml">0 ml</span>
 </div>
@@ -1003,7 +1003,7 @@
         <span class="warm-eta" id="warm-eta"></span>
       </div>
       <div class="shot" id="shot" hidden>
-        <b id="shot-seconds">0s</b>
+        <b id="shot-seconds">0 s</b>
         <span class="stale-tag" id="shot-stale" hidden>Last seen</span>
         <small id="shot-ml">0 ml</small>
         <div class="shot-track"><u id="shot-window"></u><i id="shot-progress"></i></div>
@@ -1273,7 +1273,7 @@ function renderState(machine, pressure) {
     // Fresh payload: take the machine's number. displayedShotText refuses
     // to advance a held reading while offline, which is what keeps the
     // timer from counting up if a late render lands after the lamp flips.
-    const incomingShot = `${machine.shot.seconds.toFixed(0)}s`;
+    const incomingShot = `${machine.shot.seconds.toFixed(0)} s`;
     const shownShot = DashboardLogic.displayedShotText(true, heldShotText, incomingShot);
     heldShotText = shownShot;
     shotSeconds.textContent = shownShot;
@@ -1308,7 +1308,7 @@ function renderState(machine, pressure) {
   if (last) {
     const lastVerdict = verdictOf(last.seconds);
     chip.textContent =
-      `last shot ${last.seconds.toFixed(0)} s · ${last.ml.toFixed(0)} ml · ${lastVerdict.label}`;
+      `Last shot ${last.seconds.toFixed(0)} s · ${last.ml.toFixed(0)} ml · ${lastVerdict.label}`;
   }
 
   const boilerBar = DashboardLogic.boilerReading(pressure);
@@ -1435,7 +1435,7 @@ function buildRings(pressure) {
               style="transition:stroke-dashoffset .3s ease"/>
         ${band}
       </svg>
-      <div class="ring-read"><b>0.0</b><span>BAR</span></div>
+      <div class="ring-read"><b>0.0</b><span>bar</span></div>
       <div class="ring-foot">${guide.caption || `up to ${max} bar`}</div>
     </div>`;
   }).join('');
@@ -1542,13 +1542,12 @@ function renderPulls(history) {
     });
   }
 
-  // The note doubles as the inspector: tapping a tick swaps "6 pulls" for
-  // that pull's numbers; tapping it again hands the slot back.
+  // The note is only the open tick. The count stays on Shot history.
   const note = document.getElementById('pulls-note');
   const sel = pullHistory[selectedPull];
   note.textContent = sel
     ? `${sel.seconds.toFixed(0)} s · ${sel.ml.toFixed(0)} ml · ${verdictOf(sel.seconds).label}`
-    : `${history.length} shot${history.length === 1 ? '' : 's'}`;
+    : '';
 }
 
 function selectPull(index, toggle) {
@@ -1882,9 +1881,9 @@ function renderFlow(sensor) {
 
 function formatDuration(seconds) {
   const h = Math.floor(seconds / 3600), m = Math.floor(seconds / 60) % 60;
-  if (h) return `${h}h ${m}m`;
-  if (m) return `${m}m`;
-  return `${Math.floor(seconds)}s`;
+  if (h) return `${h} h ${m} m`;
+  if (m) return `${m} m`;
+  return `${Math.floor(seconds)} s`;
 }
 
 // Volumes read in the unit that keeps the digits short: a lifetime of
@@ -1963,7 +1962,7 @@ function syncTankControl() {
 // does not wait for the next footer tick to appear.
 function paintOfflineChrome() {
   const text = DashboardLogic.pillText(connected, lastSeenAt);
-  document.getElementById('dot').classList.toggle('off', text !== 'live');
+  document.getElementById('dot').classList.toggle('off', text !== 'Live');
   document.getElementById('conn').textContent = text;
   if (!connected) {
     document.getElementById('footer').textContent = DashboardLogic.footerText(

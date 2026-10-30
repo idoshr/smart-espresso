@@ -27,10 +27,10 @@ def call(expression):
 class TestConnectionCopy:
     def test_pill_stays_connecting_until_a_reading_exists(self):
         assert call("logic.pillText(false, null)") == "connecting…"
-        assert call("logic.pillText(false, null)") != "live"
+        assert call("logic.pillText(false, null)") != "Live"
 
     def test_pill_is_live_only_while_connected(self):
-        assert call("logic.pillText(true, 1000)") == "live"
+        assert call("logic.pillText(true, 1000)") == "Live"
 
     def test_pill_is_offline_after_a_reading_was_lost(self):
         assert call("logic.pillText(false, 1000)") == "offline"
@@ -110,9 +110,9 @@ class TestOfflineRules:
         )
 
     def test_shot_timer_does_not_advance_while_offline(self):
-        assert call("logic.displayedShotText(false, '12s', '13s')") == "12s"
-        assert call("logic.displayedShotText(true, '12s', '13s')") == "13s"
-        assert call("logic.displayedShotText(false, null, '4s')") == "4s"
+        assert call("logic.displayedShotText(false, '12 s', '13 s')") == "12 s"
+        assert call("logic.displayedShotText(true, '12 s', '13 s')") == "13 s"
+        assert call("logic.displayedShotText(false, null, '4 s')") == "4 s"
 
     def test_skeletons_only_before_the_first_payload(self):
         assert call("logic.showSkeletons(false)") is True
@@ -346,3 +346,28 @@ class TestLastShotChip:
         assert "margin-top: 16px" in chip
         assert "margin-top: 12px" in _css_rule(self.page, ".warm")
         assert "margin-top: 12px" in _css_rule(self.page, ".shot")
+
+
+class TestWording:
+    def setup_method(self):
+        self.page = (
+            Path(__file__).resolve().parents[1] / "web" / "static" / "index.html"
+        ).read_text(encoding="utf-8")
+
+    def test_units_are_spaced_and_pressure_says_bar(self):
+        assert 'id="shot-seconds">0 s<' in self.page
+        assert 'id="bb-time">0 s<' in self.page
+        assert "${machine.shot.seconds.toFixed(0)} s" in self.page
+        assert "${Math.floor(seconds)} s" in self.page
+        assert ">BAR<" not in self.page
+        assert "<span>bar</span>" in self.page
+
+    def test_live_pill_and_last_shot_chip_are_sentence_case(self):
+        assert "Last shot ${last.seconds.toFixed(0)} s" in self.page
+        assert "last shot ${" not in self.page
+        assert call("logic.pillText(true, 1000)") == "Live"
+
+    def test_only_shot_history_shows_a_count(self):
+        assert "history.length} shot" not in self.page
+        assert "`${count} saved`" in self.page
+        assert "'1 saved'" in self.page
