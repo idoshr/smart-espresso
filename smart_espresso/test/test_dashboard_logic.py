@@ -385,3 +385,18 @@ class TestPhoneHeader:
         assert "#wake-text" in narrow
         assert "position: absolute" in narrow
         assert "width: 44px" in narrow
+
+    def test_narrow_phones_do_not_scroll_sideways(self):
+        # 320 and 360 used to overflow: the title could not shrink, so the
+        # connecting pill stuck out. The title ellipsizes instead.
+        title = _css_rule(self.page, "header h1")
+        assert "min-width: 0" in title
+        assert "overflow: hidden" in title
+        assert "text-overflow: ellipsis" in title
+        assert "white-space: nowrap" in title
+        assert 'class="header-tools"' in self.page
+        face = _css_rule(self.page, ".header-tools .pill-face")
+        assert "height: 36px" in face
+        tools = _css_rule(self.page, ".header-tools > .live")
+        assert "min-height: 44px" in tools
+        assert "height: 44px" in tools

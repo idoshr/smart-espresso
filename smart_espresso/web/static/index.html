@@ -213,6 +213,62 @@
     margin: 0;
   }
 
+  /* The title yields before the status pills do. At 320 px a nowrap title
+     otherwise forces the page to scroll sideways. */
+  header h1 {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .header-tools {
+    display: flex;
+    align-items: center;
+    flex: none;
+    margin-left: auto;
+    gap: 0;
+  }
+
+  /* 44 px tap area. The visible circle or pill inside is 36 px tall,
+     so the wake control and the connection pill match. */
+  .header-tools > .live {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    width: auto;
+    min-width: 44px;
+    height: 44px;
+    min-height: 44px;
+    margin: 0;
+    padding: 4px;
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  .header-tools .pill-face {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    box-sizing: border-box;
+    height: 36px;
+    min-width: 36px;
+    padding: 0 10px;
+    background: var(--card);
+    border: 1px solid var(--edge);
+    border-radius: 999px;
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: .08em;
+    color: var(--ink-soft);
+    white-space: nowrap;
+  }
+
   .tagline {
     font-family: var(--mono);
     font-size: 12px;
@@ -226,7 +282,6 @@
      On a phone the same words move into the state card. */
   @media (max-width: 999px) {
     header .tagline { display: none !important; }
-    header h1 { white-space: nowrap; }
   }
 
   /* Below about 480 px the words "Keep screen on" plus the connection
@@ -245,10 +300,16 @@
       flex: none;
       width: 44px;
       justify-content: center;
-      padding-left: 0;
-      padding-right: 0;
+      padding: 4px;
     }
-    header > .live { flex: none; }
+    #wake .pill-face {
+      width: 36px;
+      min-width: 36px;
+      padding: 0;
+      border-radius: 50%;
+    }
+    header > .live,
+    .header-tools { flex: none; }
   }
 
   @media (min-width: 1000px) {
@@ -1161,12 +1222,16 @@
 
 <header>
   <h1>Smart Espresso</h1>
-  <button class="live" id="wake" type="button" title="Keep screen on"
-          aria-label="Keep screen on" aria-pressed="false" hidden><span
-      class="dot"></span><span id="wake-text">Keep screen on</span></button>
-  <!-- Connecting, not live: the shell is often cached and painted before
-       /api/status has ever answered. A green "live" here is a lie. -->
-  <div class="live" role="status"><span class="dot off" id="dot"></span><span id="conn">connecting…</span></div>
+  <div class="header-tools">
+    <button class="live" id="wake" type="button" title="Keep screen on"
+            aria-label="Keep screen on" aria-pressed="false" hidden><span
+        class="pill-face"><span class="dot"></span><span
+        id="wake-text">Keep screen on</span></span></button>
+    <!-- Connecting, not live: the shell is often cached and painted before
+         /api/status has ever answered. A green "live" here is a lie. -->
+    <div class="live" role="status"><span class="pill-face"><span class="dot off"
+        id="dot"></span><span id="conn">connecting…</span></span></div>
+  </div>
   <div class="tagline" id="tagline"></div>
 </header>
 
