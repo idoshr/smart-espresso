@@ -133,16 +133,23 @@ class TestGracefulShutdown(unittest.TestCase):
             )
             seen = 0.0
             deadline = time.monotonic() + 15
-            assert proc.stdout is not None
-            while time.monotonic() < deadline and proc.poll() is None:
-                ready, _, _ = select.select([proc.stdout], [], [], 0.2)
-                if not ready:
-                    continue
-                line = proc.stdout.readline()
-                if line.startswith("USED"):
-                    seen = float(line.split()[1])
-                    if seen >= 5:
-                        break
+            stdout_lines = []
+            stderr_lines = []
+            assert proc.stdout is not None and proc.stderr is not None
+            # Stderr has to be drained too. A full pipe stalls the flow
+            # thread, the tank stays at 0, and the USED lines never climb.
+            while time.monotonic() < deadline and proc.poll() is None and seen < 5:
+                ready, _, _ = select.select([proc.stdout, proc.stderr], [], [], 0.2)
+                for stream in ready:
+                    line = stream.readline()
+                    if not line:
+                        continue
+                    if stream is proc.stderr:
+                        stderr_lines.append(line)
+                        continue
+                    stdout_lines.append(line)
+                    if line.startswith("USED"):
+                        seen = max(seen, float(line.split()[1]))
             if proc.poll() is None:
                 os.kill(proc.pid, signal.SIGTERM)
             try:
@@ -152,12 +159,14 @@ class TestGracefulShutdown(unittest.TestCase):
                 stdout, stderr = proc.communicate()
                 self.fail(f"process still running after 2s\n{stdout}\n{stderr}")
             stdout, stderr = proc.communicate()
-            for line in stdout.splitlines():
+            full_out = "".join(stdout_lines) + (stdout or "")
+            full_err = "".join(stderr_lines) + (stderr or "")
+            for line in full_out.splitlines():
                 if line.startswith("USED"):
                     seen = max(seen, float(line.split()[1]))
-            self.assertEqual(code, 0, stderr + stdout)
-            self.assertIn("ALIVE False False", stdout)
-            self.assertGreaterEqual(seen, 5)
+            self.assertEqual(code, 0, full_err + full_out)
+            self.assertIn("ALIVE False False", full_out)
+            self.assertGreaterEqual(seen, 5, full_err + full_out)
             with open(tank_path, encoding="utf-8") as handle:
                 saved = json.load(handle)
             self.assertGreaterEqual(saved["used_ml"], 5)
