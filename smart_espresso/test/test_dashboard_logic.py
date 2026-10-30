@@ -26,7 +26,7 @@ def call(expression):
 
 class TestConnectionCopy:
     def test_pill_stays_connecting_until_a_reading_exists(self):
-        assert call("logic.pillText(false, null)") == "connecting…"
+        assert call("logic.pillText(false, null)") == "Connecting…"
         assert call("logic.pillText(false, null)") != "live"
 
     def test_pill_is_live_only_while_connected(self):
@@ -279,7 +279,7 @@ class TestShippedShell:
         self.page = page
 
     def test_markup_does_not_ship_the_live_pill(self):
-        assert 'id="conn">connecting…' in self.page
+        assert 'id="conn">Connecting…' in self.page
         assert 'id="conn">live' not in self.page
         assert 'class="dot off"' in self.page
 
@@ -375,16 +375,28 @@ class TestPhoneHeader:
         assert "getElementById('tagline-card').textContent = text" in self.page
         assert "getElementById('tagline').textContent = text" in self.page
 
-    def test_wake_words_leave_the_header_row_below_480px(self):
-        # The full "Keep screen on" pill pushes "live" off a 390 px screen.
+    def test_title_stays_whole_at_768_and_1280_with_connecting(self):
+        # A labelled wake control plus "Connecting…" is about 438 px. The
+        # header column is about 424, so at 768 the title was cut to
+        # "Smart Espre…" and at 1280 the title row wrapped. The icon-only
+        # rules live in the base sheet, so they apply at those widths and
+        # not only under 480 px. The words stay for the accessible name.
         assert 'aria-label="Keep screen on"' in self.page
         assert ">Keep screen on<" in self.page
-        narrow_at = self.page.find("@media (max-width: 480px)")
-        assert narrow_at > 0
-        narrow = self.page[narrow_at : narrow_at + 500]
-        assert "#wake-text" in narrow
-        assert "position: absolute" in narrow
-        assert "width: 44px" in narrow
+        assert 'id="conn">Connecting…' in self.page
+        # Top-level rules (two-space indent), not a max-width media query.
+        # A 480 px query would leave 768 and 1280 on the labelled control.
+        assert re.search(r"^  #wake-text \{", self.page, re.M)
+        assert re.search(r"^  #wake \{", self.page, re.M)
+        hidden = _css_rule(self.page, "#wake-text")
+        assert "position: absolute" in hidden
+        assert "width: 1px" in hidden
+        wake = _css_rule(self.page, "#wake")
+        assert "width: 44px" in wake
+        face = _css_rule(self.page, "#wake .pill-face")
+        assert "width: 36px" in face
+        assert "border-radius: 50%" in face
+        assert "@media (max-width: 480px)" not in self.page
 
     def test_narrow_phones_do_not_scroll_sideways(self):
         # 320 and 360 used to overflow: the title could not shrink, so the
@@ -403,17 +415,32 @@ class TestPhoneHeader:
 
     def test_wake_icon_toggles_with_aria_pressed(self):
         assert 'aria-label="Keep screen on"' in self.page
+        assert 'title="Keep screen on"' in self.page
         assert 'aria-pressed="false"' in self.page
         assert 'class="wake-icon"' in self.page
         assert 'stroke="currentColor"' in self.page
+        assert 'stroke-width="2"' in self.page
         icon = self.page.split('class="wake-icon"', 1)[1].split("</svg>", 1)[0]
         assert (
             'aria-hidden="true"'
             in self.page[self.page.index("<svg") : self.page.index("</svg>")]
         )
         assert "http" not in icon
+        icon_box = _css_rule(self.page, ".wake-icon")
+        assert "width: 20px" in icon_box
+        assert "height: 20px" in icon_box
         assert "setAttribute('aria-pressed', String(on))" in self.page
         assert "classList.toggle('on', on)" in self.page
+        # Tooltip follows the toggle. The accessible name does not.
+        assert (
+            "setAttribute('title', on ? 'Screen stays on' : 'Keep screen on')"
+            in self.page
+        )
+        ui = self.page.split("const setUI = (on) => {", 1)[1].split("};", 1)[0]
+        assert "aria-label" not in ui
+        off_face = _css_rule(self.page, "#wake .pill-face")
+        assert "border-color: var(--ink-faint)" in off_face
         pressed = _css_rule(self.page, "button#wake.on .pill-face")
         assert "background: var(--ink)" in pressed
         assert "color: var(--card)" in pressed
+        assert "border-color: var(--ink)" in pressed
