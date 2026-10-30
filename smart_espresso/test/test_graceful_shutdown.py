@@ -7,12 +7,12 @@ WEB_ENABLE=false never advanced the classifier.
 
 import json
 import os
-import select
 import signal
 import subprocess
 import sys
 import tempfile
 import textwrap
+import threading
 import time
 import unittest
 from datetime import datetime
@@ -104,14 +104,19 @@ class TestGracefulShutdown(unittest.TestCase):
 
             app._health[marker.name] = SensorHealth(marker.name)
 
-            def report():
-                while True:
-                    print(f"USED {tank.used_ml}", flush=True)
-                    if tank.used_ml >= 5:
-                        return
-                    threading.Event().wait(0.05)
+            # The volume is written from the render thread. A side thread
+            # printing on a timer can stall in a pipe write and leave the
+            # parent thinking the tank never moved.
+            used_path = os.environ["USED_PATH"]
+            original_update = tank.update
 
-            threading.Thread(target=report, daemon=True).start()
+            def update(total):
+                used = original_update(total)
+                with open(used_path, "w", encoding="utf-8") as handle:
+                    handle.write(str(used))
+                return used
+
+            tank.update = update
             app.run()
             print(
                 "ALIVE",
@@ -123,47 +128,68 @@ class TestGracefulShutdown(unittest.TestCase):
         )
         with tempfile.TemporaryDirectory() as directory:
             tank_path = os.path.join(directory, "tank.json")
+            used_path = os.path.join(directory, "used.txt")
             proc = subprocess.Popen(
                 [sys.executable, "-c", script],
                 cwd=ROOT,
-                env={**os.environ, "TANK_PATH": tank_path, "HA_ENABLE": "false"},
+                env={
+                    **os.environ,
+                    "TANK_PATH": tank_path,
+                    "USED_PATH": used_path,
+                    "HA_ENABLE": "false",
+                },
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,
             )
+            stdout_lines: list[str] = []
+            stderr_lines: list[str] = []
+
+            def drain(stream, into):
+                assert stream is not None
+                for line in stream:
+                    into.append(line)
+
+            assert proc.stdout is not None and proc.stderr is not None
+            # Both pipes have to be drained. A full stderr pipe stalls the
+            # flow thread, the tank stays at 0, and shutdown saves nothing.
+            readers = [
+                threading.Thread(
+                    target=drain, args=(proc.stdout, stdout_lines), daemon=True
+                ),
+                threading.Thread(
+                    target=drain, args=(proc.stderr, stderr_lines), daemon=True
+                ),
+            ]
+            for reader in readers:
+                reader.start()
             seen = 0.0
             deadline = time.monotonic() + 15
-            stdout_lines = []
-            stderr_lines = []
-            assert proc.stdout is not None and proc.stderr is not None
-            # Stderr has to be drained too. A full pipe stalls the flow
-            # thread, the tank stays at 0, and the USED lines never climb.
             while time.monotonic() < deadline and proc.poll() is None and seen < 5:
-                ready, _, _ = select.select([proc.stdout, proc.stderr], [], [], 0.2)
-                for stream in ready:
-                    line = stream.readline()
-                    if not line:
-                        continue
-                    if stream is proc.stderr:
-                        stderr_lines.append(line)
-                        continue
-                    stdout_lines.append(line)
-                    if line.startswith("USED"):
-                        seen = max(seen, float(line.split()[1]))
+                try:
+                    with open(used_path, encoding="utf-8") as handle:
+                        seen = max(seen, float(handle.read() or 0))
+                except (FileNotFoundError, ValueError):
+                    pass
+                time.sleep(0.05)
             if proc.poll() is None:
                 os.kill(proc.pid, signal.SIGTERM)
             try:
                 code = proc.wait(timeout=2)
             except subprocess.TimeoutExpired:
                 proc.kill()
-                stdout, stderr = proc.communicate()
-                self.fail(f"process still running after 2s\n{stdout}\n{stderr}")
-            stdout, stderr = proc.communicate()
-            full_out = "".join(stdout_lines) + (stdout or "")
-            full_err = "".join(stderr_lines) + (stderr or "")
-            for line in full_out.splitlines():
-                if line.startswith("USED"):
-                    seen = max(seen, float(line.split()[1]))
+                proc.wait(timeout=2)
+                for reader in readers:
+                    reader.join(timeout=1)
+                self.fail(
+                    "process still running after 2s\n"
+                    + "".join(stderr_lines)
+                    + "".join(stdout_lines)
+                )
+            for reader in readers:
+                reader.join(timeout=1)
+            full_out = "".join(stdout_lines)
+            full_err = "".join(stderr_lines)
             self.assertEqual(code, 0, full_err + full_out)
             self.assertIn("ALIVE False False", full_out)
             self.assertGreaterEqual(seen, 5, full_err + full_out)
