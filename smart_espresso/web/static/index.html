@@ -69,7 +69,7 @@
       --ink: #F2E8DC;
       --mute: #B5A08C;
       --acc: #E58A5C;
-      --alert: #F08A6B;
+      --alert: #FFB09A;
       --alert-ink: var(--bg);
     }
   }
@@ -81,7 +81,7 @@
     --ink: #F2E8DC;
     --mute: #B5A08C;
     --acc: #E58A5C;
-    --alert: #F08A6B;
+    --alert: #FFB09A;
     --alert-ink: var(--bg);
   }
 
@@ -179,8 +179,7 @@
   .title {
     font-family: var(--mono);
     font-size: 11px;
-    letter-spacing: .14em;
-    text-transform: uppercase;
+    letter-spacing: .02em;
     color: var(--ink-soft);
   }
 
@@ -259,6 +258,22 @@
     border-color: var(--alert);
   }
 
+  .state.heating .state-label {
+    color: var(--ink);
+    border-color: var(--ink);
+    background: var(--bg);
+  }
+
+  .state.heating .state-label::before {
+    content: "";
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    border: 1.5px solid var(--ink);
+    background: transparent;
+    flex: none;
+  }
+
   .state.ready .state-label {
     background: transparent;
     color: var(--acc);
@@ -271,13 +286,24 @@
     border: 1px dashed var(--mute);
   }
 
-  .state.live .state-label::before {
-    content: "";
+  .state.live .state-label::before,
+  .alert-mark {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     width: 6px;
     height: 6px;
     border-radius: 50%;
     background: var(--card);
     flex: none;
+  }
+
+  .alert-mark {
+    width: auto;
+    height: auto;
+    border-radius: 0;
+    background: transparent;
+    font-weight: 800;
   }
 
   .state-body {
@@ -586,12 +612,15 @@
   }
 
   .mark.fast::before {
-    width: 9px;
-    height: 9px;
-    margin: -5px 0 0 -6px;
-    border-left: 2.5px solid var(--ink);
-    border-bottom: 2.5px solid var(--ink);
-    transform: rotate(45deg);
+    content: "−";
+    width: auto;
+    height: auto;
+    margin: 0;
+    border: none;
+    transform: translate(-50%, -58%);
+    color: var(--ink);
+    font-size: 15px;
+    line-height: 1;
   }
 
   .mark.good::before {
@@ -1036,7 +1065,9 @@
       <span class="lamp" id="lamp"></span>
       <span class="glyph" id="state-glyph" aria-hidden="true"></span>
       <div class="state-copy">
-        <div class="state-label" id="state-label" aria-live="polite">Connecting…</div>
+        <div class="state-label" id="state-label" aria-live="polite"><span
+            class="alert-mark" id="alert-mark" aria-hidden="true" hidden>!</span><span
+            id="state-label-text">Connecting…</span></div>
         <span class="stale-tag" id="stale-tag" hidden>Last seen</span>
       </div>
     </div>
@@ -1270,7 +1301,14 @@ function applyPill(card, label) {
   PILL_KINDS.forEach((kind) => card.classList.remove(kind));
   const kind = DashboardLogic.pillKind(label);
   if (kind) card.classList.add(kind);
+  const mark = document.getElementById('alert-mark');
+  if (mark) mark.hidden = kind !== 'alert';
   return DashboardLogic.pillLabel(label);
+}
+
+function setStateLabel(text) {
+  const el = document.getElementById('state-label-text');
+  if (el.textContent !== text) el.textContent = text;
 }
 
 function renderState(machine, pressure) {
@@ -1295,8 +1333,7 @@ function renderState(machine, pressure) {
 
   // Only rewritten when it actually changes: the label carries aria-live,
   // and a per-second "3s in this state" would talk an ear off.
-  const label = document.getElementById('state-label');
-  if (label.textContent !== shownLabel) label.textContent = shownLabel;
+  setStateLabel(shownLabel);
 
   const shot = document.getElementById('shot');
   shot.hidden = !presentation.showShot;
@@ -2041,7 +2078,7 @@ function paintOfflineChrome() {
   if (offline.replace) {
     const offlineCard = document.getElementById('state');
     const offlineLabel = applyPill(offlineCard, offline.label);
-    document.getElementById('state-label').textContent = offlineLabel;
+    setStateLabel(offlineLabel);
     document.getElementById('state-detail').textContent = '';
     document.getElementById('shot').hidden = true;
     document.getElementById('warm').hidden = true;

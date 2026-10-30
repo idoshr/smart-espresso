@@ -27,7 +27,7 @@ DARK = {
     "ink": "#F2E8DC",
     "mute": "#B5A08C",
     "acc": "#E58A5C",
-    "alert": "#F08A6B",
+    "alert": "#FFB09A",
 }
 
 # Rounded to two decimals. Card on accent is the pill. Page on accent is
@@ -46,7 +46,7 @@ DARK_RATIOS = {
     ("mute", "bg"): 7.20,
     ("mute", "card"): 6.46,
     ("card", "acc"): 6.27,
-    ("bg", "alert"): 7.36,
+    ("bg", "alert"): 10.27,
 }
 
 
@@ -158,7 +158,7 @@ class TestDashboardContrast:
         assert "fonts.googleapis.com" not in self.worker
         assert "fonts.gstatic.com" not in self.worker
         assert "/fonts/manrope.woff2" in self.worker
-        assert "espresso-shell-v15" in self.worker
+        assert "espresso-shell-v16" in self.worker
         font = PAGE.parent / "fonts" / "manrope.woff2"
         assert font.is_file()
         assert font.read_bytes()[:4] == b"wOF2"

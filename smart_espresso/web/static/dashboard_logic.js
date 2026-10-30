@@ -163,25 +163,9 @@
     return whole + " s";
   }
 
-  // One secondary line. Shot copy wins while a pull is running; heating
-  // names the boiler against the ready threshold; ready names the time in
-  // state. A later temperature or ready-alert can append to this string.
-  const STATE_NAMES = {
-    off: "Off",
-    heating: "Warming up",
-    ready: "Ready to pull",
-    brewing: "Pulling a shot",
-    steaming: "Steaming milk",
-    overpressure: "Pressure high. Check the pressurestat.",
-    unknown: "No sensor reading",
-    flushing: "Water running",
-  };
-
+  // The pill already names the state. This line only says how long.
   function durationLine(state, sinceSeconds) {
-    const dur = formatSpokenDuration(sinceSeconds);
-    if (state === "ready") return "Ready for " + dur;
-    const name = STATE_NAMES[state] || "Off";
-    return name + " for " + dur;
+    return "for " + formatSpokenDuration(sinceSeconds);
   }
 
   // The machine label is one sentence. The pill only needs the short name,
@@ -214,12 +198,12 @@
     }
     if (machine.state === "heating" && typeof boilerBar === "number") {
       const eta = formatEta(warmingEtaSeconds(boilerBar, machine.since_seconds));
-      const base = "Warming up · " + boilerBar.toFixed(1) + " of 0.8 bar";
-      return eta ? base + " · " + eta : base;
+      const base = boilerBar.toFixed(1) + " of 0.8 bar";
+      return eta ? base + " · " + eta + " to go" : base;
     }
     if (machine.state === "overpressure") {
       return (
-        "Pressure high for " +
+        "for " +
         formatSpokenDuration(machine.since_seconds) +
         "\nCheck the pressurestat"
       );
