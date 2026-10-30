@@ -400,3 +400,20 @@ class TestPhoneHeader:
         tools = _css_rule(self.page, ".header-tools > .live")
         assert "min-height: 44px" in tools
         assert "height: 44px" in tools
+
+    def test_wake_icon_toggles_with_aria_pressed(self):
+        assert 'aria-label="Keep screen on"' in self.page
+        assert 'aria-pressed="false"' in self.page
+        assert 'class="wake-icon"' in self.page
+        assert 'stroke="currentColor"' in self.page
+        icon = self.page.split('class="wake-icon"', 1)[1].split("</svg>", 1)[0]
+        assert (
+            'aria-hidden="true"'
+            in self.page[self.page.index("<svg") : self.page.index("</svg>")]
+        )
+        assert "http" not in icon
+        assert "setAttribute('aria-pressed', String(on))" in self.page
+        assert "classList.toggle('on', on)" in self.page
+        pressed = _css_rule(self.page, "button#wake.on .pill-face")
+        assert "background: var(--ink)" in pressed
+        assert "color: var(--card)" in pressed
