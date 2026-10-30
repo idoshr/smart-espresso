@@ -131,6 +131,29 @@ class TestGlance:
         assert heating.startswith("Warming up · 0.6 of 0.8 bar")
         assert "about" in heating and "min" in heating
 
+    def test_each_state_has_its_own_pill_class(self):
+        assert call("logic.pillKind('Off')") == "off"
+        assert call("logic.pillKind('Warming up')") == "heating"
+        assert call("logic.pillKind('Ready to pull')") == "ready"
+        assert call("logic.pillKind('Pulling a shot')") == "live"
+        assert call("logic.pillKind('Steaming milk')") == "live"
+        assert call("logic.pillKind('Water running')") == "live"
+        assert call("logic.pillKind('No sensor reading')") == "unknown"
+        assert (
+            call("logic.pillKind('Pressure high. Check the pressurestat.')") == "alert"
+        )
+        assert call("logic.pillLabel('Pressure high. Check the pressurestat.')") == (
+            "Pressure high"
+        )
+        assert call("logic.pillKind('connecting…')") == "quiet"
+
+    def test_pressure_high_puts_the_check_on_its_own_line(self):
+        detail = call(
+            "logic.heroDetail({state:'overpressure', since_seconds:4, shot:null}, 1.9)"
+        )
+        assert detail == "Pressure high for 4 s\nCheck the pressurestat"
+        assert "pressurestat. for" not in detail
+
     def test_warming_bar_and_eta_need_a_real_slope(self):
         assert call("logic.warmingProgress(0.4)") == 0.5
         assert call("logic.warmingProgress(2)") == 1
@@ -230,8 +253,9 @@ class TestGlance:
         ).read_text(encoding="utf-8")
         # Colour means live, not a band per state. The five glyphs still differ.
         assert "--state-off:" not in page
-        assert "presentation.label === 'Pulling a shot'" in page
-        assert "presentation.label === 'Water running'" in page
+        assert "applyPill(card, presentation.label)" in page
+        assert call("logic.pillKind('Pulling a shot')") == "live"
+        assert call("logic.pillKind('Water running')") == "live"
         glyphs = re.findall(
             r"(off|heating|ready|brewing|steaming):\s+'([^']+)'",
             page,

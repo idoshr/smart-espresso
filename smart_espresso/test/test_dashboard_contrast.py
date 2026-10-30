@@ -1,9 +1,10 @@
 """Contrast of the warm-neutral dashboard tokens.
 
-Look C uses five colours in each scheme. Text has to clear 4.5:1. The
-pill puts the card colour on the accent, which clears that bar. The page
-colour on the accent does not, so it is not used for type. Tracks are the
-page colour on a card on purpose, and are not held to 3:1.
+Look C uses five surface colours in each scheme, plus one alert colour.
+Text has to clear 4.5:1. Terracotta text sits on the card. Alert text is
+the card colour in the light scheme and the page colour in the dark
+scheme. Tracks are the page colour on a card on purpose, and are not
+held to 3:1.
 """
 
 import re
@@ -17,7 +18,8 @@ LIGHT = {
     "card": "#FBF8F3",
     "ink": "#3A2A20",
     "mute": "#735E4D",
-    "acc": "#B04F26",
+    "acc": "#A04620",
+    "alert": "#8E2F1C",
 }
 DARK = {
     "bg": "#1B1511",
@@ -25,6 +27,7 @@ DARK = {
     "ink": "#F2E8DC",
     "mute": "#B5A08C",
     "acc": "#E58A5C",
+    "alert": "#F08A6B",
 }
 
 # Rounded to two decimals. Card on accent is the pill. Page on accent is
@@ -34,7 +37,8 @@ LIGHT_RATIOS = {
     ("ink", "card"): 12.94,
     ("mute", "bg"): 5.16,
     ("mute", "card"): 5.77,
-    ("card", "acc"): 4.97,
+    ("card", "acc"): 5.84,
+    ("card", "alert"): 7.70,
 }
 DARK_RATIOS = {
     ("ink", "bg"): 14.93,
@@ -42,6 +46,7 @@ DARK_RATIOS = {
     ("mute", "bg"): 7.20,
     ("mute", "card"): 6.46,
     ("card", "acc"): 6.27,
+    ("bg", "alert"): 7.36,
 }
 
 
@@ -95,7 +100,7 @@ class TestDashboardContrast:
         self.css = PAGE.read_text(encoding="utf-8")
         self.worker = WORKER.read_text(encoding="utf-8")
 
-    def test_each_scheme_has_exactly_five_colours(self):
+    def test_each_scheme_has_the_palette_and_one_alert(self):
         light = _declarations(self.css, "/* theme:light */")
         assert light == LIGHT
         first = self.css.split("/* theme:dark */", 1)[1]
@@ -135,10 +140,11 @@ class TestDashboardContrast:
         assert "color: var(--ink)" in quiet
         assert "background: var(--acc)" in live
         assert "color: var(--card)" in live
-        assert "Pulling a shot" in self.css
-        assert "Steaming milk" in self.css
-        assert "Water running" in self.css
-        assert "classList.remove('live')" in self.css
+        assert "classList.remove(kind)" in self.css
+        logic = (PAGE.parent / "dashboard_logic.js").read_text(encoding="utf-8")
+        assert "Pulling a shot" in logic
+        assert "Steaming milk" in logic
+        assert "Water running" in logic
         assert "repeating-linear-gradient" not in self.css
         assert "fonts.googleapis.com" not in self.css
         assert "box-shadow" not in self.css
@@ -152,7 +158,7 @@ class TestDashboardContrast:
         assert "fonts.googleapis.com" not in self.worker
         assert "fonts.gstatic.com" not in self.worker
         assert "/fonts/manrope.woff2" in self.worker
-        assert "espresso-shell-v12" in self.worker
+        assert "espresso-shell-v14" in self.worker
         font = PAGE.parent / "fonts" / "manrope.woff2"
         assert font.is_file()
         assert font.read_bytes()[:4] == b"wOF2"

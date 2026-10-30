@@ -26,29 +26,32 @@
 
   /* theme:light */
   :root {
-    /* Warm neutral. Five colours, and every other token is an alias of
-       one of them: page and tracks, cards, text, secondary text, accent. */
+    /* Warm neutral, plus one alert colour. Page and tracks, cards, text,
+       secondary text, accent. The oat pill uses a mute border rather than
+       another fill. */
     --bg: #F2EBE1;
     --card: #FBF8F3;
     --ink: #3A2A20;
     --mute: #735E4D;
-    --acc: #B04F26;
+    --acc: #A04620;
+    --alert: #8E2F1C;
+    --alert-ink: var(--card);
 
     --ink-soft: var(--mute);
     --ink-faint: var(--mute);
     --edge: var(--bg);
-    --crema: var(--acc);
+    --crema: var(--ink);
     --crema-soft: var(--bg);
     --matcha: var(--ink);
     --matcha-soft: var(--bg);
     --water: var(--ink);
     --water-soft: var(--bg);
-    --clay: var(--acc);
+    --clay: var(--ink);
     --clay-soft: var(--bg);
-    --crema-ink: var(--acc);
+    --crema-ink: var(--ink);
     --matcha-ink: var(--ink);
     --water-ink: var(--ink);
-    --clay-ink: var(--acc);
+    --clay-ink: var(--ink);
     --fast-ink: var(--ink);
 
     --display: "Manrope", sans-serif;
@@ -66,6 +69,8 @@
       --ink: #F2E8DC;
       --mute: #B5A08C;
       --acc: #E58A5C;
+      --alert: #F08A6B;
+      --alert-ink: var(--bg);
     }
   }
 
@@ -76,6 +81,8 @@
     --ink: #F2E8DC;
     --mute: #B5A08C;
     --acc: #E58A5C;
+    --alert: #F08A6B;
+    --alert-ink: var(--bg);
   }
 
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -137,7 +144,7 @@
     white-space: nowrap;
   }
 
-  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--acc); }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ink); }
   .dot.off { background: var(--ink-faint); }
 
   /* The wake-screen toggle wears the same pill as the connection lamp,
@@ -147,7 +154,7 @@
   button.live { cursor: pointer; min-height: 44px; padding: 10px 14px; }
   button.live .dot { background: var(--ink-faint); }
   button.live.on { color: var(--ink); }
-  button.live.on .dot { background: var(--acc); }
+  button.live.on .dot { background: var(--ink); }
   button.live:focus-visible { outline: 2px solid var(--ink-soft); outline-offset: 2px; }
 
   .stack { display: flex; flex-direction: column; gap: 12px; }
@@ -195,6 +202,7 @@
   .state-band {
     display: flex;
     align-items: center;
+    justify-content: flex-start;
     gap: 8px;
     min-height: 0;
     padding: 0;
@@ -227,6 +235,7 @@
     font-weight: 700;
     letter-spacing: -.01em;
     line-height: 1.2;
+    border: 1px solid var(--mute);
     border-radius: 99px;
     padding: 5px 12px;
   }
@@ -234,6 +243,25 @@
   .state.live .state-label {
     background: var(--acc);
     color: var(--card);
+    border-color: var(--acc);
+  }
+
+  .state.alert .state-label {
+    background: var(--alert);
+    color: var(--alert-ink);
+    border-color: var(--alert);
+  }
+
+  .state.ready .state-label {
+    background: transparent;
+    color: var(--acc);
+    border: 1px solid var(--acc);
+  }
+
+  .state.unknown .state-label {
+    background: transparent;
+    color: var(--mute);
+    border: 1px dashed var(--mute);
   }
 
   .state.live .state-label::before {
@@ -251,6 +279,8 @@
     font-size: 15px;
     color: var(--ink);
     line-height: 1.35;
+    text-align: left;
+    white-space: pre-line;
   }
 
   .warm {
@@ -307,7 +337,7 @@
     height: 8px;
     flex: none;
     border-radius: 50%;
-    background: var(--acc);
+    background: var(--ink);
   }
 
   /* The shot timer is the figure the eye is here for: full stage,
@@ -330,7 +360,7 @@
     transition: color .3s ease;
   }
 
-  .shot b.good { color: var(--acc); }
+  .shot b.good { color: var(--ink); }
   .shot b.fast { color: var(--ink); }
   .shot b.long { color: var(--ink); }
 
@@ -364,8 +394,8 @@
   .shot-track u {
     position: absolute;
     top: -3px; bottom: -3px;
-    border-left: 1.5px solid var(--acc);
-    border-right: 1.5px solid var(--acc);
+    border-left: 1.5px solid var(--ink);
+    border-right: 1.5px solid var(--ink);
   }
 
   /* ---- pressure rings ---- */
@@ -454,7 +484,7 @@
     transition: width .4s ease, background .4s ease;
   }
 
-  .level i.low { background: var(--acc); }
+  .level i.low { background: var(--ink); }
 
   .tank-foot {
     display: flex;
@@ -484,7 +514,7 @@
     transition: background .2s, color .2s;
   }
 
-  button.reset.armed { background: var(--acc); color: var(--card); }
+  button.reset.armed { background: var(--ink); color: var(--card); }
   button.reset:focus-visible { outline: 2px solid var(--ink-soft); outline-offset: 2px; }
 
   /* ---- pour chart ---- */
@@ -510,7 +540,7 @@
   }
 
   .bar.on { background: var(--ink); }
-  .bar.now { background: var(--acc); }
+  .bar.now { background: var(--ink); }
 
   .axis {
     display: flex;
@@ -555,7 +585,7 @@
     height: 10px;
     margin: -5px 0 0 -5px;
     border-radius: 50%;
-    background: var(--acc);
+    background: var(--ink);
   }
 
   .mark.long::before {
@@ -710,7 +740,7 @@
 
   .curve { display: block; width: 100%; height: auto; margin-top: 4px; }
 
-  .curve .head { stroke: var(--acc); fill: var(--acc); }
+  .curve .head { stroke: var(--ink); fill: var(--ink); }
   .curve .flow { stroke: var(--ink); fill: var(--ink); }
   .curve .boiler { stroke: var(--ink); fill: var(--ink); }
   .curve .fill { fill-opacity: .22; stroke: none; }
@@ -796,7 +826,7 @@
   }
 
   .bb-time.fast { color: var(--ink); }
-  .bb-time.good { color: var(--acc); }
+  .bb-time.good { color: var(--ink); }
   .bb-time.long { color: var(--ink); }
 
   .bb-ml {
@@ -1102,7 +1132,7 @@
 // What a barista actually watches for: 9 bar at the group, a boiler sitting
 // around 1 bar, and a double landing in the 25-30 second window.
 const GUIDES = {
-  head:   { band: [8, 10], accent: 'var(--acc)', soft: 'var(--bg)',
+  head:   { band: [8, 10], accent: 'var(--ink)', soft: 'var(--bg)',
             caption: '9 bar is the sweet spot' },
   boiler: { band: [0.8, 1.4], accent: 'var(--ink)', soft: 'var(--bg)',
             caption: 'steam holds near 1 bar' },
@@ -1220,6 +1250,15 @@ function headBar(pressure) {
   return head && typeof head.bar === 'number' ? head.bar : null;
 }
 
+const PILL_KINDS = ['live', 'alert', 'ready', 'unknown', 'heating', 'off', 'quiet'];
+
+function applyPill(card, label) {
+  PILL_KINDS.forEach((kind) => card.classList.remove(kind));
+  const kind = DashboardLogic.pillKind(label);
+  if (kind) card.classList.add(kind);
+  return DashboardLogic.pillLabel(label);
+}
+
 function renderState(machine, pressure) {
   lastMachine = machine;
   const presentation = DashboardLogic.livePresentation(machine, headBar(pressure));
@@ -1227,14 +1266,9 @@ function renderState(machine, pressure) {
   const stateName = GLYPHS[machine.state] ? machine.state : 'unknown';
   const card = document.getElementById('state');
   card.dataset.state = stateName;
-  card.classList.toggle(
-    'live',
-    presentation.label === 'Pulling a shot' ||
-      presentation.label === 'Steaming milk' ||
-      presentation.label === 'Water running'
-  );
+  const shownLabel = applyPill(card, presentation.label);
   document.getElementById('brewbar').dataset.state = stateName;
-  document.getElementById('bb-label').textContent = presentation.label;
+  document.getElementById('bb-label').textContent = shownLabel;
 
   const lamp = document.getElementById('lamp');
   lamp.classList.toggle('pulse', machine.severity === 'alert');
@@ -1248,7 +1282,7 @@ function renderState(machine, pressure) {
   // Only rewritten when it actually changes: the label carries aria-live,
   // and a per-second "3s in this state" would talk an ear off.
   const label = document.getElementById('state-label');
-  if (label.textContent !== presentation.label) label.textContent = presentation.label;
+  if (label.textContent !== shownLabel) label.textContent = shownLabel;
 
   const shot = document.getElementById('shot');
   shot.hidden = !presentation.showShot;
@@ -1415,7 +1449,7 @@ function buildRings(pressure) {
               stroke="var(--ink-soft)" stroke-width="3" stroke-linecap="round"/>` +
         (dial > to
           ? `<path class="ring-over" d="${arcPath(R - 7, angleFor(to / dial), angleFor(1))}" fill="none"
-                stroke="var(--acc)" stroke-width="3" stroke-linecap="round"
+                stroke="var(--alert)" stroke-width="3" stroke-linecap="round"
                 visibility="hidden"/>`
           : '');
     }
@@ -1478,7 +1512,7 @@ function renderRings(pressure) {
     // Past the band's top the fill itself turns clay: the geometry says
     // "high", the colour says "high is wrong".
     const over = el.bandTop != null && sensor.bar > el.bandTop;
-    el.value.setAttribute('stroke', over ? 'var(--acc)' : el.accent);
+    el.value.setAttribute('stroke', over ? 'var(--alert)' : el.accent);
     // At rest the clay "past the band" arc reads as a warning. Keep it
     // hidden until the needle is actually near the band.
     if (el.over) {
@@ -1991,8 +2025,9 @@ function paintOfflineChrome() {
     lastMachine, null, connected, hasPayload, lastSeenAt, Date.now()
   );
   if (offline.replace) {
-    document.getElementById('state-label').textContent = offline.label;
-    document.getElementById('state').classList.remove('live');
+    const offlineCard = document.getElementById('state');
+    const offlineLabel = applyPill(offlineCard, offline.label);
+    document.getElementById('state-label').textContent = offlineLabel;
     document.getElementById('state-detail').textContent = '';
     document.getElementById('shot').hidden = true;
     document.getElementById('warm').hidden = true;

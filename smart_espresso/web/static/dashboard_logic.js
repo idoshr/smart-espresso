@@ -184,6 +184,27 @@
     return name + " for " + dur;
   }
 
+  // The machine label is one sentence. The pill only needs the short name,
+  // and the check belongs on the line under the duration.
+  function pillLabel(label) {
+    if (!label) return "";
+    if (label.indexOf("Pressure high") === 0) return "Pressure high";
+    return label;
+  }
+
+  function pillKind(label) {
+    const text = pillLabel(label);
+    if (text === "Pulling a shot" || text === "Steaming milk" || text === "Water running") {
+      return "live";
+    }
+    if (text === "Pressure high") return "alert";
+    if (text === "Ready to pull") return "ready";
+    if (text === "No sensor reading") return "unknown";
+    if (text === "Warming up") return "heating";
+    if (text === "Off") return "off";
+    return "quiet";
+  }
+
   function heroDetail(machine, boilerBar) {
     if (machine.shot) {
       const seconds = machine.shot.seconds;
@@ -195,6 +216,13 @@
       const eta = formatEta(warmingEtaSeconds(boilerBar, machine.since_seconds));
       const base = "Warming up · " + boilerBar.toFixed(1) + " of 0.8 bar";
       return eta ? base + " · " + eta : base;
+    }
+    if (machine.state === "overpressure") {
+      return (
+        "Pressure high for " +
+        formatSpokenDuration(machine.since_seconds) +
+        "\nCheck the pressurestat"
+      );
     }
     return durationLine(machine.state, machine.since_seconds);
   }
@@ -333,6 +361,8 @@
     warmingEtaSeconds: warmingEtaSeconds,
     formatEta: formatEta,
     heroDetail: heroDetail,
+    pillLabel: pillLabel,
+    pillKind: pillKind,
     glanceOn: glanceOn,
     noteShotWindow: noteShotWindow,
     clearShotWindow: clearShotWindow,
