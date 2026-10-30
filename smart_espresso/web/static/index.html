@@ -213,6 +213,102 @@
     margin: 0;
   }
 
+  /* The title yields before the status pills do. At 320 px a nowrap title
+     otherwise forces the page to scroll sideways. */
+  header h1 {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .header-tools {
+    display: flex;
+    align-items: center;
+    flex: none;
+    margin-left: auto;
+    gap: 0;
+  }
+
+  /* 44 px tap area. The visible circle or pill inside is 36 px tall,
+     so the wake control and the connection pill match. */
+  .header-tools > .live {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    width: auto;
+    min-width: 44px;
+    height: 44px;
+    min-height: 44px;
+    margin: 0;
+    padding: 4px;
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  .header-tools .pill-face {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    box-sizing: border-box;
+    height: 36px;
+    min-width: 36px;
+    padding: 0 10px;
+    background: var(--card);
+    border: 1px solid var(--edge);
+    border-radius: 999px;
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: .08em;
+    color: var(--ink-soft);
+    white-space: nowrap;
+  }
+
+  /* Icon-only at every width. A labelled "Keep screen on" plus
+     "Connecting…" needs about 438 px, and the header column is about 424.
+     At 768 that cut the title to "Smart Espre…"; at 1280 the title row
+     wrapped. The words stay as the accessible name and the tooltip. */
+  #wake {
+    position: relative;
+    flex: none;
+    width: 44px;
+  }
+  #wake-text {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+  }
+  /* Off: an outline icon. The ring is --ink-faint so it clears 3:1 against
+     the page (--edge is about 1.14:1 in light and 1.42:1 in dark). On: a
+     filled ink face with a card-coloured icon. Dark tokens swap those two. */
+  #wake .pill-face {
+    width: 36px;
+    min-width: 36px;
+    padding: 0;
+    border-radius: 50%;
+    border-color: var(--ink-faint);
+    color: var(--ink);
+  }
+  button#wake.on .pill-face {
+    background: var(--ink);
+    color: var(--card);
+    border-color: var(--ink);
+  }
+
+  .wake-icon {
+    display: block;
+    width: 20px;
+    height: 20px;
+    flex: none;
+  }
+
   .tagline {
     font-family: var(--mono);
     font-size: 12px;
@@ -220,6 +316,25 @@
     color: var(--ink-faint);
     margin-top: 4px;
   }
+
+  /* The today line stays in the header only when the viewport is wide
+     enough. The column itself is 460 px, so this is a viewport query.
+     On a phone the same words move into the state card. */
+  @media (max-width: 999px) {
+    header .tagline { display: none !important; }
+  }
+
+  @media (min-width: 1000px) {
+    header { flex-wrap: wrap; }
+    header h1 { margin-right: auto; }
+    /* The column is 460 px, so the today line takes the next row
+       rather than squeezing in beside the connection pill. */
+    header .tagline { flex-basis: 100%; margin-top: 6px; }
+    #tagline-card { display: none !important; }
+  }
+
+  #tagline-card { margin: 0 0 10px; }
+  #tagline-card:empty { display: none; }
 
   .live {
     display: flex;
@@ -1067,6 +1182,7 @@
 
   body.glance header h1,
   body.glance header .tagline,
+  body.glance #tagline-card,
   body.glance #rings,
   body.glance #pulls-card,
   body.glance #history-card,
@@ -1117,16 +1233,22 @@
 </div>
 
 <header>
-  <div>
-    <h1>Smart Espresso</h1>
-    <div class="tagline" id="tagline"></div>
+  <h1>Smart Espresso</h1>
+  <div class="header-tools">
+    <button class="live" id="wake" type="button" title="Keep screen on"
+            aria-label="Keep screen on" aria-pressed="false" hidden><span
+        class="pill-face"><svg class="wake-icon" viewBox="0 0 24 24"
+        aria-hidden="true" focusable="false"><g fill="none"
+        stroke="currentColor" stroke-width="2" stroke-linecap="round"
+        stroke-linejoin="round"><rect x="8.2" y="3.4" width="7.6" height="13.2"
+        rx="1.6"/><path d="M10.6 14.2h2.8"/><path d="M5.4 7.4 3.8 5.8M4.8 12H2.6M5.4 16.4 4 18M18.6 7.4 20.2 5.8M19.2 12h2.2M18.6 16.4 20 18"/></g></svg><span
+        id="wake-text">Keep screen on</span></span></button>
+    <!-- Connecting, not live: the shell is often cached and painted before
+         /api/status has ever answered. A green "live" here is a lie. -->
+    <div class="live" role="status"><span class="pill-face"><span class="dot off"
+        id="dot"></span><span id="conn">Connecting…</span></span></div>
   </div>
-  <button class="live" id="wake" type="button" title="Keep screen on"
-          aria-pressed="false" hidden><span class="dot"></span><span
-      id="wake-text">Keep screen on</span></button>
-  <!-- Connecting, not live: the shell is often cached and painted before
-       /api/status has ever answered. A green "live" here is a lie. -->
-  <div class="live" role="status"><span class="dot off" id="dot"></span><span id="conn">connecting…</span></div>
+  <div class="tagline" id="tagline"></div>
 </header>
 
 <div class="stack">
@@ -1140,6 +1262,7 @@
       </div>
     </div>
     <div class="state-body">
+      <div class="tagline" id="tagline-card"></div>
       <div class="state-detail" id="state-detail">waiting for the machine</div>
       <div class="warm" id="warm" hidden>
         <div class="warm-track" aria-hidden="true"><i id="warm-fill"></i></div>
@@ -2035,10 +2158,11 @@ function volText(ml) {
 // "how many shots has the machine seen today".
 function renderToday(today) {
   if (!today) return;   // an older server payload: keep the static line
-  const el = document.getElementById('tagline');
-  el.textContent = today.shots > 0
+  const text = today.shots > 0
     ? `${today.shots} shot${today.shots === 1 ? '' : 's'} · ${volText(today.ml)} today`
     : 'No shots yet today';
+  document.getElementById('tagline').textContent = text;
+  document.getElementById('tagline-card').textContent = text;
 }
 
 function render(data) {
@@ -2295,7 +2419,9 @@ async function syncWake() {
   const setUI = (on) => {
     wakeBtn.classList.toggle('on', on);
     wakeBtn.setAttribute('aria-pressed', String(on));
-    // One phrase. aria-pressed says whether the screen is being held.
+    // The accessible name stays "Keep screen on". The tooltip says whether
+    // the screen is being held; aria-pressed carries the state.
+    wakeBtn.setAttribute('title', on ? 'Screen stays on' : 'Keep screen on');
     document.getElementById('wake-text').textContent = 'Keep screen on';
     syncGlance();
   };
