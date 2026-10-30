@@ -374,3 +374,14 @@ class TestPhoneHeader:
         # One sentence, written to both slots. No second wording.
         assert "getElementById('tagline-card').textContent = text" in self.page
         assert "getElementById('tagline').textContent = text" in self.page
+
+    def test_wake_words_leave_the_header_row_below_480px(self):
+        # The full "Keep screen on" pill pushes "live" off a 390 px screen.
+        assert 'aria-label="Keep screen on"' in self.page
+        assert ">Keep screen on<" in self.page
+        narrow_at = self.page.find("@media (max-width: 480px)")
+        assert narrow_at > 0
+        narrow = self.page[narrow_at : narrow_at + 500]
+        assert "#wake-text" in narrow
+        assert "position: absolute" in narrow
+        assert "width: 44px" in narrow

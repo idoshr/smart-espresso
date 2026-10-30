@@ -229,6 +229,28 @@
     header h1 { white-space: nowrap; }
   }
 
+  /* Below about 480 px the words "Keep screen on" plus the connection
+     pill no longer fit beside the title. The toggle keeps its dot and
+     the same phrase as its accessible name. */
+  @media (max-width: 480px) {
+    #wake-text {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+    }
+    #wake {
+      position: relative;
+      flex: none;
+      width: 44px;
+      justify-content: center;
+      padding-left: 0;
+      padding-right: 0;
+    }
+    header > .live { flex: none; }
+  }
+
   @media (min-width: 1000px) {
     header { flex-wrap: wrap; }
     header h1 { margin-right: auto; }
@@ -1140,8 +1162,8 @@
 <header>
   <h1>Smart Espresso</h1>
   <button class="live" id="wake" type="button" title="Keep screen on"
-          aria-pressed="false" hidden><span class="dot"></span><span
-      id="wake-text">Keep screen on</span></button>
+          aria-label="Keep screen on" aria-pressed="false" hidden><span
+      class="dot"></span><span id="wake-text">Keep screen on</span></button>
   <!-- Connecting, not live: the shell is often cached and painted before
        /api/status has ever answered. A green "live" here is a lie. -->
   <div class="live" role="status"><span class="dot off" id="dot"></span><span id="conn">connecting…</span></div>
