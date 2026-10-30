@@ -391,6 +391,22 @@ class TestWording:
         assert "last shot ${" not in self.page
         assert call("logic.pillText(true, 1000)") == "Live"
 
+    def test_only_the_timer_stays_centred_during_a_shot(self):
+        state = _css_rule(self.page, ".state")
+        assert "align-items: stretch" in state
+        assert "text-align: left" in state
+        assert "text-align: left" in _css_rule(self.page, ".state-detail")
+        assert "justify-content: flex-start" in _css_rule(self.page, ".state-band")
+        assert "text-align: center" in _css_rule(self.page, ".shot")
+        assert "font-variant-numeric: tabular-nums" in _css_rule(self.page, ".shot b")
+        assert "font-variant-numeric: tabular-nums" in _css_rule(
+            self.page, ".ring-read b"
+        )
+        assert "font-variant-numeric: tabular-nums" in _css_rule(self.page, ".figure b")
+        # The connection pill shares the class live. Unscoped, it centers the card.
+        assert re.search(r"(^|\n)\s*\.live\s*\{", self.page) is None
+        assert "header .live {" in self.page
+
     def test_only_shot_history_shows_a_count(self):
         assert "history.length} shot" not in self.page
         assert "`${count} saved`" in self.page

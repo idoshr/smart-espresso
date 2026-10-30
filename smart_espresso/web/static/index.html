@@ -129,7 +129,9 @@
     margin-top: 4px;
   }
 
-  .live {
+  /* Scoped to the header. The state card also uses the class live, and an
+     unscoped rule was centering that card's pill and detail. */
+  header .live {
     display: flex;
     align-items: center;
     gap: 7px;
@@ -150,7 +152,7 @@
   /* The wake-screen toggle wears the same pill as the connection lamp,
      but it is the interactive one, so it gets the full 44 px tap target
      and a label that says what it will do, not what it is. */
-  .live { min-height: 36px; }
+  header .live { min-height: 36px; }
   button.live { cursor: pointer; min-height: 44px; padding: 10px 14px; }
   button.live .dot { background: var(--ink-faint); }
   button.live.on { color: var(--ink); }
@@ -194,6 +196,8 @@
   .state {
     display: flex;
     flex-direction: column;
+    align-items: stretch;
+    text-align: left;
     padding: 16px;
     overflow: visible;
     background: var(--card);
@@ -201,6 +205,8 @@
 
   .state-band {
     display: flex;
+    align-self: stretch;
+    width: 100%;
     align-items: center;
     justify-content: flex-start;
     gap: 8px;
@@ -217,6 +223,7 @@
     display: flex;
     flex-wrap: wrap;
     align-items: center;
+    justify-content: flex-start;
     gap: 8px;
     width: 100%;
     min-width: 0;
@@ -273,7 +280,12 @@
     flex: none;
   }
 
-  .state-body { padding: 0; }
+  .state-body {
+    align-self: stretch;
+    width: 100%;
+    padding: 0;
+    text-align: left;
+  }
 
   .state-detail {
     font-size: 15px;
@@ -345,6 +357,8 @@
   .shot {
     display: flex;
     flex-direction: column;
+    align-self: stretch;
+    width: 100%;
     align-items: center;
     text-align: center;
     margin-top: 12px;

@@ -158,7 +158,7 @@ class TestDashboardContrast:
         assert "fonts.googleapis.com" not in self.worker
         assert "fonts.gstatic.com" not in self.worker
         assert "/fonts/manrope.woff2" in self.worker
-        assert "espresso-shell-v14" in self.worker
+        assert "espresso-shell-v15" in self.worker
         font = PAGE.parent / "fonts" / "manrope.woff2"
         assert font.is_file()
         assert font.read_bytes()[:4] == b"wOF2"
