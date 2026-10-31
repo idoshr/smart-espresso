@@ -367,6 +367,27 @@ class ShotHistory:
         with self._lock:
             self._active = None
 
+    def current_payload(self, after: Optional[float] = None) -> dict:
+        """The running shot's curve, for ``GET /api/shots/current``.
+
+        ``after`` keeps only points whose elapsed ``t`` is strictly newer,
+        so a page can poll for the tail. No open shot answers
+        ``active: false`` and an empty list. Points are copies.
+        """
+        with self._lock:
+            active = self._active
+            if active is None:
+                return {"active": False, "started_at": None, "samples": []}
+            if after is None:
+                chosen = active.samples
+            else:
+                chosen = [point for point in active.samples if point["t"] > after]
+            return {
+                "active": True,
+                "started_at": active.started_at,
+                "samples": [dict(point) for point in chosen],
+            }
+
     def get(self, shot_id: int) -> Optional[dict]:
         """The full record for one shot, or None when that id is not kept."""
         with self._lock:
