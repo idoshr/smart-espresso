@@ -332,6 +332,12 @@
   }
 
   .state-chip .lamp { display: none; }
+  .state-chip.offline {
+    background: transparent;
+    color: var(--mute, var(--ink-faint));
+    border: 1px dashed var(--mute, var(--ink-faint));
+  }
+  .state-chip.offline .state-label::before { display: none; }
   .state-chip .state-label::before {
     content: "";
     display: inline-block;
@@ -2248,9 +2254,13 @@ function paintOfflineChrome() {
   const offline = DashboardLogic.shownState(
     lastMachine, null, connected, hasPayload, lastSeenAt, Date.now()
   );
+  const chip = document.querySelector('.state-chip');
+  if (chip) chip.classList.toggle('offline', offline.replace);
   if (offline.replace) {
     document.getElementById('state-label').textContent = offline.label;
-    document.getElementById('state-detail').textContent = '';
+    const detailEl = document.getElementById('state-detail');
+    detailEl.textContent = offline.detail;
+    detailEl.hidden = false;
     document.getElementById('shot').hidden = true;
     document.getElementById('warm').hidden = true;
     document.getElementById('brewbar').classList.remove('show');
