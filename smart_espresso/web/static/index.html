@@ -731,17 +731,16 @@
     white-space: nowrap;
   }
 
-  .all-shots {
-    display: block;
-    margin: 10px 0 0;
-    padding: 8px 0;
+  .card-head .all-shots {
+    margin: 0;
+    padding: 0;
     border: 0;
     background: transparent;
     color: var(--ink);
     font: inherit;
     font-size: 12.5px;
     font-weight: 600;
-    text-align: left;
+    white-space: nowrap;
     cursor: pointer;
   }
 
@@ -1186,18 +1185,6 @@
 
   <div class="rings" id="rings"></div>
 
-  <div class="card" id="pulls-card" hidden>
-    <div class="card-head">
-      <span class="title">Recent shots</span>
-    </div>
-    <div class="recent-tiles" id="recent-tiles" aria-label="Recent shots"></div>
-    <button type="button" class="all-shots" id="all-shots" aria-expanded="false" hidden>All 0 shots ›</button>
-    <div id="history-card" hidden>
-      <div class="history-list" id="history-list"></div>
-    </div>
-    <div class="history-detail" id="shot-sheet" hidden></div>
-  </div>
-
   <div class="card" id="flow-card" hidden>
     <div class="card-head">
       <span class="title" id="flow-title">Water used, last 2 min</span>
@@ -1234,6 +1221,18 @@
   <div class="card" id="other-card" hidden>
     <div class="card-head"><span class="title">Room</span></div>
     <div class="rows" id="other-rows"></div>
+  </div>
+
+  <div class="card" id="pulls-card" hidden>
+    <div class="card-head">
+      <span class="title">Recent shots</span>
+      <button type="button" class="all-shots" id="all-shots" aria-expanded="false" hidden>All 0 shots ›</button>
+    </div>
+    <div class="recent-tiles" id="recent-tiles" aria-label="Recent shots"></div>
+    <div id="history-card" hidden>
+      <div class="history-list" id="history-list"></div>
+    </div>
+    <div class="history-detail" id="shot-sheet" hidden></div>
   </div>
 </div>
 

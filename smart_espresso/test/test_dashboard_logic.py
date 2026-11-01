@@ -343,6 +343,13 @@ class TestShippedShell:
         five = call("logic.allShotsLink(5, 4)")
         assert five["hidden"] is False
         assert five["text"] == "All 5 shots \u203A"
+        tank = self.page.find('id="tank-card"')
+        room = self.page.find('id="other-card"')
+        recent = self.page.find('id="pulls-card"')
+        assert tank < room < recent
+        head = self.page[recent : self.page.find('id="recent-tiles"', recent)]
+        assert 'id="all-shots"' in head
+        assert "card-head .all-shots" in self.page
 
 
 def _css_rule(page, selector):
