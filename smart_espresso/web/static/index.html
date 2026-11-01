@@ -615,6 +615,25 @@
     font-weight: 600;
     letter-spacing: 0;
   }
+  #tank-card .tank-foot {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  #tank-card .reset {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    white-space: nowrap;
+    container-type: inline-size;
+    container-name: refill;
+  }
+  #tank-card .refill-short { display: none; }
+  /* The long label is 109 px at 13.5 px/600. Below that, use the short one. */
+  @container refill (max-width: 112px) {
+    #tank-card .refill-long { display: none; }
+    #tank-card .refill-short { display: inline; }
+  }
   #tank-card .level {
     height: 6px;
     margin-top: 8px;
@@ -629,7 +648,7 @@
   }
   @media (min-width: 1000px) {
     .pair-lead { font-size: 28px; }
-    .pair-lead.empty { font-size: 16px; }
+    .pair-lead.empty { font-size: 15px; }
   }
 
   /* ---- pour chart ---- */
@@ -1267,7 +1286,7 @@
       <div class="tank-foot">
         <span class="refill-hint" id="tank-warn" hidden>Time to refill</span>
         <span class="refill-hint" id="tank-offline-hint" hidden>Reconnect to mark the tank filled</span>
-        <button class="reset" id="tank-reset" type="button" aria-disabled="true">I refilled the tank</button>
+        <button class="reset" id="tank-reset" type="button" aria-label="I refilled the tank" aria-disabled="true"><span class="refill-long">I refilled the tank</span><span class="refill-short">I refilled it</span></button>
       </div>
     </div>
     <div class="card" id="other-card" hidden>
@@ -2003,11 +2022,7 @@ function renderRoom(sensors) {
     temp.textContent = '—';
   }
   if (typeof room.humidity_pct === 'number') {
-    const value = room.humidity_pct;
-    const shown = Math.abs(value - Math.round(value)) < 0.05
-      ? String(Math.round(value))
-      : value.toFixed(1);
-    humidity.textContent = `${shown}% humidity`;
+    humidity.textContent = DashboardLogic.humidityLabel(room.humidity_pct);
   } else {
     humidity.textContent = 'No sensor reading';
   }
@@ -2031,12 +2046,14 @@ function renderTank(tank) {
   }
 
   const fill = document.getElementById('tank-fill');
+  const meter = fill.parentElement;
+  meter.hidden = DashboardLogic.tankMeterHidden(shotsLeft);
   fill.style.width = `${tank.percent}%`;
   fill.classList.toggle('low', tank.low);
 
   const warn = document.getElementById('tank-warn');
-  warn.hidden = !tank.low;
-  warn.textContent = tank.empty ? 'Tank is empty' : 'Time to refill';
+  warn.hidden = tank.empty || !tank.low;
+  warn.textContent = 'Time to refill';
 }
 
 // ---- pour chart ----------------------------------------------------------
@@ -2258,7 +2275,14 @@ resetButton.addEventListener('click', async () => {
 
 function disarmReset() {
   resetButton.classList.remove('armed');
-  resetButton.textContent = 'I refilled the tank';
+  resetButton.replaceChildren();
+  const long = document.createElement('span');
+  long.className = 'refill-long';
+  long.textContent = 'I refilled the tank';
+  const short = document.createElement('span');
+  short.className = 'refill-short';
+  short.textContent = 'I refilled it';
+  resetButton.append(long, short);
 }
 
 // ---- polling, with a backoff so a down machine is not hammered ----------

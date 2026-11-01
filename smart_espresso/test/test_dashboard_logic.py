@@ -342,6 +342,24 @@ class TestTankLead:
         )
         assert call("logic.tankLead(1)") == "About 1 shot left"
         assert call("logic.tankLead(43)") == "About 43 shots left"
+        assert call("logic.humidityLabel(45.2)") == "45% humidity"
+        assert call("logic.humidityLabel(45.6)") == "46% humidity"
+        assert call("logic.tankMeterHidden(0)") is True
+        assert call("logic.tankMeterHidden(12)") is False
+
+
+class TestRefillButton:
+    def setup_method(self):
+        self.page = (
+            Path(__file__).resolve().parents[1] / "web" / "static" / "index.html"
+        ).read_text(encoding="utf-8")
+
+    def test_short_label_keeps_the_full_accessible_name(self):
+        assert 'aria-label="I refilled the tank"' in self.page
+        assert 'class="refill-long">I refilled the tank<' in self.page
+        assert 'class="refill-short">I refilled it<' in self.page
+        assert "@container refill" in self.page
+        assert "tankMeterHidden" in self.page
 
 
 class TestLastShotChip:

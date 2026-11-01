@@ -238,6 +238,15 @@
 
   // fast / on target / long. The shape is what remains when colour is
   // removed: an open left chevron, a filled dot, a filled right chevron.
+  function humidityLabel(percent) {
+    if (typeof percent !== "number" || !isFinite(percent)) return null;
+    return Math.round(percent) + "% humidity";
+  }
+
+  function tankMeterHidden(shotsLeft) {
+    return !(Number(shotsLeft) > 0);
+  }
+
   function tankLead(shotsLeft) {
     const count = Number(shotsLeft) || 0;
     if (count <= 0) {
@@ -348,6 +357,8 @@
     showOverBand: showOverBand,
     shotVerdict: shotVerdict,
     tankLead: tankLead,
+    humidityLabel: humidityLabel,
+    tankMeterHidden: tankMeterHidden,
     staleTagText: staleTagText,
     offlineMessage: offlineMessage,
     isFlush: isFlush,
