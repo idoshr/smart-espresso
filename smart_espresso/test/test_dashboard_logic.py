@@ -124,12 +124,13 @@ class TestGlance:
         ready = call(
             "logic.heroDetail({state:'ready', since_seconds:600, shot:null}, 1.1)"
         )
-        assert ready == "Ready for 10 min"
+        assert ready == "for 10 min"
         heating = call(
             "logic.heroDetail({state:'heating', since_seconds:150, shot:null}, 0.6)"
         )
-        assert heating.startswith("Warming up · 0.6 of 0.8 bar")
-        assert "about" in heating and "min" in heating
+        assert heating.startswith("0.6 of 0.8 bar")
+        assert "Warming up" not in heating
+        assert "about" in heating and "min" in heating and heating.endswith("to go")
 
     def test_warming_bar_and_eta_need_a_real_slope(self):
         assert call("logic.warmingProgress(0.4)") == 0.5
@@ -332,6 +333,64 @@ def _css_rule(page, selector):
     match = re.search(re.escape(selector) + r"\s*\{([^}]*)\}", page)
     assert match, selector
     return match.group(1)
+
+
+class TestHero:
+    """The state card is the look C hero: chip, timer, verdict, window."""
+
+    def setup_method(self):
+        self.page = (
+            Path(__file__).resolve().parents[1] / "web" / "static" / "index.html"
+        ).read_text(encoding="utf-8")
+
+    def test_chip_timer_and_window_match_the_hero(self):
+        chip = _css_rule(self.page, ".state-chip")
+        assert "font-size: 12.5px" in chip
+        assert "font-weight: 700" in chip
+        assert "var(--acc" in chip
+        timer = _css_rule(self.page, ".timer b")
+        assert "font-size: 62px" in timer
+        assert "font-weight: 700" in timer
+        assert "letter-spacing: -.05em" in timer
+        unit = _css_rule(self.page, ".timer small")
+        assert "font-size: 22px" in unit
+        assert "font-weight: 600" in unit
+        verdict = _css_rule(self.page, ".hint b")
+        assert "font-size: 14px" in verdict
+        assert "font-weight: 700" in verdict
+        assert "var(--acc" in verdict
+        track = _css_rule(self.page, ".shot-track")
+        assert "height: 6px" in track
+        window = _css_rule(self.page, ".shot-track u")
+        assert "border: 1.5px solid var(--acc" in window
+        assert "border-radius: 5px" in window
+        assert 'id="shot-ml"' not in self.page
+        assert 'id="shot-curve"' in self.page
+        assert 'id="shot-verdict"' in self.page
+        assert ">Pressure, this shot<" in self.page
+        assert ">0 s<" in self.page
+        assert ">25–30 s<" in self.page
+        assert ">40 s<" in self.page
+        wide = self.page[self.page.find("@media (min-width: 1000px)") :]
+        assert "font-size: 140px" in wide
+        assert "font-size: 40px" in wide
+        assert "height: 8px" in wide
+
+    def test_aim_stays_and_the_verdict_is_its_own_line(self):
+        for seconds in (12, 26, 34):
+            detail = call(
+                "logic.heroDetail({state:'brewing', since_seconds:1,"
+                " shot:{seconds:%s, ml:30}}, null)" % seconds
+            )
+            assert detail == "Aiming for 25 to 30 s"
+        assert call("logic.liveVerdict(12, 25, 30)") == "Short"
+        assert call("logic.liveVerdict(26, 25, 30)") == "On target"
+        assert call("logic.liveVerdict(34, 25, 30)") == "Long"
+        pressure = call(
+            "logic.heroDetail({state:'overpressure', since_seconds:4, shot:null}, 1.9)"
+        )
+        assert pressure == "for 4 s\nCheck the pressurestat"
+        assert "Pressure high" not in pressure
 
 
 class TestLastShotChip:

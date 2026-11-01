@@ -302,47 +302,60 @@
   [data-state="overpressure"] { --state-solid: var(--state-overpressure); --state-ink: var(--state-overpressure-ink); }
   [data-state="unknown"] { --state-solid: var(--state-unknown); --state-ink: var(--state-unknown-ink); }
 
-  /* The solid band is the thing you can read from across the kitchen.
-     min-height keeps it above 30% of the idle card. */
+  /* The state card is the hero. The chip names the state; the timer,
+     the aim and the window live in the body. Colours are look C tokens
+     so a later palette rebase does not rewrite these rules. */
+  .state { padding: 14px 18px 10px; }
   .state-band {
     display: flex;
     align-items: center;
-    gap: 14px;
-    min-height: 132px;
-    padding: 22px 18px;
-    background: var(--state-solid, var(--state-unknown));
-    color: var(--state-ink, var(--state-unknown-ink));
-    --state-color: var(--state-ink);
-  }
-
-  .state-copy {
-    display: flex;
     flex-wrap: wrap;
-    align-items: center;
     gap: 8px;
-    min-width: 0;
+    min-height: 0;
+    padding: 0;
+    background: transparent;
+    color: inherit;
   }
 
-  .glyph { display: inline-flex; flex: none; color: inherit; }
-  .glyph svg { width: 36px; height: 36px; display: block; }
+  .state-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    background: var(--acc, var(--crema-ink));
+    color: var(--card);
+    font-family: var(--display);
+    font-size: 12.5px;
+    font-weight: 700;
+    line-height: 1.2;
+    border-radius: 99px;
+    padding: 5px 12px;
+  }
+
+  .state-chip .lamp {
+    width: 6px;
+    height: 6px;
+    background: var(--card);
+    box-shadow: none;
+  }
 
   .state-label {
-    font-family: var(--display);
-    font-size: 44px;
-    font-weight: 600;
-    letter-spacing: -.03em;
-    line-height: 1.05;
+    font-size: inherit;
+    font-weight: inherit;
+    letter-spacing: 0;
+    line-height: inherit;
     color: inherit;
-    /* Two-word labels wrap by balance, never orphaning a single word. */
     text-wrap: balance;
   }
 
-  .state-body { padding: 14px 16px 16px; }
+  .state-body { padding: 0; }
 
   .state-detail {
-    font-size: 15px;
-    color: var(--ink);
+    margin-top: 8px;
+    font-size: 12.5px;
+    font-weight: 500;
+    color: var(--mute, var(--ink-faint));
     line-height: 1.35;
+    white-space: pre-line;
   }
 
   .warm {
@@ -409,62 +422,123 @@
     50% { box-shadow: 0 0 0 9px color-mix(in srgb, var(--state-color, #999) 12%, transparent); }
   }
 
-  /* The shot timer is the figure the eye is here for: full stage,
-     centered, and the target window drawn under it across the card. */
-  .shot {
+  /* Timer on the left, aim and the live verdict on the right.
+     The yield stays on the water card, not under the timer. */
+  .shot { margin-top: 12px; text-align: left; }
+
+  .trow {
     display: flex;
-    flex-direction: column;
-    align-items: center;
-    text-align: center;
-    margin-top: 12px;
+    justify-content: space-between;
+    align-items: flex-end;
+    gap: 12px;
   }
 
-  .shot b {
+  .timer b {
     font-family: var(--display);
-    font-size: 64px;
-    font-weight: 600;
-    letter-spacing: -.03em;
+    font-size: 62px;
+    font-weight: 700;
+    letter-spacing: -.05em;
     font-variant-numeric: tabular-nums;
     line-height: 1;
-    transition: color .3s ease;
   }
 
-  .shot b.good { color: var(--matcha-ink); }
-  .shot b.fast { color: var(--fast-ink); }
-  .shot b.long { color: var(--clay-ink); }
+  .timer small {
+    font-size: 22px;
+    font-weight: 600;
+    color: var(--mute, var(--ink-faint));
+    margin-left: 4px;
+    letter-spacing: 0;
+  }
 
-  .shot small {
+  .hint {
+    text-align: right;
+    font-size: 12.5px;
+    font-weight: 500;
+    color: var(--mute, var(--ink-faint));
+    padding-bottom: 8px;
+  }
+
+  .hint b {
     display: block;
-    font-family: var(--mono);
-    font-size: 12px;
-    letter-spacing: .04em;
-    color: var(--ink-soft);
-    margin-top: 8px;
+    color: var(--acc, var(--crema-ink));
+    font-size: 14px;
+    font-weight: 700;
+    margin-top: 2px;
   }
 
-  /* Target extraction window, drawn under the shot timer. */
+  /* 6 px track. The window box sticks out 4 px each side, so it is 14 px
+     tall, outlined in the accent, with a 5 px radius. */
   .shot-track {
     position: relative;
     width: 100%;
-    height: 5px;
-    margin-top: 12px;
+    height: 6px;
+    margin-top: 10px;
     border-radius: 3px;
-    background: var(--edge);
+    background: var(--bg);
   }
 
   .shot-track i {
     position: absolute;
     inset: 0 auto 0 0;
-    background: var(--crema-ink);
+    background: var(--ink);
     border-radius: 3px;
     transition: width .3s ease;
   }
 
   .shot-track u {
     position: absolute;
-    top: -3px; bottom: -3px;
-    border-left: 1px solid var(--ink-soft);
-    border-right: 1px solid var(--ink-soft);
+    top: -4px;
+    bottom: -4px;
+    border: 1.5px solid var(--acc, var(--crema-ink));
+    border-radius: 5px;
+    text-decoration: none;
+  }
+
+  .tl {
+    display: flex;
+    justify-content: space-between;
+    position: relative;
+    margin-top: 6px;
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--mute, var(--ink-faint));
+  }
+
+  .tl .wl {
+    position: absolute;
+    left: 68.75%;
+    transform: translateX(-50%);
+    color: var(--acc, var(--crema-ink));
+    font-weight: 700;
+  }
+
+  .cvh {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 8px;
+  }
+
+  .lbl {
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--mute, var(--ink-faint));
+  }
+
+  /* Empty until curve-c draws the live pressure line. */
+  #shot-curve {
+    position: relative;
+    height: 62px;
+    margin-top: 6px;
+  }
+
+  @media (min-width: 1000px) {
+    .state-chip { font-size: 14px; padding: 7px 15px; }
+    .timer b { font-size: 140px; margin-top: 14px; }
+    .timer small { font-size: 40px; }
+    .hint { font-size: 15px; padding-bottom: 22px; }
+    .hint b { font-size: 18px; }
+    .shot-track { height: 8px; margin-top: 22px; }
+    .tl { font-size: 12px; }
   }
 
   /* ---- pressure rings ---- */
@@ -1080,10 +1154,6 @@
     display: none !important;
   }
 
-  body.glance .state-label {
-    font-size: clamp(40px, 9vh, 88px);
-  }
-
   body.glance .shot b {
     font-size: clamp(8rem, 28vh, 50vh);
     line-height: 1;
@@ -1105,7 +1175,7 @@
 <div class="brewbar" id="brewbar" aria-hidden="true">
   <span class="lamp" id="bb-lamp"></span>
   <span class="bb-label" id="bb-label">Pulling a shot</span>
-  <b class="bb-time" id="bb-time">0s</b>
+  <b class="bb-time" id="bb-time">0 s</b>
   <span class="stale-tag" id="bb-stale" hidden>Last seen</span>
   <span class="bb-ml" id="bb-ml">0 ml</span>
 </div>
@@ -1132,12 +1202,11 @@
 <div class="stack">
   <div class="card state" id="state" data-state="unknown">
     <div class="state-band" id="state-band">
-      <span class="lamp" id="lamp"></span>
-      <span class="glyph" id="state-glyph" aria-hidden="true"></span>
-      <div class="state-copy">
-        <div class="state-label" id="state-label" aria-live="polite">Connecting…</div>
-        <span class="stale-tag" id="stale-tag" hidden>Last seen</span>
-      </div>
+      <span class="state-chip">
+        <i class="lamp" id="lamp"></i>
+        <span class="state-label" id="state-label" aria-live="polite">Connecting…</span>
+      </span>
+      <span class="stale-tag" id="stale-tag" hidden>Last seen</span>
     </div>
     <div class="state-body">
       <div class="state-detail" id="state-detail">waiting for the machine</div>
@@ -1146,10 +1215,19 @@
         <span class="warm-eta" id="warm-eta"></span>
       </div>
       <div class="shot" id="shot" hidden>
-        <b id="shot-seconds">0s</b>
-        <span class="stale-tag" id="shot-stale" hidden>Last seen</span>
-        <small id="shot-ml">0 ml</small>
-        <div class="shot-track"><u id="shot-window"></u><i id="shot-progress"></i></div>
+        <div class="trow">
+          <div class="timer"><b id="shot-seconds">0</b><small>s</small>
+            <span class="stale-tag" id="shot-stale" hidden>Last seen</span>
+          </div>
+          <div class="hint" id="shot-hint">
+            <span id="shot-aim">Aiming for 25 to 30 s</span>
+            <b id="shot-verdict">On target</b>
+          </div>
+        </div>
+        <div class="shot-track"><i id="shot-progress"></i><u id="shot-window"></u></div>
+        <div class="tl"><span>0 s</span><span class="wl">25–30 s</span><span>40 s</span></div>
+        <div class="cvh"><span class="lbl">Pressure, this shot</span><span class="lbl">bar</span></div>
+        <div class="chart" id="shot-curve" aria-hidden="true"></div>
       </div>
       <span class="last-pull" id="last-pull" hidden></span>
     </div>
@@ -1376,12 +1454,6 @@ function renderState(machine, pressure) {
   const lamp = document.getElementById('lamp');
   lamp.classList.toggle('pulse', machine.severity === 'alert');
 
-  const glyph = document.getElementById('state-glyph');
-  glyph.innerHTML =
-    `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-          stroke-linecap="round" stroke-linejoin="round">${GLYPHS[machine.state] || GLYPHS.unknown}</svg>`;
-  glyph.style.color = '';
-
   // Only rewritten when it actually changes: the label carries aria-live,
   // and a per-second "3s in this state" would talk an ear off.
   const label = document.getElementById('state-label');
@@ -1410,22 +1482,23 @@ function renderState(machine, pressure) {
     // Fresh payload: take the machine's number. displayedShotText refuses
     // to advance a held reading while offline, which is what keeps the
     // timer from counting up if a late render lands after the lamp flips.
-    const incomingShot = `${machine.shot.seconds.toFixed(0)}s`;
+    const incomingShot = machine.shot.seconds.toFixed(0);
     const shownShot = DashboardLogic.displayedShotText(true, heldShotText, incomingShot);
     heldShotText = shownShot;
     shotSeconds.textContent = shownShot;
-    shotSeconds.className = verdictOf(machine.shot.seconds).key;
+    const verdict = DashboardLogic.liveVerdict(
+      machine.shot.seconds, SHOT_WINDOW[0], SHOT_WINDOW[1]
+    );
+    document.getElementById('shot-verdict').textContent = verdict;
     document.getElementById('bb-time').className =
       `bb-time ${verdictOf(machine.shot.seconds).key}`;
-    document.getElementById('shot-ml').textContent =
-      `${machine.shot.ml.toFixed(0)} ml`;
     document.getElementById('shot-progress').style.width =
       `${Math.min(100, machine.shot.seconds / SHOT_SCALE * 100)}%`;
     const windowEl = document.getElementById('shot-window');
     if (presentation.showTarget) Object.assign(windowEl.style, windowStyle());
     else windowEl.style.width = '0';
 
-    document.getElementById('bb-time').textContent = shownShot;
+    document.getElementById('bb-time').textContent = `${shownShot} s`;
     document.getElementById('bb-ml').textContent =
       `${machine.shot.ml.toFixed(0)} ml`;
   } else {
@@ -1445,15 +1518,20 @@ function renderState(machine, pressure) {
   if (last) {
     const lastVerdict = verdictOf(last.seconds);
     chip.textContent =
-      `last shot ${last.seconds.toFixed(0)} s · ${last.ml.toFixed(0)} ml · ${lastVerdict.label}`;
+      `Last shot ${last.seconds.toFixed(0)} s · ${last.ml.toFixed(0)} ml · ${lastVerdict.label}`;
   }
 
   const boilerBar = DashboardLogic.boilerReading(pressure);
   const detailMachine = flushDisplay
     ? Object.assign({}, machine, { shot: null, state: 'flushing' })
     : machine;
-  document.getElementById('state-detail').textContent =
-    DashboardLogic.heroDetail(detailMachine, boilerBar);
+  const detail = DashboardLogic.heroDetail(detailMachine, boilerBar);
+  document.getElementById('state-detail').hidden = presentation.showShot;
+  if (presentation.showShot) {
+    document.getElementById('shot-aim').textContent = detail;
+  } else {
+    document.getElementById('state-detail').textContent = detail;
+  }
   paintWarm(machine, boilerBar);
 
   syncBrewbar();

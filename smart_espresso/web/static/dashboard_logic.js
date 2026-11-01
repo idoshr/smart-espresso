@@ -163,40 +163,37 @@
     return whole + " s";
   }
 
-  // One secondary line. Shot copy wins while a pull is running; heating
-  // names the boiler against the ready threshold; ready names the time in
-  // state. A later temperature or ready-alert can append to this string.
-  const STATE_NAMES = {
-    off: "Off",
-    heating: "Warming up",
-    ready: "Ready to pull",
-    brewing: "Pulling a shot",
-    steaming: "Steaming milk",
-    overpressure: "Pressure high. Check the pressurestat.",
-    unknown: "No sensor reading",
-    flushing: "Water running",
-  };
-
+  // One secondary line. The chip already says the state, so this line
+  // only adds the duration, the boiler, or the aim.
   function durationLine(state, sinceSeconds) {
-    const dur = formatSpokenDuration(sinceSeconds);
-    if (state === "ready") return "Ready for " + dur;
-    const name = STATE_NAMES[state] || "Off";
-    return name + " for " + dur;
+    return "for " + formatSpokenDuration(sinceSeconds);
   }
 
+  // The chip already names the state, so this line does not repeat it.
+  // During a shot the aim stays put; the live verdict is a separate line.
   function heroDetail(machine, boilerBar) {
-    if (machine.shot) {
-      const seconds = machine.shot.seconds;
-      if (seconds < 25) return "Aiming for 25 to 30 s";
-      if (seconds <= 30) return "On target";
-      return "Running long";
-    }
+    if (machine.shot) return "Aiming for 25 to 30 s";
     if (machine.state === "heating" && typeof boilerBar === "number") {
       const eta = formatEta(warmingEtaSeconds(boilerBar, machine.since_seconds));
-      const base = "Warming up · " + boilerBar.toFixed(1) + " of 0.8 bar";
-      return eta ? base + " · " + eta : base;
+      const base = boilerBar.toFixed(1) + " of 0.8 bar";
+      return eta ? base + " · " + eta + " to go" : base;
+    }
+    if (machine.state === "overpressure") {
+      return (
+        "for " +
+        formatSpokenDuration(machine.since_seconds) +
+        "\nCheck the pressurestat"
+      );
     }
     return durationLine(machine.state, machine.since_seconds);
+  }
+
+  // Sentence case. short / on target / long from the same window.
+  function liveVerdict(seconds, windowLow, windowHigh) {
+    const verdict = shotVerdict(seconds, windowLow, windowHigh);
+    if (verdict.key === "fast") return "Short";
+    if (verdict.key === "long") return "Long";
+    return "On target";
   }
 
   function glanceOn(wakeHeld, pinned) {
@@ -333,6 +330,7 @@
     warmingEtaSeconds: warmingEtaSeconds,
     formatEta: formatEta,
     heroDetail: heroDetail,
+    liveVerdict: liveVerdict,
     glanceOn: glanceOn,
     noteShotWindow: noteShotWindow,
     clearShotWindow: clearShotWindow,
