@@ -334,6 +334,27 @@ def _css_rule(page, selector):
     return match.group(1)
 
 
+class TestWaterCard:
+    """The water card puts the peak in the header and shortens the chart."""
+
+    def setup_method(self):
+        self.page = (
+            Path(__file__).resolve().parents[1] / "web" / "static" / "index.html"
+        ).read_text(encoding="utf-8")
+
+    def test_peak_header_sentence_case_and_short_chart(self):
+        assert ">Now <" in self.page
+        assert ">All time <" in self.page
+        assert "3 s peak" in self.page
+        assert "s peak" in self.page
+        assert "−1:00" in self.page
+        chart = _css_rule(self.page, "#flow-card .chart")
+        assert "height: 26px" in chart
+        assert "gap: 4px" in chart
+        wide = self.page[self.page.find("@media (min-width: 1000px)") :]
+        assert "height: 170px" in wide
+
+
 class TestLastShotChip:
     """The chip is an inline span on main, so its box rules do nothing."""
 
