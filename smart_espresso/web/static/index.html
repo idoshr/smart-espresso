@@ -1473,11 +1473,13 @@ function renderState(machine, pressure) {
     ? Object.assign({}, machine, { shot: null, state: 'flushing' })
     : machine;
   const detail = DashboardLogic.heroDetail(detailMachine, boilerBar);
-  document.getElementById('state-detail').hidden = presentation.showShot;
+  const detailEl = document.getElementById('state-detail');
   if (presentation.showShot) {
+    detailEl.hidden = true;
     document.getElementById('shot-aim').textContent = detail;
   } else {
-    document.getElementById('state-detail').textContent = detail;
+    detailEl.textContent = detail;
+    detailEl.hidden = detail === "";
   }
   paintWarm(machine, boilerBar);
 
