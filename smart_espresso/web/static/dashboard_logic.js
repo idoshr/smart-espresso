@@ -308,8 +308,6 @@
   const HERO_CURVE_HEIGHT = 100;
   const HERO_CURVE_Y_MAX = 12;
   const HERO_CURVE_T_MAX = 40;
-  const HERO_CURVE_BAND_LOW = 8;
-  const HERO_CURVE_BAND_HIGH = 10;
 
   function curveAfter(samples) {
     if (!samples || !samples.length) return null;
@@ -437,8 +435,6 @@
       " " +
       HERO_CURVE_HEIGHT.toFixed(2) +
       " Z";
-    const bandY = yOf(HERO_CURVE_BAND_HIGH);
-    const bandHeight = yOf(HERO_CURVE_BAND_LOW) - bandY;
     const marks = [0, 10, 20, 30, 40];
     const axis = marks.map((value, index) => {
       const text =
@@ -454,12 +450,6 @@
       tMax: tMax,
       line: line,
       area: area,
-      band: {
-        x: 0,
-        y: Number(bandY.toFixed(2)),
-        width: HERO_CURVE_WIDTH,
-        height: Number(bandHeight.toFixed(2)),
-      },
       dot: { x: Number(last.x.toFixed(2)), y: Number(last.y.toFixed(2)) },
       // A fixed 9 bar mark, above the line. Not the live reading, so a
       // shot that has just ended cannot label the axis 0.0.

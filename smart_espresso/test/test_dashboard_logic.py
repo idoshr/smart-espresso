@@ -428,8 +428,8 @@ class TestHeroCurve:
         assert "height: 62px" in chart
         line = _css_rule(self.page, "#hero-curve .curve-line")
         assert "stroke: var(--acc" in line
-        band = _css_rule(self.page, "#hero-curve .band")
-        assert "fill: var(--acc" in band
+        assert 'id="hero-band"' not in self.page
+        assert "#hero-curve .band" not in self.page
         wide = self.page[self.page.find("@media (min-width: 1000px)") :]
         assert "height: 220px" in wide
 
@@ -509,7 +509,7 @@ class TestHeroCurve:
         )
         assert waiting["hidden"] is True
 
-    def test_the_line_is_head_pressure_and_the_band_is_8_to_10(self):
+    def test_the_line_is_head_pressure_on_a_40_second_scale(self):
         figure = call(
             "logic.heroCurveFigure(["
             " {t:0, head_bar:0, boiler_bar:1.2},"
@@ -521,8 +521,7 @@ class TestHeroCurve:
         assert figure["axis"] == ["0 s", "10", "20", "30", "40 s"]
         assert figure["dot"]["x"] == 195
         assert figure["dot"]["y"] == 25
-        assert figure["band"]["y"] == 16.67
-        assert figure["band"]["height"] == 16.67
+        assert "band" not in figure
         assert "M0.00 100.00" in figure["line"]
         assert "L195.00 25.00" in figure["line"]
         # Boiler is not the drawn series: 1.2 bar would sit much lower.
