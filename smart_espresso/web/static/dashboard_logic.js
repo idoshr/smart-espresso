@@ -267,7 +267,7 @@
     if (!connected && hasPayload) {
       return {
         replace: true,
-        label: offlineMessage(lastSeenAt, now),
+        label: "Offline",
         showShot: false,
         showTarget: false,
       };
