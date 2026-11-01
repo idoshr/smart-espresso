@@ -284,7 +284,9 @@ class TestShippedShell:
         assert 'class="dot off"' in self.page
 
     def test_markup_does_not_ship_a_last_seen_footer(self):
-        assert 'id="footer">never connected' in self.page
+        # The offline banner already says Last seen. A footer would repeat it.
+        assert 'id="footer"' not in self.page
+        assert "dashboard up" not in self.page
         assert "let lastSeenAt = null" in self.page
         assert "let lastSeenAt = Date.now()" not in self.page
 
@@ -380,30 +382,6 @@ class TestTodayLine:
         assert "header .tagline:empty { display: none" in page
 
 
-class TestStaleFooter:
-    """The uptime line is gone. A stale connection names the clock time."""
-
-    def test_footer_is_quiet_while_connected(self):
-        assert call("logic.lastSeenLine(true, 1000, '8:14 AM')") == ""
-
-    def test_stale_connection_uses_the_device_time(self):
-        assert (
-            call("logic.lastSeenLine(false, 1000, '8:14 AM')")
-            == "Last seen 8:14 AM"
-        )
-
-    def test_never_connected_does_not_invent_a_time(self):
-        assert call("logic.lastSeenLine(false, null, '')") == "never connected"
-
-    def test_the_page_does_not_render_dashboard_uptime(self):
-        page = (
-            Path(__file__).resolve().parents[1] / "web" / "static" / "index.html"
-        ).read_text(encoding="utf-8")
-        assert "dashboard up" not in page
-        assert "footer:empty { display: none" in page
-        assert "lastSeenLine(" in page
-
-
 class TestPhoneHeader:
     """On a phone the today line wraps the header to four lines."""
 
@@ -416,14 +394,14 @@ class TestPhoneHeader:
         assert 'id="tagline-card"' not in self.page
         assert "header .tagline:empty { display: none" in self.page
         title = _css_rule(self.page, "header h1")
-        assert "font-size: 17px" in title
+        assert "font-size: 20px" in title
         assert "font-weight: 800" in title
         today = _css_rule(self.page, "header .tagline")
         assert "font-size: 12.5px" in today
         assert "font-weight: 500" in today
         assert "var(--mute" in today
-        wide = self.page[self.page.find("@media (min-width: 1000px)") :]
-        assert "font-size: 20px" in wide
+        gap = _css_rule(self.page, "header .conn + .tagline")
+        assert "margin-left: 6px" in gap
         assert "todayLine(" in self.page
 
     def test_title_stays_whole_at_768_and_1280_with_connecting(self):

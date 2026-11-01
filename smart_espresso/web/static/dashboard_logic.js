@@ -35,15 +35,7 @@
     return shots + " " + noun + " · " + todayVolume(today.ml) + " today";
   }
 
-  // Clock time is the page's job (the device's locale). Empty while the
-  // link is up, so the uptime line has nothing to say.
-  function lastSeenLine(connected, lastSeenAt, timeText) {
-    if (connected) return "";
-    if (lastSeenAt == null || !timeText) return "never connected";
-    return "Last seen " + timeText;
-  }
-
-  // Null while the page has never applied a payload. The footer must not
+  // Null while the page has never applied a payload. The banner must not
   // invent a "last seen" age from the moment the document loaded.
   function footerText(connected, lastSeenAt, now) {
     if (connected) return null;
@@ -343,7 +335,6 @@
     pillText: pillText,
     footerText: footerText,
     todayLine: todayLine,
-    lastSeenLine: lastSeenLine,
     sensorCardVisible: sensorCardVisible,
     formatReading: formatReading,
     readingFaulted: readingFaulted,

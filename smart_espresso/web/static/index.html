@@ -221,7 +221,7 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-size: 17px;
+    font-size: 20px;
     font-weight: 800;
     letter-spacing: -.02em;
   }
@@ -325,6 +325,7 @@
     white-space: nowrap;
   }
   header .tagline:empty { display: none; }
+  header .conn + .tagline { margin-left: 6px; }
 
   /* The connection word stays for the status role. The header shows the dot. */
   #conn {
@@ -341,10 +342,6 @@
   }
   header .dot { background: var(--acc, var(--matcha-ink)); }
   header .dot.off { background: var(--mute, var(--ink-faint)); }
-
-  @media (min-width: 1000px) {
-    header h1 { font-size: 20px; }
-  }
 
   .live {
     display: flex;
@@ -1043,17 +1040,6 @@
     text-align: right;
   }
 
-  footer {
-    font-family: var(--body);
-    font-size: 12.5px;
-    font-weight: 500;
-    letter-spacing: 0;
-    color: var(--mute, var(--ink-faint));
-    text-align: center;
-    margin-top: 18px;
-  }
-  footer:empty { display: none; }
-
   /* Offline keeps the last reading at full contrast. A tag does the
      "this is old" job that dimming used to do, without dropping the
      type below 4.5:1. */
@@ -1202,7 +1188,6 @@
   body.glance #other-card,
   body.glance #skeletons,
   body.glance .last-pull,
-  body.glance footer,
   body.glance .warm {
     display: none !important;
   }
@@ -1368,8 +1353,6 @@
     <div class="rows" id="other-rows"></div>
   </div>
 </div>
-
-<footer id="footer">never connected</footer>
 
 <div class="toast" id="toast" role="status" hidden></div>
 
@@ -2166,18 +2149,6 @@ function renderToday(machine) {
   document.getElementById('tagline').textContent = text;
 }
 
-function paintFooter() {
-  const timeText = lastSeenAt == null
-    ? ''
-    : new Date(lastSeenAt).toLocaleTimeString([], {
-        hour: 'numeric',
-        minute: '2-digit',
-      });
-  document.getElementById('footer').textContent = DashboardLogic.lastSeenLine(
-    connected, lastSeenAt, timeText
-  );
-}
-
 function render(data) {
   renderState(data.machine, data.pressure);
   renderRings(data.pressure);
@@ -2226,14 +2197,14 @@ function syncTankControl() {
   if (!allowed && resetButton.classList.contains('armed')) disarmReset();
 }
 
-// Pill, footer, banner, skeletons and the stale tags. Called the moment
-// the connection changes and once a second while offline, so the banner
-// does not wait for the next footer tick to appear.
+// Pill, banner, skeletons and the stale tags. Called the moment the
+// connection changes and once a second while offline, so the banner
+// does not wait for the next tick. The banner already names Last seen,
+// so there is no footer repeating it.
 function paintOfflineChrome() {
   const text = DashboardLogic.pillText(connected, lastSeenAt);
   document.getElementById('dot').classList.toggle('off', text !== 'live');
   document.getElementById('conn').textContent = text;
-  paintFooter();
 
   const banner = DashboardLogic.offlineBanner(
     connected, missed, lastSeenAt, Date.now()
