@@ -338,6 +338,11 @@ class TestShippedShell:
         assert short["mark"] == "\u2212"
         assert call("logic.recentTile(40, 50, 25, 30)")["label"] == "Long"
         assert call("logic.recentTile(40, 90, 25, 30)")["bar"] == 1
+        assert call("logic.allShotsLink(1, 4)")["hidden"] is True
+        assert call("logic.allShotsLink(4, 4)")["hidden"] is True
+        five = call("logic.allShotsLink(5, 4)")
+        assert five["hidden"] is False
+        assert five["text"] == "All 5 shots \u203A"
 
 
 def _css_rule(page, selector):

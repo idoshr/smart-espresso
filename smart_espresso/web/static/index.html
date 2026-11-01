@@ -1639,8 +1639,9 @@ function renderRecent(block) {
   const count = (block && block.count) || recent.length;
   card.hidden = count === 0 && recent.length === 0;
   const link = document.getElementById('all-shots');
-  link.hidden = count === 0;
-  link.textContent = `All ${count} shot${count === 1 ? '' : 's'} ›`;
+  const linkInfo = DashboardLogic.allShotsLink(count, 4);
+  link.hidden = linkInfo.hidden;
+  link.textContent = linkInfo.text;
 
   const tiles = recent.slice(0, 4);
   const sig = tiles.map(shot => `${shot.id}:${shot.seconds}:${shot.ml}:${shot.started_at}`).join(',');

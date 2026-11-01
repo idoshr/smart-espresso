@@ -254,6 +254,17 @@
     };
   }
 
+  // The link is only for the shots that do not fit in the four tiles.
+  function allShotsLink(count, shown) {
+    const total = Number(count) || 0;
+    const tiles = typeof shown === "number" ? shown : 4;
+    const noun = total === 1 ? "shot" : "shots";
+    return {
+      hidden: total <= tiles,
+      text: "All " + total + " " + noun + " \u203A",
+    };
+  }
+
   function shotVerdict(seconds, windowLow, windowHigh) {
     const low = typeof windowLow === "number" ? windowLow : 25;
     const high = typeof windowHigh === "number" ? windowHigh : 30;
@@ -355,6 +366,7 @@
     showOverBand: showOverBand,
     shotVerdict: shotVerdict,
     recentTile: recentTile,
+    allShotsLink: allShotsLink,
     staleTagText: staleTagText,
     offlineMessage: offlineMessage,
     isFlush: isFlush,
