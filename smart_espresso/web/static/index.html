@@ -221,6 +221,9 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    font-size: 17px;
+    font-weight: 800;
+    letter-spacing: -.02em;
   }
 
   .header-tools {
@@ -309,32 +312,39 @@
     flex: none;
   }
 
-  .tagline {
-    font-family: var(--mono);
-    font-size: 12px;
-    letter-spacing: .1em;
-    color: var(--ink-faint);
-    margin-top: 4px;
+  /* Today sits on the right of the one-line header. An empty line
+     (the first shot of the day, still running) must not leave a gap. */
+  header .tagline {
+    flex: none;
+    margin: 0;
+    font-family: var(--body);
+    font-size: 12.5px;
+    font-weight: 500;
+    letter-spacing: 0;
+    color: var(--mute, var(--ink-faint));
+    white-space: nowrap;
   }
+  header .tagline:empty { display: none; }
 
-  /* The today line stays in the header only when the viewport is wide
-     enough. The column itself is 460 px, so this is a viewport query.
-     On a phone the same words move into the state card. */
-  @media (max-width: 999px) {
-    header .tagline { display: none !important; }
+  /* The connection word stays for the status role. The header shows the dot. */
+  #conn {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
   }
+  header .conn {
+    display: inline-flex;
+    align-items: center;
+    flex: none;
+  }
+  header .dot { background: var(--acc, var(--matcha-ink)); }
+  header .dot.off { background: var(--mute, var(--ink-faint)); }
 
   @media (min-width: 1000px) {
-    header { flex-wrap: wrap; }
-    header h1 { margin-right: auto; }
-    /* The column is 460 px, so the today line takes the next row
-       rather than squeezing in beside the connection pill. */
-    header .tagline { flex-basis: 100%; margin-top: 6px; }
-    #tagline-card { display: none !important; }
+    header h1 { font-size: 20px; }
   }
-
-  #tagline-card { margin: 0 0 10px; }
-  #tagline-card:empty { display: none; }
 
   .live {
     display: flex;
@@ -1034,13 +1044,15 @@
   }
 
   footer {
-    font-family: var(--mono);
-    font-size: 12px;
-    letter-spacing: .08em;
-    color: var(--ink-faint);
+    font-family: var(--body);
+    font-size: 12.5px;
+    font-weight: 500;
+    letter-spacing: 0;
+    color: var(--mute, var(--ink-faint));
     text-align: center;
     margin-top: 18px;
   }
+  footer:empty { display: none; }
 
   /* Offline keeps the last reading at full contrast. A tag does the
      "this is old" job that dimming used to do, without dropping the
@@ -1182,7 +1194,6 @@
 
   body.glance header h1,
   body.glance header .tagline,
-  body.glance #tagline-card,
   body.glance #rings,
   body.glance #pulls-card,
   body.glance #history-card,
@@ -1235,6 +1246,11 @@
 <header>
   <h1>Smart Espresso</h1>
   <div class="header-tools">
+    <!-- Connecting, not live: the shell is often cached and painted before
+         /api/status has ever answered. A green dot here is a lie. -->
+    <div class="conn" role="status"><span class="dot off" id="dot"></span><span
+        id="conn">Connecting…</span></div>
+    <div class="tagline" id="tagline"></div>
     <button class="live" id="wake" type="button" title="Keep screen on"
             aria-label="Keep screen on" aria-pressed="false" hidden><span
         class="pill-face"><svg class="wake-icon" viewBox="0 0 24 24"
@@ -1243,12 +1259,7 @@
         stroke-linejoin="round"><rect x="8.2" y="3.4" width="7.6" height="13.2"
         rx="1.6"/><path d="M10.6 14.2h2.8"/><path d="M5.4 7.4 3.8 5.8M4.8 12H2.6M5.4 16.4 4 18M18.6 7.4 20.2 5.8M19.2 12h2.2M18.6 16.4 20 18"/></g></svg><span
         id="wake-text">Keep screen on</span></span></button>
-    <!-- Connecting, not live: the shell is often cached and painted before
-         /api/status has ever answered. A green "live" here is a lie. -->
-    <div class="live" role="status"><span class="pill-face"><span class="dot off"
-        id="dot"></span><span id="conn">Connecting…</span></span></div>
   </div>
-  <div class="tagline" id="tagline"></div>
 </header>
 
 <div class="stack">
@@ -1262,7 +1273,6 @@
       </div>
     </div>
     <div class="state-body">
-      <div class="tagline" id="tagline-card"></div>
       <div class="state-detail" id="state-detail">waiting for the machine</div>
       <div class="warm" id="warm" hidden>
         <div class="warm-track" aria-hidden="true"><i id="warm-fill"></i></div>
@@ -2140,13 +2150,6 @@ function renderFlow(sensor) {
 
 // ---- frame ---------------------------------------------------------------
 
-function formatDuration(seconds) {
-  const h = Math.floor(seconds / 3600), m = Math.floor(seconds / 60) % 60;
-  if (h) return `${h}h ${m}m`;
-  if (m) return `${m}m`;
-  return `${Math.floor(seconds)}s`;
-}
-
 // Volumes read in the unit that keeps the digits short: a lifetime of
 // water is litres, this morning's tank is millilitres with thin commas.
 function volText(ml) {
@@ -2154,15 +2157,25 @@ function volText(ml) {
   return `${Math.round(ml).toLocaleString('en-US')} ml`;
 }
 
-// The tagline slot earns its keep: today's pulls, so a glance answers
-// "how many shots has the machine seen today".
-function renderToday(today) {
-  if (!today) return;   // an older server payload: keep the static line
-  const text = today.shots > 0
-    ? `${today.shots} shot${today.shots === 1 ? '' : 's'} · ${volText(today.ml)} today`
-    : 'No shots yet today';
+// Saved shots today. The first one, while it is still running, leaves
+// the line empty. header .tagline:empty hides that gap.
+function renderToday(machine) {
+  if (!machine || !machine.today) return;
+  const text = DashboardLogic.todayLine(machine.today, !!machine.shot);
+  if (text == null) return;
   document.getElementById('tagline').textContent = text;
-  document.getElementById('tagline-card').textContent = text;
+}
+
+function paintFooter() {
+  const timeText = lastSeenAt == null
+    ? ''
+    : new Date(lastSeenAt).toLocaleTimeString([], {
+        hour: 'numeric',
+        minute: '2-digit',
+      });
+  document.getElementById('footer').textContent = DashboardLogic.lastSeenLine(
+    connected, lastSeenAt, timeText
+  );
 }
 
 function render(data) {
@@ -2170,7 +2183,7 @@ function render(data) {
   renderRings(data.pressure);
   renderPulls(data.machine.history || []);
   renderHistory(data.shots);
-  renderToday(data.machine && data.machine.today);
+  renderToday(data.machine);
 
   const flowCard = document.getElementById('flow-card');
   const flowPresent = data.flow.length > 0;
@@ -2194,12 +2207,6 @@ function render(data) {
 
   hasPayload = true;
   document.getElementById('skeletons').hidden = true;
-
-  // render() only runs with a payload just applied, so the uptime line is
-  // a real reading. Gating it on `connected` left the first success showing
-  // "never connected" until the following poll.
-  document.getElementById('footer').textContent =
-    `dashboard up ${formatDuration(data.uptime)}`;
 }
 
 let toastTimer = null;
@@ -2226,11 +2233,7 @@ function paintOfflineChrome() {
   const text = DashboardLogic.pillText(connected, lastSeenAt);
   document.getElementById('dot').classList.toggle('off', text !== 'live');
   document.getElementById('conn').textContent = text;
-  if (!connected) {
-    document.getElementById('footer').textContent = DashboardLogic.footerText(
-      connected, lastSeenAt, Date.now()
-    );
-  }
+  paintFooter();
 
   const banner = DashboardLogic.offlineBanner(
     connected, missed, lastSeenAt, Date.now()

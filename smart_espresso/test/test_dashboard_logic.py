@@ -352,6 +352,58 @@ class TestLastShotChip:
         assert "margin-top: 12px" in _css_rule(self.page, ".shot")
 
 
+class TestTodayLine:
+    """Today's tally, including the first shot while it is still running."""
+
+    def test_idle_with_no_shots_names_the_empty_day(self):
+        assert (
+            call("logic.todayLine({shots:0, ml:0}, false)") == "No shots yet today"
+        )
+
+    def test_the_first_shot_of_the_day_leaves_the_line_empty(self):
+        assert call("logic.todayLine({shots:0, ml:0}, true)") == ""
+
+    def test_one_shot_and_two_shots(self):
+        assert (
+            call("logic.todayLine({shots:1, ml:39}, false)")
+            == "1 shot · 39 ml today"
+        )
+        assert (
+            call("logic.todayLine({shots:2, ml:68}, true)")
+            == "2 shots · 68 ml today"
+        )
+
+    def test_the_empty_line_is_removed_from_the_header(self):
+        page = (
+            Path(__file__).resolve().parents[1] / "web" / "static" / "index.html"
+        ).read_text(encoding="utf-8")
+        assert "header .tagline:empty { display: none" in page
+
+
+class TestStaleFooter:
+    """The uptime line is gone. A stale connection names the clock time."""
+
+    def test_footer_is_quiet_while_connected(self):
+        assert call("logic.lastSeenLine(true, 1000, '8:14 AM')") == ""
+
+    def test_stale_connection_uses_the_device_time(self):
+        assert (
+            call("logic.lastSeenLine(false, 1000, '8:14 AM')")
+            == "Last seen 8:14 AM"
+        )
+
+    def test_never_connected_does_not_invent_a_time(self):
+        assert call("logic.lastSeenLine(false, null, '')") == "never connected"
+
+    def test_the_page_does_not_render_dashboard_uptime(self):
+        page = (
+            Path(__file__).resolve().parents[1] / "web" / "static" / "index.html"
+        ).read_text(encoding="utf-8")
+        assert "dashboard up" not in page
+        assert "footer:empty { display: none" in page
+        assert "lastSeenLine(" in page
+
+
 class TestPhoneHeader:
     """On a phone the today line wraps the header to four lines."""
 
@@ -360,20 +412,19 @@ class TestPhoneHeader:
             Path(__file__).resolve().parents[1] / "web" / "static" / "index.html"
         ).read_text(encoding="utf-8")
 
-    def test_today_line_moves_into_the_state_card_on_a_phone(self):
-        assert 'id="tagline-card"' in self.page
-        phone = re.search(r"@media \(max-width: 999px\)\s*\{([^}]*)\}", self.page)
-        assert phone is not None
-        assert "header .tagline" in phone.group(1)
-        assert "display: none" in phone.group(1)
-        wide_at = self.page.find("@media (min-width: 1000px)")
-        assert wide_at > 0
-        wide = self.page[wide_at : wide_at + 400]
-        assert "#tagline-card" in wide
-        assert "display: none" in wide
-        # One sentence, written to both slots. No second wording.
-        assert "getElementById('tagline-card').textContent = text" in self.page
-        assert "getElementById('tagline').textContent = text" in self.page
+    def test_today_line_stays_on_the_header_row(self):
+        assert 'id="tagline-card"' not in self.page
+        assert "header .tagline:empty { display: none" in self.page
+        title = _css_rule(self.page, "header h1")
+        assert "font-size: 17px" in title
+        assert "font-weight: 800" in title
+        today = _css_rule(self.page, "header .tagline")
+        assert "font-size: 12.5px" in today
+        assert "font-weight: 500" in today
+        assert "var(--mute" in today
+        wide = self.page[self.page.find("@media (min-width: 1000px)") :]
+        assert "font-size: 20px" in wide
+        assert "todayLine(" in self.page
 
     def test_title_stays_whole_at_768_and_1280_with_connecting(self):
         # A labelled wake control plus "Connecting…" is about 438 px. The

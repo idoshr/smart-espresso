@@ -18,6 +18,31 @@
     return "offline";
   }
 
+  function todayVolume(ml) {
+    const n = Number(ml);
+    if (!Number.isFinite(n)) return "0 ml";
+    if (n >= 10000) return (n / 1000).toFixed(1) + " L";
+    return Math.round(n).toLocaleString("en-US") + " ml";
+  }
+
+  // Saved shots only. The shot still running is not in the tally, so the
+  // first one of the day leaves the line empty instead of "No shots yet".
+  function todayLine(today, shotActive) {
+    if (!today) return null;
+    const shots = Number(today.shots) || 0;
+    if (shots <= 0) return shotActive ? "" : "No shots yet today";
+    const noun = shots === 1 ? "shot" : "shots";
+    return shots + " " + noun + " · " + todayVolume(today.ml) + " today";
+  }
+
+  // Clock time is the page's job (the device's locale). Empty while the
+  // link is up, so the uptime line has nothing to say.
+  function lastSeenLine(connected, lastSeenAt, timeText) {
+    if (connected) return "";
+    if (lastSeenAt == null || !timeText) return "never connected";
+    return "Last seen " + timeText;
+  }
+
   // Null while the page has never applied a payload. The footer must not
   // invent a "last seen" age from the moment the document loaded.
   function footerText(connected, lastSeenAt, now) {
@@ -317,6 +342,8 @@
   return {
     pillText: pillText,
     footerText: footerText,
+    todayLine: todayLine,
+    lastSeenLine: lastSeenLine,
     sensorCardVisible: sensorCardVisible,
     formatReading: formatReading,
     readingFaulted: readingFaulted,
