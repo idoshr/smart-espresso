@@ -238,6 +238,22 @@
 
   // fast / on target / long. The shape is what remains when colour is
   // removed: an open left chevron, a filled dot, a filled right chevron.
+  // Four recent tiles. The bar is the yield against a 45 ml double.
+  // Short carries a minus so the word is not the only signal.
+  function recentTile(seconds, ml, windowLow, windowHigh) {
+    const verdict = shotVerdict(seconds, windowLow, windowHigh);
+    let label = "On target";
+    if (verdict.key === "fast") label = "Short";
+    else if (verdict.key === "long") label = "Long";
+    const volume = typeof ml === "number" && isFinite(ml) ? ml : 0;
+    return {
+      key: verdict.key,
+      label: label,
+      bar: Math.max(0, Math.min(1, volume / 45)),
+      mark: verdict.key === "fast" ? "\u2212" : "",
+    };
+  }
+
   function shotVerdict(seconds, windowLow, windowHigh) {
     const low = typeof windowLow === "number" ? windowLow : 25;
     const high = typeof windowHigh === "number" ? windowHigh : 30;
@@ -338,6 +354,7 @@
     clearShotWindow: clearShotWindow,
     showOverBand: showOverBand,
     shotVerdict: shotVerdict,
+    recentTile: recentTile,
     staleTagText: staleTagText,
     offlineMessage: offlineMessage,
     isFlush: isFlush,

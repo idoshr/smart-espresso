@@ -316,16 +316,28 @@ class TestShippedShell:
         assert handler.index("tankPostAllowed") < handler.index("fetch(")
         assert "resetFailureToast" in handler
 
-    def test_verdict_is_written_and_ticks_are_not_buttons(self):
-        assert 'class="pulls-legend"' in self.page
-        assert "> short<" in self.page
-        assert "> on target<" in self.page
-        assert "> long<" in self.page
-        assert "pointer-events: none" in self.page
-        assert "nearestTickIndex" in self.page
-        assert "verdict.label" in self.page
+    def test_recent_tiles_open_a_shot_and_the_log(self):
+        assert 'class="pulls-legend"' not in self.page
+        assert 'id="pulls-track"' not in self.page
+        assert 'id="recent-tiles"' in self.page
+        assert 'id="all-shots"' in self.page
+        assert 'id="history-card" hidden' in self.page
+        assert "Yesterday" in self.page
+        assert "toLocaleTimeString" in self.page
+        assert "createElement('button')" in self.page
         assert "setAttribute('role', 'button')" not in self.page
-        assert 'role="listbox"' in self.page
+        tile = _css_rule(self.page, ".recent-tile .ml")
+        assert "font-size: 17px" in tile
+        assert "font-weight: 700" in tile
+        bar = _css_rule(self.page, ".recent-bar")
+        assert "height: 4px" in bar
+        assert call("logic.recentTile(26, 34, 25, 30)")["label"] == "On target"
+        assert call("logic.recentTile(26, 34, 25, 30)")["bar"] == 34 / 45
+        short = call("logic.recentTile(12, 22, 25, 30)")
+        assert short["label"] == "Short"
+        assert short["mark"] == "\u2212"
+        assert call("logic.recentTile(40, 50, 25, 30)")["label"] == "Long"
+        assert call("logic.recentTile(40, 90, 25, 30)")["bar"] == 1
 
 
 def _css_rule(page, selector):
