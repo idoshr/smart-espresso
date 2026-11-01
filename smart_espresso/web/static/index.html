@@ -512,25 +512,6 @@
     font-weight: 700;
   }
 
-  .cvh {
-    display: flex;
-    justify-content: space-between;
-    margin-top: 8px;
-  }
-
-  .lbl {
-    font-size: 12.5px;
-    font-weight: 600;
-    color: var(--mute, var(--ink-faint));
-  }
-
-  /* Empty until curve-c draws the live pressure line. */
-  #shot-curve {
-    position: relative;
-    height: 62px;
-    margin-top: 6px;
-  }
-
   @media (min-width: 1000px) {
     .state-chip { font-size: 14px; padding: 7px 15px; }
     .timer b { font-size: 140px; margin-top: 14px; }
@@ -1226,8 +1207,6 @@
         </div>
         <div class="shot-track"><i id="shot-progress"></i><u id="shot-window"></u></div>
         <div class="tl"><span>0 s</span><span class="wl">25–30 s</span><span>40 s</span></div>
-        <div class="cvh"><span class="lbl">Pressure, this shot</span><span class="lbl">bar</span></div>
-        <div class="chart" id="shot-curve" aria-hidden="true"></div>
       </div>
       <span class="last-pull" id="last-pull" hidden></span>
     </div>

@@ -365,9 +365,10 @@ class TestHero:
         assert "border: 1.5px solid var(--acc" in window
         assert "border-radius: 5px" in window
         assert 'id="shot-ml"' not in self.page
-        assert 'id="shot-curve"' in self.page
+        assert 'id="shot-curve"' not in self.page
+        assert "Pressure, this shot" not in self.page
+        assert "This shot's pressure" not in self.page
         assert 'id="shot-verdict"' in self.page
-        assert ">Pressure, this shot<" in self.page
         assert ">0 s<" in self.page
         assert ">25–30 s<" in self.page
         assert ">40 s<" in self.page
