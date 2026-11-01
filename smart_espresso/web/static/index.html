@@ -388,25 +388,6 @@
     white-space: nowrap;
   }
 
-  /* The reference pull, kept as a chip: dialing in means comparing.
-     One line, even if that means the tail yields to an ellipsis. */
-  .last-pull {
-    display: inline-block;
-    max-width: 100%;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    vertical-align: top;
-    font-family: var(--mono);
-    font-size: 12px;
-    letter-spacing: .06em;
-    color: var(--ink-soft);
-    border: 1px solid var(--edge);
-    border-radius: 999px;
-    padding: 4px 10px;
-    margin-top: 16px;
-  }
-
   .lamp {
     width: 10px; height: 10px;
     flex: none;
@@ -1129,7 +1110,6 @@
   body.glance #tank-card,
   body.glance #other-card,
   body.glance #skeletons,
-  body.glance .last-pull,
   body.glance footer,
   body.glance .warm {
     display: none !important;
@@ -1208,7 +1188,6 @@
         <div class="shot-track"><i id="shot-progress"></i><u id="shot-window"></u></div>
         <div class="tl"><span>0 s</span><span class="wl">25–30 s</span><span>40 s</span></div>
       </div>
-      <span class="last-pull" id="last-pull" hidden></span>
     </div>
   </div>
 
@@ -1487,17 +1466,6 @@ function renderState(machine, pressure) {
     heldShotText = null;
     shotSeconds.className = '';
     document.getElementById('bb-time').className = 'bb-time';
-  }
-
-  // The last shot stays up as a reference chip, even mid-shot.
-  // Ratio stays hidden until #26 stores a dose. See ratioText.
-  const chip = document.getElementById('last-pull');
-  const last = machine.last_shot;
-  chip.hidden = !last;
-  if (last) {
-    const lastVerdict = verdictOf(last.seconds);
-    chip.textContent =
-      `Last shot ${last.seconds.toFixed(0)} s · ${last.ml.toFixed(0)} ml · ${lastVerdict.label}`;
   }
 
   const boilerBar = DashboardLogic.boilerReading(pressure);

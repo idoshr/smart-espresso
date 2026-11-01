@@ -395,18 +395,14 @@ class TestHero:
 
 
 class TestLastShotChip:
-    """The chip is an inline span on main, so its box rules do nothing."""
+    """Look C drops the last-shot chip. Recent shots covers that glance."""
 
     def setup_method(self):
         self.page = (
             Path(__file__).resolve().parents[1] / "web" / "static" / "index.html"
         ).read_text(encoding="utf-8")
 
-    def test_chip_stays_inside_the_card_and_clears_the_track(self):
-        chip = _css_rule(self.page, ".last-pull")
-        assert "display: inline-block" in chip
-        assert "max-width: 100%" in chip
-        assert "text-overflow: ellipsis" in chip
-        assert "margin-top: 16px" in chip
-        assert "margin-top: 12px" in _css_rule(self.page, ".warm")
-        assert "margin-top: 12px" in _css_rule(self.page, ".shot")
+    def test_last_shot_chip_is_absent(self):
+        assert 'id="last-pull"' not in self.page
+        assert "last-pull" not in self.page
+        assert "Last shot " not in self.page
