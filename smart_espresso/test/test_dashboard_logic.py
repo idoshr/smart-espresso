@@ -393,6 +393,18 @@ class TestHero:
         assert pressure == "for 4 s\nCheck the pressurestat"
         assert "Pressure high" not in pressure
 
+    def test_ready_detail_waits_until_a_minute(self):
+        # since_seconds is the age of this Ready visit, not the last poll.
+        young = "{state:'ready', since_seconds:%s, shot:null}"
+        for seconds in (0, 0.4, 59, 59.9):
+            assert call("logic.heroDetail(%s, 1.2)" % (young % seconds)) == ""
+        assert (
+            call("logic.heroDetail(%s, 1.2)" % (young % 60)) == "for 1 min"
+        )
+        assert (
+            call("logic.heroDetail(%s, 1.2)" % (young % 120)) == "for 2 min"
+        )
+
 
 class TestHeroCurve:
     """The hero curve: live tail, a reset on the next shot, last curve in Ready."""
