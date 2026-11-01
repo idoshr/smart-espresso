@@ -518,15 +518,6 @@
 
   .meter i.hot { background: var(--acc, var(--crema-ink)); }
 
-  .meter u.band {
-    position: absolute;
-    top: 0;
-    bottom: 0;
-    border-left: 1px solid var(--acc, var(--crema-ink));
-    border-right: 1px solid var(--acc, var(--crema-ink));
-    text-decoration: none;
-  }
-
   .meter-scale {
     display: flex;
     justify-content: space-between;
@@ -1531,13 +1522,10 @@ function renderMeters(pressure) {
     const fraction = fault ? 0 : DashboardLogic.meterFraction(sensor.bar, spec.max);
     const hot = !fault && DashboardLogic.meterHot(sensor.bar, spec.band);
     const label = escapeHtml(spec.label);
-    const band = spec.band
-      ? `<u class="band" style="left:${(spec.band[0] / spec.max * 100).toFixed(2)}%;width:${((spec.band[1] - spec.band[0]) / spec.max * 100).toFixed(2)}%"></u>`
-      : '';
     return `<div>
       <div class="meter-label">${label}</div>
       <div class="meter-num"><b>${reading}</b><small>bar</small></div>
-      <div class="meter" role="img" aria-label="${label} ${reading} bar">${band}<i class="${hot ? 'hot' : ''}" style="width:${(fraction * 100).toFixed(1)}%"></i></div>
+      <div class="meter" role="img" aria-label="${label} ${reading} bar"><i class="${hot ? 'hot' : ''}" style="width:${(fraction * 100).toFixed(1)}%"></i></div>
       <div class="meter-scale"><span>0</span><span>${spec.max} bar</span></div>
     </div>`;
   }).join('')}</div>`;

@@ -367,6 +367,8 @@ class TestMeters:
         assert "font-size: 28px" in number
         assert "font-weight: 700" in number
         hot = _css_rule(self.page, ".meter i.hot")
+        assert 'class="band"' not in self.page
+        assert ".meter u.band" not in self.page
         assert "var(--acc" in hot
         assert "function renderRings" not in self.page
         assert 'class="ring"' not in self.page
