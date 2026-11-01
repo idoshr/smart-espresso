@@ -361,6 +361,20 @@ class TestRefillButton:
         assert "@container refill" in self.page
         assert "tankMeterHidden" in self.page
 
+    def test_normal_refill_is_short_text_and_empty_stays_a_pill(self):
+        normal = call("logic.refillControl(false)")
+        assert normal["pill"] is False
+        assert normal["text"] == "I refilled it"
+        assert normal["name"] == "I refilled the tank"
+        empty = call("logic.refillControl(true)")
+        assert empty["pill"] is True
+        assert empty["long"] == "I refilled the tank"
+        assert empty["short"] == "I refilled it"
+        assert empty["name"] == "I refilled the tank"
+        assert 'id="tank-used-row"' in self.page
+        assert "refill-inline" in self.page
+        assert "refill-pill" in self.page
+
 
 class TestLastShotChip:
     """The chip is an inline span on main, so its box rules do nothing."""

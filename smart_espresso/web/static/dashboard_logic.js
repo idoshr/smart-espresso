@@ -243,6 +243,22 @@
     return Math.round(percent) + "% humidity";
   }
 
+  // Normal: a short text button on the used row. Empty: the full-width pill,
+  // which still shortens its own label when the card is narrow.
+  function refillControl(empty) {
+    const name = "I refilled the tank";
+    if (empty) {
+      return {
+        pill: true,
+        text: "",
+        long: "I refilled the tank",
+        short: "I refilled it",
+        name: name,
+      };
+    }
+    return { pill: false, text: "I refilled it", long: "", short: "", name: name };
+  }
+
   function tankMeterHidden(shotsLeft) {
     return !(Number(shotsLeft) > 0);
   }
@@ -359,6 +375,7 @@
     tankLead: tankLead,
     humidityLabel: humidityLabel,
     tankMeterHidden: tankMeterHidden,
+    refillControl: refillControl,
     staleTagText: staleTagText,
     offlineMessage: offlineMessage,
     isFlush: isFlush,

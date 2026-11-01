@@ -619,7 +619,15 @@
     flex-direction: column;
     align-items: stretch;
   }
-  #tank-card .reset {
+  .used-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+    margin-top: 3px;
+  }
+  .used-row .pair-sub { margin-top: 0; }
+  #tank-card .reset.refill-pill {
     width: 100%;
     display: flex;
     align-items: center;
@@ -627,6 +635,19 @@
     white-space: nowrap;
     container-type: inline-size;
     container-name: refill;
+  }
+  #tank-card .reset.refill-inline {
+    width: auto;
+    display: inline;
+    min-height: 0;
+    padding: 0;
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--acc, var(--crema-ink));
+    container-type: normal;
   }
   #tank-card .refill-short { display: none; }
   /* The long label is 109 px at 13.5 px/600. Below that, use the short one. */
@@ -1282,11 +1303,13 @@
       <div class="pair-label">Water tank</div>
       <div class="pair-lead" id="tank-lead">Tank's probably empty. Refill before the next shot.</div>
       <div class="level"><i id="tank-fill" style="width:0%"></i></div>
-      <div class="pair-sub" id="tank-used-line">0 ml used</div>
-      <div class="tank-foot">
+      <div class="used-row" id="tank-used-row">
+        <span class="pair-sub" id="tank-used-line">0 ml used</span>
+      </div>
+      <div class="tank-foot" id="tank-foot">
         <span class="refill-hint" id="tank-warn" hidden>Time to refill</span>
         <span class="refill-hint" id="tank-offline-hint" hidden>Reconnect to mark the tank filled</span>
-        <button class="reset" id="tank-reset" type="button" aria-label="I refilled the tank" aria-disabled="true"><span class="refill-long">I refilled the tank</span><span class="refill-short">I refilled it</span></button>
+        <button class="reset refill-pill" id="tank-reset" type="button" aria-label="I refilled the tank" aria-disabled="true"><span class="refill-long">I refilled the tank</span><span class="refill-short">I refilled it</span></button>
       </div>
     </div>
     <div class="card" id="other-card" hidden>
@@ -2054,6 +2077,7 @@ function renderTank(tank) {
   const warn = document.getElementById('tank-warn');
   warn.hidden = tank.empty || !tank.low;
   warn.textContent = 'Time to refill';
+  applyRefill(shotsLeft === 0);
 }
 
 // ---- pour chart ----------------------------------------------------------
@@ -2273,16 +2297,34 @@ resetButton.addEventListener('click', async () => {
   }
 });
 
+let tankIsEmpty = true;
+
+function applyRefill(empty) {
+  tankIsEmpty = !!empty;
+  if (resetButton.classList.contains('armed')) return;
+  const spec = DashboardLogic.refillControl(tankIsEmpty);
+  resetButton.classList.toggle('refill-pill', spec.pill);
+  resetButton.classList.toggle('refill-inline', !spec.pill);
+  resetButton.setAttribute('aria-label', spec.name);
+  if (spec.pill) {
+    document.getElementById('tank-foot').appendChild(resetButton);
+    resetButton.replaceChildren();
+    const long = document.createElement('span');
+    long.className = 'refill-long';
+    long.textContent = spec.long;
+    const short = document.createElement('span');
+    short.className = 'refill-short';
+    short.textContent = spec.short;
+    resetButton.append(long, short);
+  } else {
+    document.getElementById('tank-used-row').appendChild(resetButton);
+    resetButton.textContent = spec.text;
+  }
+}
+
 function disarmReset() {
   resetButton.classList.remove('armed');
-  resetButton.replaceChildren();
-  const long = document.createElement('span');
-  long.className = 'refill-long';
-  long.textContent = 'I refilled the tank';
-  const short = document.createElement('span');
-  short.className = 'refill-short';
-  short.textContent = 'I refilled it';
-  resetButton.append(long, short);
+  applyRefill(tankIsEmpty);
 }
 
 // ---- polling, with a backoff so a down machine is not hammered ----------
