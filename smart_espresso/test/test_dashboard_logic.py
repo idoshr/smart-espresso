@@ -334,6 +334,49 @@ def _css_rule(page, selector):
     return match.group(1)
 
 
+class TestMeters:
+    """Head and boiler share one card of linear meters. The dials are gone."""
+
+    def setup_method(self):
+        self.page = (
+            Path(__file__).resolve().parents[1] / "web" / "static" / "index.html"
+        ).read_text(encoding="utf-8")
+
+    def test_scales_and_the_head_band(self):
+        head = call("logic.meterSpec('Head')")
+        assert head["label"] == "Head pressure"
+        assert head["max"] == 12
+        assert head["band"] == [8, 10]
+        boiler = call("logic.meterSpec('Boiler')")
+        assert boiler == {"label": "Boiler pressure", "max": 2, "band": None}
+        assert call("logic.meterFraction(9, 12)") == 0.75
+        assert call("logic.meterFraction(1.2, 2)") == 0.6
+        assert call("logic.meterFraction(15, 12)") == 1
+        assert call("logic.meterFraction(-1, 12)") == 0
+        assert call("logic.meterHot(9, [8, 10])") is True
+        assert call("logic.meterHot(8, [8, 10])") is True
+        assert call("logic.meterHot(10, [8, 10])") is True
+        assert call("logic.meterHot(7.9, [8, 10])") is False
+        assert call("logic.meterHot(10.1, [8, 10])") is False
+        assert call("logic.meterHot(1.2, null)") is False
+
+    def test_markup_is_one_card_of_linear_meters(self):
+        meter = _css_rule(self.page, ".meter")
+        assert "height: 6px" in meter
+        number = _css_rule(self.page, ".meter-num")
+        assert "font-size: 28px" in number
+        assert "font-weight: 700" in number
+        hot = _css_rule(self.page, ".meter i.hot")
+        assert "var(--acc" in hot
+        assert "function renderRings" not in self.page
+        assert 'class="ring"' not in self.page
+        assert "renderMeters" in self.page
+        assert "12 bar" in self.page
+        assert "2 bar" in self.page
+        wide = self.page[self.page.find("@media (min-width: 1000px)") :]
+        assert "font-size: 38px" in wide
+
+
 class TestLastShotChip:
     """The chip is an inline span on main, so its box rules do nothing."""
 
