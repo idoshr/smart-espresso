@@ -238,6 +238,15 @@
 
   // fast / on target / long. The shape is what remains when colour is
   // removed: an open left chevron, a filled dot, a filled right chevron.
+  function tankLead(shotsLeft) {
+    const count = Number(shotsLeft) || 0;
+    if (count <= 0) {
+      return "Tank's probably empty. Refill before the next shot.";
+    }
+    if (count === 1) return "About 1 shot left";
+    return "About " + count + " shots left";
+  }
+
   function shotVerdict(seconds, windowLow, windowHigh) {
     const low = typeof windowLow === "number" ? windowLow : 25;
     const high = typeof windowHigh === "number" ? windowHigh : 30;
@@ -338,6 +347,7 @@
     clearShotWindow: clearShotWindow,
     showOverBand: showOverBand,
     shotVerdict: shotVerdict,
+    tankLead: tankLead,
     staleTagText: staleTagText,
     offlineMessage: offlineMessage,
     isFlush: isFlush,

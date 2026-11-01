@@ -308,6 +308,47 @@ class StatusServer:
         print(f"Status web server listening on http://{self.host}:{self.port}")
 
 
+def _climate_number(value):
+    """One decimal, or None when the sensor has no reading."""
+    if value is None:
+        return None
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    if number != number:
+        return None
+    return round(number, 1)
+
+
+def _climate_fields(sensor, ok: bool) -> dict:
+    """Temperature and humidity for a DHT-style sensor, in °C and percent.
+
+    A sensor that does not measure climate omits the keys. A failed read
+    keeps the keys and publishes null, so the page does not invent a number
+    from the last good sample.
+    """
+    has_temp = hasattr(sensor, "temperature") or hasattr(sensor, "_temperature")
+    has_humidity = hasattr(sensor, "humidity") or hasattr(sensor, "_humidity")
+    if not has_temp or not has_humidity:
+        return {}
+    if not ok:
+        return {"temperature_c": None, "humidity_pct": None}
+
+    temperature = getattr(sensor, "temperature", None)
+    humidity = getattr(sensor, "humidity", None)
+    if callable(temperature):
+        temperature = temperature()
+    if callable(humidity):
+        humidity = humidity()
+    if getattr(sensor, "temperature_unit", "°C") == "°F" and temperature is not None:
+        temperature = (float(temperature) - 32.0) * 5.0 / 9.0
+    return {
+        "temperature_c": _climate_number(temperature),
+        "humidity_pct": _climate_number(humidity),
+    }
+
+
 def sensor_text(sensor, ok: bool) -> str:
     """Line for the display and the dashboard.
 
@@ -425,13 +466,13 @@ def collect_sensor_readings(sensors, health) -> dict:
                 }
             )
         else:
-            other.append(
-                {
-                    "name": name,
-                    "message": sensor_text(sensor, ok),
-                    "health": health_fields,
-                }
-            )
+            entry = {
+                "name": name,
+                "message": sensor_text(sensor, ok),
+                "health": health_fields,
+            }
+            entry.update(_climate_fields(sensor, ok))
+            other.append(entry)
 
     # A failed flow sensor must not report a lifetime total of 0: the
     # tank would treat that as a reset and the next good sample as a

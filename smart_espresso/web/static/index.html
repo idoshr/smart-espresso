@@ -586,6 +586,52 @@
   button.reset.armed { background: var(--clay-ink); color: var(--bg); }
   button.reset:focus-visible { outline: 2px solid var(--ink-soft); outline-offset: 2px; }
 
+  /* Tank and room share a row. The tank leads with shots left. */
+  .pair {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .pair-label {
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--mute, var(--ink-faint));
+  }
+  .pair-lead {
+    margin-top: 4px;
+    font-size: 19px;
+    font-weight: 700;
+    letter-spacing: -.02em;
+    line-height: 1.2;
+  }
+  .pair-lead small {
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0;
+    color: var(--mute, var(--ink-faint));
+  }
+  .pair-lead.empty {
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: 0;
+  }
+  #tank-card .level {
+    height: 6px;
+    margin-top: 8px;
+    border-radius: 3px;
+    background: var(--bg);
+  }
+  .pair-sub {
+    margin-top: 3px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--mute, var(--ink-faint));
+  }
+  @media (min-width: 1000px) {
+    .pair-lead { font-size: 28px; }
+    .pair-lead.empty { font-size: 16px; }
+  }
+
   /* ---- pour chart ---- */
   .chart {
     display: flex;
@@ -1212,27 +1258,23 @@
     <div class="axis"><span id="flow-axis-start">-2:00</span><span>now</span></div>
   </div>
 
-  <div class="card" id="tank-card" hidden>
-    <div class="card-head">
-      <span class="title">Water tank</span>
-      <span class="note" id="tank-note"></span>
+  <div class="pair" id="tank-room">
+    <div class="card" id="tank-card" hidden>
+      <div class="pair-label">Water tank</div>
+      <div class="pair-lead" id="tank-lead">Tank's probably empty. Refill before the next shot.</div>
+      <div class="level"><i id="tank-fill" style="width:0%"></i></div>
+      <div class="pair-sub" id="tank-used-line">0 ml used</div>
+      <div class="tank-foot">
+        <span class="refill-hint" id="tank-warn" hidden>Time to refill</span>
+        <span class="refill-hint" id="tank-offline-hint" hidden>Reconnect to mark the tank filled</span>
+        <button class="reset" id="tank-reset" type="button" aria-disabled="true">I refilled the tank</button>
+      </div>
     </div>
-    <div class="figure"><b id="tank-remaining">--</b><span id="tank-capacity">ml left</span></div>
-    <div class="level"><i id="tank-fill" style="width:0%"></i></div>
-    <div class="meta">
-      <span id="tank-used-line">0 ml used</span>
-      <span id="tank-left">About 0 shots left</span>
+    <div class="card" id="other-card" hidden>
+      <div class="pair-label">Room</div>
+      <div class="pair-lead" id="room-temp">—</div>
+      <div class="pair-sub" id="room-humidity">No sensor reading</div>
     </div>
-    <div class="tank-foot">
-      <span class="refill-hint" id="tank-warn" hidden>Time to refill</span>
-      <span class="refill-hint" id="tank-offline-hint" hidden>Reconnect to mark the tank filled</span>
-      <button class="reset" id="tank-reset" type="button" aria-disabled="true">I refilled the tank</button>
-    </div>
-  </div>
-
-  <div class="card" id="other-card" hidden>
-    <div class="card-head"><span class="title">Room</span></div>
-    <div class="rows" id="other-rows"></div>
   </div>
 </div>
 
@@ -1941,19 +1983,52 @@ function paintShot(detail, shot) {
 
 // ---- tank ----------------------------------------------------------------
 
+function renderRoom(sensors) {
+  const card = document.getElementById('other-card');
+  const room = (sensors || []).find(sensor =>
+    sensor && (sensor.temperature_c !== undefined || sensor.humidity_pct !== undefined
+      || sensor.name === 'Environment' || sensor.name === 'Room')
+  );
+  card.hidden = !room;
+  if (!room) return;
+  const temp = document.getElementById('room-temp');
+  const humidity = document.getElementById('room-humidity');
+  temp.replaceChildren();
+  if (typeof room.temperature_c === 'number') {
+    temp.append(document.createTextNode(room.temperature_c.toFixed(1)));
+    const unit = document.createElement('small');
+    unit.textContent = ' °C';
+    temp.append(unit);
+  } else {
+    temp.textContent = '—';
+  }
+  if (typeof room.humidity_pct === 'number') {
+    const value = room.humidity_pct;
+    const shown = Math.abs(value - Math.round(value)) < 0.05
+      ? String(Math.round(value))
+      : value.toFixed(1);
+    humidity.textContent = `${shown}% humidity`;
+  } else {
+    humidity.textContent = 'No sensor reading';
+  }
+}
+
 function renderTank(tank) {
-  document.getElementById('tank-remaining').textContent =
-    Math.round(tank.remaining_ml).toLocaleString('en-US');
-  document.getElementById('tank-capacity').textContent =
-    `ml of ${Math.round(tank.capacity_ml).toLocaleString('en-US')} left`;
   document.getElementById('tank-used-line').textContent =
     `${Math.round(tank.used_ml).toLocaleString('en-US')} ml used`;
   const shotsLeft = tank.shots_left;
-  document.getElementById('tank-left').textContent = shotsLeft === 1
-    ? 'About 1 shot left'
-    : `About ${shotsLeft} shots left`;
-  document.getElementById('tank-note').textContent =
-    tank.refills ? `${tank.refills} refill${tank.refills === 1 ? '' : 's'}` : '';
+  const lead = document.getElementById('tank-lead');
+  lead.replaceChildren();
+  lead.classList.toggle('empty', shotsLeft === 0);
+  if (shotsLeft === 0) {
+    lead.textContent = DashboardLogic.tankLead(0);
+  } else {
+    const count = document.createElement('span');
+    count.textContent = shotsLeft === 1 ? 'About 1' : `About ${shotsLeft}`;
+    const rest = document.createElement('small');
+    rest.textContent = shotsLeft === 1 ? ' shot left' : ' shots left';
+    lead.append(count, rest);
+  }
 
   const fill = document.getElementById('tank-fill');
   fill.style.width = `${tank.percent}%`;
@@ -2057,16 +2132,7 @@ function render(data) {
   tankCard.hidden = !DashboardLogic.sensorCardVisible(true, !!data.tank);
   if (data.tank) renderTank(data.tank);
 
-  const otherCard = document.getElementById('other-card');
-  otherCard.hidden = !data.other.length;
-  if (data.other.length) {
-    document.getElementById('other-rows').innerHTML = data.other
-      .map(s => {
-        const name = s.name === 'Environment' ? 'Room' : s.name;
-        return `<div class="row"><span>${escapeHtml(name)}</span><span class="v">${escapeHtml(s.message)}</span></div>`;
-      })
-      .join('');
-  }
+  renderRoom(data.other || []);
 
   hasPayload = true;
   document.getElementById('skeletons').hidden = true;

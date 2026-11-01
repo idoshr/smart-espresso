@@ -334,6 +334,16 @@ def _css_rule(page, selector):
     return match.group(1)
 
 
+class TestTankLead:
+    def test_zero_shots_says_the_tank_is_probably_empty(self):
+        assert (
+            call("logic.tankLead(0)")
+            == "Tank's probably empty. Refill before the next shot."
+        )
+        assert call("logic.tankLead(1)") == "About 1 shot left"
+        assert call("logic.tankLead(43)") == "About 43 shots left"
+
+
 class TestLastShotChip:
     """The chip is an inline span on main, so its box rules do nothing."""
 
