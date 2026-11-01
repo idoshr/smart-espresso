@@ -472,6 +472,7 @@ class TestHeroCurve:
         )
         assert ready["hidden"] is False
         assert ready["source"] == "last"
+        assert ready["label"] == "Last shot's pressure"
         assert ready["samples"] == last
         live = [{"t": 10, "head_bar": 8}]
         brewing = call(
@@ -481,6 +482,7 @@ class TestHeroCurve:
         )
         assert brewing["hidden"] is False
         assert brewing["source"] == "live"
+        assert brewing["label"] == "This shot's pressure"
         assert brewing["samples"] == live
         for state in ("ready", "heating", "off"):
             empty = call(
@@ -503,16 +505,37 @@ class TestHeroCurve:
             " {t:26, head_bar:9, boiler_bar:1.2}])"
         )
         assert figure["yLabel"] == "9.0"
-        assert figure["axis"] == ["0 s", "10", "20", "30 s"]
-        assert figure["dot"]["x"] == 260
+        assert figure["tMax"] == 40
+        assert figure["axis"] == ["0 s", "10", "20", "30", "40 s"]
+        assert figure["dot"]["x"] == 195
         assert figure["dot"]["y"] == 25
         assert figure["band"]["y"] == 16.67
         assert figure["band"]["height"] == 16.67
         assert "M0.00 100.00" in figure["line"]
-        assert "L260.00 25.00" in figure["line"]
+        assert "L195.00 25.00" in figure["line"]
         # Boiler is not the drawn series: 1.2 bar would sit much lower.
         assert "L150.00 90.00" not in figure["line"]
         assert call("logic.heroCurveFigure([])") is None
+
+    def test_the_label_switches_with_the_shot(self):
+        saved = [{"t": 26, "head_bar": 9}]
+        running = call(
+            "logic.heroCurveSlot({state:'brewing', shotActive:true,"
+            " liveSamples:[{t:4, head_bar:6}], lastSamples:%s})" % json.dumps(saved)
+        )
+        assert running["label"] == "This shot's pressure"
+        ready = call(
+            "logic.heroCurveSlot({state:'ready', shotActive:false,"
+            " liveSamples:[], lastSamples:%s})" % json.dumps(saved)
+        )
+        assert ready["label"] == "Last shot's pressure"
+        nxt = call(
+            "logic.heroCurveSlot({state:'brewing', shotActive:true,"
+            " liveSamples:[{t:0.5, head_bar:1}], lastSamples:%s})"
+            % json.dumps(saved)
+        )
+        assert nxt["label"] == "This shot's pressure"
+        assert nxt["source"] == "live"
 
 
 class TestLastShotChip:

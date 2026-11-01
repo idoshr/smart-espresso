@@ -297,10 +297,11 @@
     };
   }
 
-  // Head scale for the hero curve. 8–10 bar stays a fixed band on it.
+  // Same 0–40 s scale as the shot bar, so the curve lines up under it.
   const HERO_CURVE_WIDTH = 300;
   const HERO_CURVE_HEIGHT = 100;
   const HERO_CURVE_Y_MAX = 12;
+  const HERO_CURVE_T_MAX = 40;
   const HERO_CURVE_BAND_LOW = 8;
   const HERO_CURVE_BAND_HIGH = 10;
 
@@ -356,14 +357,33 @@
     const shotActive = !!(view && view.shotActive);
     const state = view && view.state;
     if (shotActive) {
-      if (!live.length) return { hidden: true, source: null, samples: [] };
-      return { hidden: false, source: "live", samples: live };
+      if (!live.length) return { hidden: true, source: null, samples: [], label: "" };
+      return {
+        hidden: false,
+        source: "live",
+        samples: live,
+        label: "This shot's pressure",
+      };
     }
     if (state === "ready") {
-      if (last.length) return { hidden: false, source: "last", samples: last };
-      if (live.length) return { hidden: false, source: "live", samples: live };
+      if (last.length) {
+        return {
+          hidden: false,
+          source: "last",
+          samples: last,
+          label: "Last shot's pressure",
+        };
+      }
+      if (live.length) {
+        return {
+          hidden: false,
+          source: "live",
+          samples: live,
+          label: "Last shot's pressure",
+        };
+      }
     }
-    return { hidden: true, source: null, samples: [] };
+    return { hidden: true, source: null, samples: [], label: "" };
   }
 
   function heroCurveFigure(samples) {
@@ -376,16 +396,12 @@
         Number.isFinite(sample.t)
     );
     if (!points.length) return null;
-    let lastT = 0;
-    points.forEach((sample) => {
-      lastT = Math.max(lastT, sample.t);
-    });
-    const tMax = lastT <= 30 ? 30 : Math.ceil(lastT / 10) * 10;
+    const tMax = HERO_CURVE_T_MAX;
     const yOf = (bar) =>
       (1 - Math.max(0, Math.min(HERO_CURVE_Y_MAX, bar)) / HERO_CURVE_Y_MAX) *
       HERO_CURVE_HEIGHT;
     const mapped = points.map((sample) => ({
-      x: (sample.t / tMax) * HERO_CURVE_WIDTH,
+      x: (Math.max(0, Math.min(tMax, sample.t)) / tMax) * HERO_CURVE_WIDTH,
       y: yOf(sample.head_bar),
     }));
     const line = mapped
@@ -409,7 +425,7 @@
       " Z";
     const bandY = yOf(HERO_CURVE_BAND_HIGH);
     const bandHeight = yOf(HERO_CURVE_BAND_LOW) - bandY;
-    const marks = [0, tMax / 3, (2 * tMax) / 3, tMax];
+    const marks = [0, 10, 20, 30, 40];
     const axis = marks.map((value, index) => {
       const text =
         Math.abs(value - Math.round(value)) < 0.05

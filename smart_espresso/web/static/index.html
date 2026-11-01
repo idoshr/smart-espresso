@@ -518,10 +518,13 @@
     height: 100%;
     overflow: visible;
   }
-  #hero-curve .area { fill: var(--bg); }
-  #hero-curve .band {
+  #hero-curve .area {
     fill: var(--acc, var(--crema-ink));
     opacity: .16;
+  }
+  #hero-curve .band {
+    fill: var(--acc, var(--crema-ink));
+    opacity: .07;
   }
   #hero-curve .curve-line {
     stroke: var(--acc, var(--crema-ink));
@@ -545,6 +548,7 @@
     border: 2px solid var(--card);
     box-sizing: content-box;
     transform: translate(-50%, -50%);
+    z-index: 1;
   }
   #hero-curve .yl {
     position: absolute;
@@ -1271,7 +1275,7 @@
           <span class="dot" id="hero-dot" hidden></span>
         </div>
         <div class="tl" id="hero-curve-axis">
-          <span>0 s</span><span>10</span><span>20</span><span>30 s</span>
+          <span>0 s</span><span>10</span><span>20</span><span>30</span><span>40 s</span>
         </div>
       </div>
     </div>
@@ -2340,6 +2344,10 @@ function paintHeroCurve(machine, shotActive) {
     return;
   }
   root.hidden = false;
+  const title = root.querySelector('.lbl');
+  if (title && slot.label) title.textContent = slot.label;
+  const svg = document.getElementById('hero-curve-svg');
+  if (svg && slot.label) svg.setAttribute('aria-label', slot.label + ', bar');
   const band = document.getElementById('hero-band');
   band.setAttribute('y', String(figure.band.y));
   band.setAttribute('height', String(figure.band.height));
