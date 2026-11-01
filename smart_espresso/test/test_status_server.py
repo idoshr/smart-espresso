@@ -212,7 +212,7 @@ class TestStatusServer(unittest.TestCase):
 
         self.assertIn(b'id="history-card"', page.data)
         self.assertIn(b"/api/shots/", page.data)
-        self.assertIn(b'id="conn">connecting', page.data)
+        self.assertIn('id="conn">Connecting…'.encode(), page.data)
 
         logic = client.get("/dashboard_logic.js")
         self.assertEqual(logic.status_code, 200)

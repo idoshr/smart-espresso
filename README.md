@@ -338,7 +338,7 @@ number is at least 12 px. A stronger theme follows
 the reading nears that band, so a resting head at 0 bar does not
 look like a warning. Before the first
 `/api/status` response the header and the state card read
-**connecting…** (no green lamp), skeleton placeholders stand in for the
+**Connecting…** (no green lamp), skeleton placeholders stand in for the
 dials and the flow and tank cards, and the footer says **never
 connected**. No number is shown until a payload arrives.
 

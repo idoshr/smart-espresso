@@ -14,7 +14,7 @@
   // Before that, "offline" would pretend a reading once existed.
   function pillText(connected, lastSeenAt) {
     if (connected) return "live";
-    if (lastSeenAt == null) return "connecting…";
+    if (lastSeenAt == null) return "Connecting…";
     return "offline";
   }
 
