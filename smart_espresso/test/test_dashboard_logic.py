@@ -367,7 +367,7 @@ class TestHero:
         assert 'id="shot-ml"' not in self.page
         assert 'id="shot-curve"' not in self.page
         assert "Pressure, this shot" not in self.page
-        assert "This shot's pressure" not in self.page
+        assert "This shot's pressure" in self.page
         assert 'id="shot-verdict"' in self.page
         assert ">0 s<" in self.page
         assert ">25–30 s<" in self.page
@@ -392,6 +392,127 @@ class TestHero:
         )
         assert pressure == "for 4 s\nCheck the pressurestat"
         assert "Pressure high" not in pressure
+
+
+class TestHeroCurve:
+    """The hero curve: live tail, a reset on the next shot, last curve in Ready."""
+
+    def setup_method(self):
+        self.page = (
+            Path(__file__).resolve().parents[1] / "web" / "static" / "index.html"
+        ).read_text(encoding="utf-8")
+
+    def test_markup_sits_under_the_axis_and_starts_hidden(self):
+        axis = self.page.find('id="shot-window"')
+        curve = self.page.find('id="hero-curve"')
+        assert axis != -1 and curve > axis
+        assert 'id="hero-curve" hidden' in self.page
+        assert "This shot's pressure" in self.page
+        assert ">bar<" in self.page
+        label = _css_rule(self.page, "#hero-curve .lbl")
+        assert "font-size: 12.5px" in label
+        assert "font-weight: 600" in label
+        chart = _css_rule(self.page, "#hero-curve .chart")
+        assert "height: 62px" in chart
+        line = _css_rule(self.page, "#hero-curve .curve-line")
+        assert "stroke: var(--acc" in line
+        band = _css_rule(self.page, "#hero-curve .band")
+        assert "fill: var(--acc" in band
+        wide = self.page[self.page.find("@media (min-width: 1000px)") :]
+        assert "height: 220px" in wide
+
+    def test_append_uses_the_after_cursor_and_skips_points_already_held(self):
+        first = call(
+            "logic.applyCurrentSamples({startedAt:null, samples:[]},"
+            " {active:true, started_at:'shot-a',"
+            " samples:[{t:0.25, head_bar:2},{t:0.5, head_bar:4}]})"
+        )
+        assert first["startedAt"] == "shot-a"
+        assert [point["t"] for point in first["samples"]] == [0.25, 0.5]
+        assert call("logic.curveRequest(%s)" % json.dumps(first)) == {"after": 0.5}
+        # The server returns only t > after. The point at the cursor stays put.
+        second = call(
+            "logic.applyCurrentSamples(%s,"
+            " {active:true, started_at:'shot-a',"
+            " samples:[{t:0.5, head_bar:4},{t:0.75, head_bar:9}]})"
+            % json.dumps(first)
+        )
+        assert [point["t"] for point in second["samples"]] == [0.25, 0.5, 0.75]
+        assert [point["head_bar"] for point in second["samples"]] == [2, 4, 9]
+
+    def test_a_new_started_at_replaces_the_curve(self):
+        held = {
+            "startedAt": "shot-a",
+            "samples": [{"t": 26, "head_bar": 9}],
+        }
+        assert call(
+            "logic.curveNeedsFull(%s, {active:true, started_at:'shot-b', samples:[]})"
+            % json.dumps(held)
+        )
+        reset = call(
+            "logic.applyCurrentSamples(%s,"
+            " {active:true, started_at:'shot-b', samples:[{t:0.25, head_bar:1}]})"
+            % json.dumps(held)
+        )
+        assert reset["startedAt"] == "shot-b"
+        assert [point["t"] for point in reset["samples"]] == [0.25]
+        assert (
+            call(
+                "logic.curveNeedsFull({startedAt:null, samples:[]},"
+                " {active:true, started_at:'shot-b', samples:[]})"
+            )
+            is False
+        )
+
+    def test_ready_keeps_the_last_curve_and_an_empty_slot_stays_hidden(self):
+        last = [{"t": 26, "head_bar": 9.0}]
+        ready = call(
+            "logic.heroCurveSlot({state:'ready', shotActive:false,"
+            " liveSamples:[], lastSamples:%s})" % json.dumps(last)
+        )
+        assert ready["hidden"] is False
+        assert ready["source"] == "last"
+        assert ready["samples"] == last
+        live = [{"t": 10, "head_bar": 8}]
+        brewing = call(
+            "logic.heroCurveSlot({state:'brewing', shotActive:true,"
+            " liveSamples:%s, lastSamples:%s})"
+            % (json.dumps(live), json.dumps(last))
+        )
+        assert brewing["hidden"] is False
+        assert brewing["source"] == "live"
+        assert brewing["samples"] == live
+        for state in ("ready", "heating", "off"):
+            empty = call(
+                "logic.heroCurveSlot({state:'%s', shotActive:false,"
+                " liveSamples:[], lastSamples:[]})" % state
+            )
+            assert empty["hidden"] is True
+            assert empty["samples"] == []
+        waiting = call(
+            "logic.heroCurveSlot({state:'brewing', shotActive:true,"
+            " liveSamples:[], lastSamples:[]})"
+        )
+        assert waiting["hidden"] is True
+
+    def test_the_line_is_head_pressure_and_the_band_is_8_to_10(self):
+        figure = call(
+            "logic.heroCurveFigure(["
+            " {t:0, head_bar:0, boiler_bar:1.2},"
+            " {t:15, head_bar:9, boiler_bar:1.2},"
+            " {t:26, head_bar:9, boiler_bar:1.2}])"
+        )
+        assert figure["yLabel"] == "9.0"
+        assert figure["axis"] == ["0 s", "10", "20", "30 s"]
+        assert figure["dot"]["x"] == 260
+        assert figure["dot"]["y"] == 25
+        assert figure["band"]["y"] == 16.67
+        assert figure["band"]["height"] == 16.67
+        assert "M0.00 100.00" in figure["line"]
+        assert "L260.00 25.00" in figure["line"]
+        # Boiler is not the drawn series: 1.2 bar would sit much lower.
+        assert "L150.00 90.00" not in figure["line"]
+        assert call("logic.heroCurveFigure([])") is None
 
 
 class TestLastShotChip:

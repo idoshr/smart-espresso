@@ -297,6 +297,146 @@
     };
   }
 
+  // Head scale for the hero curve. 8–10 bar stays a fixed band on it.
+  const HERO_CURVE_WIDTH = 300;
+  const HERO_CURVE_HEIGHT = 100;
+  const HERO_CURVE_Y_MAX = 12;
+  const HERO_CURVE_BAND_LOW = 8;
+  const HERO_CURVE_BAND_HIGH = 10;
+
+  function curveAfter(samples) {
+    if (!samples || !samples.length) return null;
+    const t = Number(samples[samples.length - 1].t);
+    return Number.isFinite(t) ? t : null;
+  }
+
+  // The next /api/shots/current poll. `after` is omitted until this shot
+  // has a point, then it is that point's t so the server sends the tail.
+  function curveRequest(state) {
+    const samples = state && Array.isArray(state.samples) ? state.samples : [];
+    const startedAt = state && state.startedAt ? state.startedAt : null;
+    if (!startedAt || !samples.length) return { after: null };
+    return { after: curveAfter(samples) };
+  }
+
+  // A cursor from the previous shot would drop the start of the new one.
+  function curveNeedsFull(state, payload) {
+    if (!payload || payload.active !== true) return false;
+    const startedAt = state && state.startedAt;
+    if (!startedAt) return false;
+    return payload.started_at !== startedAt;
+  }
+
+  function applyCurrentSamples(state, payload) {
+    const current = {
+      startedAt: state && state.startedAt ? state.startedAt : null,
+      samples: state && Array.isArray(state.samples) ? state.samples.slice() : [],
+    };
+    if (!payload || payload.active !== true) return current;
+    const incoming = Array.isArray(payload.samples) ? payload.samples : [];
+    if (current.startedAt !== payload.started_at) {
+      return { startedAt: payload.started_at || null, samples: incoming.slice() };
+    }
+    const cursor = curveAfter(current.samples);
+    const extra =
+      cursor == null
+        ? incoming.slice()
+        : incoming.filter((point) => Number(point.t) > cursor);
+    return {
+      startedAt: current.startedAt,
+      samples: current.samples.concat(extra),
+    };
+  }
+
+  // Live samples while a shot runs. The saved curve in Ready. Nothing
+  // else, including a shot that has not produced a point yet.
+  function heroCurveSlot(view) {
+    const live = view && Array.isArray(view.liveSamples) ? view.liveSamples : [];
+    const last = view && Array.isArray(view.lastSamples) ? view.lastSamples : [];
+    const shotActive = !!(view && view.shotActive);
+    const state = view && view.state;
+    if (shotActive) {
+      if (!live.length) return { hidden: true, source: null, samples: [] };
+      return { hidden: false, source: "live", samples: live };
+    }
+    if (state === "ready") {
+      if (last.length) return { hidden: false, source: "last", samples: last };
+      if (live.length) return { hidden: false, source: "live", samples: live };
+    }
+    return { hidden: true, source: null, samples: [] };
+  }
+
+  function heroCurveFigure(samples) {
+    const points = (samples || []).filter(
+      (sample) =>
+        sample &&
+        typeof sample.head_bar === "number" &&
+        Number.isFinite(sample.head_bar) &&
+        typeof sample.t === "number" &&
+        Number.isFinite(sample.t)
+    );
+    if (!points.length) return null;
+    let lastT = 0;
+    points.forEach((sample) => {
+      lastT = Math.max(lastT, sample.t);
+    });
+    const tMax = lastT <= 30 ? 30 : Math.ceil(lastT / 10) * 10;
+    const yOf = (bar) =>
+      (1 - Math.max(0, Math.min(HERO_CURVE_Y_MAX, bar)) / HERO_CURVE_Y_MAX) *
+      HERO_CURVE_HEIGHT;
+    const mapped = points.map((sample) => ({
+      x: (sample.t / tMax) * HERO_CURVE_WIDTH,
+      y: yOf(sample.head_bar),
+    }));
+    const line = mapped
+      .map(
+        (point, index) =>
+          (index ? "L" : "M") + point.x.toFixed(2) + " " + point.y.toFixed(2)
+      )
+      .join(" ");
+    const first = mapped[0];
+    const last = mapped[mapped.length - 1];
+    const area =
+      line +
+      " L" +
+      last.x.toFixed(2) +
+      " " +
+      HERO_CURVE_HEIGHT.toFixed(2) +
+      " L" +
+      first.x.toFixed(2) +
+      " " +
+      HERO_CURVE_HEIGHT.toFixed(2) +
+      " Z";
+    const bandY = yOf(HERO_CURVE_BAND_HIGH);
+    const bandHeight = yOf(HERO_CURVE_BAND_LOW) - bandY;
+    const marks = [0, tMax / 3, (2 * tMax) / 3, tMax];
+    const axis = marks.map((value, index) => {
+      const text =
+        Math.abs(value - Math.round(value)) < 0.05
+          ? String(Math.round(value))
+          : value.toFixed(0);
+      return index === 0 || index === marks.length - 1 ? text + " s" : text;
+    });
+    const head = points[points.length - 1].head_bar;
+    return {
+      width: HERO_CURVE_WIDTH,
+      height: HERO_CURVE_HEIGHT,
+      yMax: HERO_CURVE_Y_MAX,
+      tMax: tMax,
+      line: line,
+      area: area,
+      band: {
+        x: 0,
+        y: Number(bandY.toFixed(2)),
+        width: HERO_CURVE_WIDTH,
+        height: Number(bandHeight.toFixed(2)),
+      },
+      dot: { x: Number(last.x.toFixed(2)), y: Number(last.y.toFixed(2)) },
+      yLabel: head.toFixed(1),
+      axis: axis,
+    };
+  }
+
   function nearestTickIndex(centers, x) {
     if (!centers || !centers.length || typeof x !== "number") return -1;
     let best = 0;
@@ -342,6 +482,12 @@
     livePresentation: livePresentation,
     shownState: shownState,
     nearestTickIndex: nearestTickIndex,
+    curveAfter: curveAfter,
+    curveRequest: curveRequest,
+    curveNeedsFull: curveNeedsFull,
+    applyCurrentSamples: applyCurrentSamples,
+    heroCurveSlot: heroCurveSlot,
+    heroCurveFigure: heroCurveFigure,
     READY_MIN_BAR: READY_MIN_BAR,
   };
 });

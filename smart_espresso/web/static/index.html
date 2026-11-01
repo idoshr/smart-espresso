@@ -493,6 +493,68 @@
     font-weight: 700;
   }
 
+  /* The live curve sits under the shot-bar axis. Hidden until a shot
+     has points, or until Ready has a saved curve to keep showing. */
+  #hero-curve { margin-top: 8px; }
+  #hero-curve .cvh {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+  }
+  #hero-curve .lbl {
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--mute, var(--ink-faint));
+  }
+  #hero-curve .chart {
+    position: relative;
+    height: 62px;
+    margin-top: 6px;
+  }
+  #hero-curve .chart svg {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+  }
+  #hero-curve .area { fill: var(--bg); }
+  #hero-curve .band {
+    fill: var(--acc, var(--crema-ink));
+    opacity: .16;
+  }
+  #hero-curve .curve-line {
+    stroke: var(--acc, var(--crema-ink));
+    stroke-width: 2;
+    fill: none;
+    vector-effect: non-scaling-stroke;
+    stroke-linejoin: round;
+    stroke-linecap: round;
+  }
+  #hero-curve .base {
+    stroke: var(--mute, var(--ink-faint));
+    stroke-width: 1;
+    vector-effect: non-scaling-stroke;
+  }
+  #hero-curve .dot {
+    position: absolute;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--acc, var(--crema-ink));
+    border: 2px solid var(--card);
+    box-sizing: content-box;
+    transform: translate(-50%, -50%);
+  }
+  #hero-curve .yl {
+    position: absolute;
+    left: 2px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--mute, var(--ink-faint));
+    transform: translateY(-130%);
+  }
+
   @media (min-width: 1000px) {
     .state-chip { font-size: 14px; padding: 7px 15px; }
     .timer b { font-size: 140px; margin-top: 14px; }
@@ -501,6 +563,9 @@
     .hint b { font-size: 18px; }
     .shot-track { height: 8px; margin-top: 22px; }
     .tl { font-size: 12px; }
+    #hero-curve .cvh { margin-top: 22px; }
+    #hero-curve .chart { height: 220px; margin-top: 12px; }
+    #hero-curve .yl { font-size: 12px; }
   }
 
   /* ---- pressure rings ---- */
@@ -1111,7 +1176,8 @@
   body.glance #other-card,
   body.glance #skeletons,
   body.glance footer,
-  body.glance .warm {
+  body.glance .warm,
+  body.glance #hero-curve {
     display: none !important;
   }
 
@@ -1187,6 +1253,26 @@
         </div>
         <div class="shot-track"><i id="shot-progress"></i><u id="shot-window"></u></div>
         <div class="tl"><span>0 s</span><span class="wl">25–30 s</span><span>40 s</span></div>
+      </div>
+      <div class="hero-curve" id="hero-curve" hidden>
+        <div class="cvh">
+          <span class="lbl">This shot's pressure</span>
+          <span class="lbl">bar</span>
+        </div>
+        <div class="chart" id="hero-chart">
+          <svg id="hero-curve-svg" viewBox="0 0 300 100" preserveAspectRatio="none"
+               role="img" aria-label="This shot's pressure, bar">
+            <path class="area" id="hero-area" d=""></path>
+            <rect class="band" id="hero-band" x="0" y="0" width="300" height="0"></rect>
+            <path class="curve-line" id="hero-line" d=""></path>
+            <line class="base" x1="0" y1="100" x2="300" y2="100"></line>
+          </svg>
+          <span class="yl" id="hero-yl"></span>
+          <span class="dot" id="hero-dot" hidden></span>
+        </div>
+        <div class="tl" id="hero-curve-axis">
+          <span>0 s</span><span>10</span><span>20</span><span>30 s</span>
+        </div>
       </div>
     </div>
   </div>
@@ -2235,6 +2321,85 @@ let heldShotText = null;
 let lastSeenAt = null;
 let pollTimer = null;
 let pollInFlight = false;
+// The shot that is running, appended from /api/shots/current?after=.
+let liveCurve = { startedAt: null, samples: [] };
+// The newest saved shot, loaded from /api/shots/<id> for Ready.
+let lastCurve = { id: null, samples: [] };
+
+function paintHeroCurve(machine, shotActive) {
+  const slot = DashboardLogic.heroCurveSlot({
+    state: machine && machine.state,
+    shotActive: !!shotActive,
+    liveSamples: liveCurve.samples,
+    lastSamples: lastCurve.samples,
+  });
+  const root = document.getElementById('hero-curve');
+  const figure = slot.hidden ? null : DashboardLogic.heroCurveFigure(slot.samples);
+  if (!figure) {
+    root.hidden = true;
+    return;
+  }
+  root.hidden = false;
+  const band = document.getElementById('hero-band');
+  band.setAttribute('y', String(figure.band.y));
+  band.setAttribute('height', String(figure.band.height));
+  band.setAttribute('width', String(figure.band.width));
+  document.getElementById('hero-area').setAttribute('d', figure.area);
+  document.getElementById('hero-line').setAttribute('d', figure.line);
+  const dot = document.getElementById('hero-dot');
+  dot.hidden = false;
+  dot.style.left = `${figure.dot.x / figure.width * 100}%`;
+  dot.style.top = `${figure.dot.y / figure.height * 100}%`;
+  const label = document.getElementById('hero-yl');
+  label.textContent = figure.yLabel;
+  label.style.top = `${figure.dot.y / figure.height * 100}%`;
+  const axis = document.getElementById('hero-curve-axis').querySelectorAll('span');
+  figure.axis.forEach((text, index) => {
+    if (axis[index]) axis[index].textContent = text;
+  });
+}
+
+async function refreshHeroCurve(data) {
+  const machine = (data && data.machine) || {};
+  const shotActive = DashboardLogic.livePresentation(
+    machine, headBar(data && data.pressure)
+  ).showShot;
+  try {
+    if (shotActive) {
+      const request = DashboardLogic.curveRequest(liveCurve);
+      const url = request.after == null
+        ? '/api/shots/current'
+        : `/api/shots/current?after=${encodeURIComponent(request.after)}`;
+      const payload = await (await fetch(url, { cache: 'no-store' })).json();
+      if (DashboardLogic.curveNeedsFull(liveCurve, payload)) {
+        const full = await (await fetch('/api/shots/current', { cache: 'no-store' })).json();
+        liveCurve = DashboardLogic.applyCurrentSamples(
+          { startedAt: null, samples: [] }, full
+        );
+      } else {
+        liveCurve = DashboardLogic.applyCurrentSamples(liveCurve, payload);
+      }
+    } else if (machine.state === 'ready') {
+      const recent = (data.shots && data.shots.recent) || [];
+      const newest = recent[0];
+      if (newest && newest.id != null && newest.id !== lastCurve.id) {
+        const res = await fetch(`/api/shots/${encodeURIComponent(newest.id)}`, {
+          cache: 'no-store',
+        });
+        if (res.ok) {
+          const shot = await res.json();
+          lastCurve = {
+            id: shot.id,
+            samples: Array.isArray(shot.samples) ? shot.samples : [],
+          };
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('hero curve:', err);
+  }
+  paintHeroCurve(machine, shotActive);
+}
 
 async function poll() {
   clearTimeout(pollTimer);
@@ -2251,6 +2416,7 @@ async function poll() {
     // failures may count as misses or flip the connection lamp.
     try {
       render(data);
+      await refreshHeroCurve(data);
       missed = 0;
       backoff = 0;
       lastSeenAt = Date.now();
