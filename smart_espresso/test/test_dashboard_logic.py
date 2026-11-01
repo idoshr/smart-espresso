@@ -170,9 +170,18 @@ class TestGlance:
         assert ready["replace"] is True
         assert ready["showShot"] is False
         assert ready["label"] == "Offline"
+        assert ready["detail"] == "Readings below are from before it went offline."
         assert "Ready to pull" not in ready["label"]
-        assert "Can't reach" not in ready["label"]
-        assert "Same Wi-Fi" not in ready["label"]
+        assert "Can't reach" not in ready["detail"]
+        assert "Same Wi-Fi" not in ready["detail"]
+        quiet = _css_rule(
+            Path(__file__).resolve().parents[1].joinpath(
+                "web/static/index.html"
+            ).read_text(encoding="utf-8"),
+            ".state.offline .state-label",
+        )
+        assert "border: 1px dashed var(--mute" in quiet
+        assert "background: transparent" in quiet
         banner = call("logic.offlineBanner(false, 3, 1000, 41000)")
         assert "Can't reach the machine. Last seen 40 s ago" in banner["title"]
         assert "Same Wi-Fi" in banner["title"]

@@ -282,6 +282,7 @@
       return {
         replace: true,
         label: "Offline",
+        detail: "Readings below are from before it went offline.",
         showShot: false,
         showTarget: false,
       };
@@ -290,6 +291,7 @@
     return {
       replace: false,
       label: live.label,
+      detail: "",
       showShot: live.showShot,
       showTarget: live.showTarget,
     };

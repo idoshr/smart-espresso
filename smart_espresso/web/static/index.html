@@ -453,6 +453,30 @@
   .glyph { display: inline-flex; flex: none; color: inherit; }
   .glyph svg { width: 36px; height: 36px; display: block; }
 
+  .state.offline .state-band {
+    min-height: 0;
+    padding: 16px 16px 0;
+    background: transparent;
+    color: var(--mute, var(--ink-faint));
+  }
+  .state.offline .glyph,
+  .state.offline .lamp { display: none; }
+  .state.offline .state-label {
+    display: inline-block;
+    font-size: 12.5px;
+    font-weight: 700;
+    letter-spacing: 0;
+    line-height: 1.2;
+    color: var(--mute, var(--ink-faint));
+    background: transparent;
+    border: 1px dashed var(--mute, var(--ink-faint));
+    border-radius: 99px;
+    padding: 5px 12px;
+  }
+  .state.offline .state-detail {
+    color: var(--mute, var(--ink-faint));
+  }
+
   .state-label {
     font-family: var(--display);
     font-size: 44px;
@@ -2231,9 +2255,12 @@ function paintOfflineChrome() {
   const offline = DashboardLogic.shownState(
     lastMachine, null, connected, hasPayload, lastSeenAt, Date.now()
   );
+  document.getElementById('state').classList.toggle('offline', offline.replace);
   if (offline.replace) {
     document.getElementById('state-label').textContent = offline.label;
-    document.getElementById('state-detail').textContent = '';
+    const detailEl = document.getElementById('state-detail');
+    detailEl.textContent = offline.detail;
+    detailEl.hidden = false;
     document.getElementById('shot').hidden = true;
     document.getElementById('warm').hidden = true;
     document.getElementById('brewbar').classList.remove('show');
