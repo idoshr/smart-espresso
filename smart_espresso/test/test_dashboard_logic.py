@@ -171,9 +171,10 @@ class TestGlance:
         assert ready["replace"] is True
         assert ready["showShot"] is False
         assert ready["label"] == "Offline"
+        assert ready["detail"] == "Readings below are from before it went offline."
         assert "Ready to pull" not in ready["label"]
-        assert "Can't reach" not in ready["label"]
-        assert "Same Wi-Fi" not in ready["label"]
+        assert "Can't reach" not in ready["detail"]
+        assert "Same Wi-Fi" not in ready["detail"]
         banner = call("logic.offlineBanner(false, 3, 1000, 41000)")
         assert "Can't reach the machine. Last seen 40 s ago" in banner["title"]
         assert "Same Wi-Fi" in banner["title"]
@@ -359,6 +360,10 @@ class TestHero:
         assert "display: inline-block" in dot
         assert "width: 6px" in dot
         assert "display: none" in _css_rule(self.page, ".state-chip .lamp")
+        offline = _css_rule(self.page, ".state-chip.offline")
+        assert "background: transparent" in offline
+        assert "border: 1px dashed var(--mute" in offline
+        assert "var(--mute" in offline
         timer = _css_rule(self.page, ".timer b")
         assert "font-size: 62px" in timer
         assert "font-weight: 700" in timer
