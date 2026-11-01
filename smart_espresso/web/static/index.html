@@ -286,7 +286,18 @@
     border: 1px dashed var(--mute);
   }
 
-  .state.live .state-label::before,
+  .state.live .state-label::before {
+    content: "";
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--card);
+    flex: none;
+  }
+
   .alert-mark {
     display: inline-flex;
     align-items: center;

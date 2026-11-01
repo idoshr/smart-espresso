@@ -449,6 +449,14 @@ class TestWording:
         assert "`${count} saved`" in self.page
         assert "'1 saved'" in self.page
 
+    def test_live_pill_paints_its_dot(self):
+        dot = _css_rule(self.page, ".state.live .state-label::before")
+        assert 'content: ""' in dot
+        assert "display: inline-flex" in dot
+        assert "width: 6px" in dot
+        assert "height: 6px" in dot
+        assert "border-radius: 50%" in dot
+
     def test_warming_pill_has_an_espresso_ring(self):
         assert call("logic.pillKind('Warming up')") == "heating"
         heating = _css_rule(self.page, ".state.heating .state-label")
