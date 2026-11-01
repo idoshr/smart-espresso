@@ -349,6 +349,21 @@
     };
   }
 
+  // The pour ends at the last sample that still has flow and pressure.
+  // The head often falls to 0 while the meter is still ticking; that tail
+  // is the pump stopping, not part of the frozen curve.
+  function pourCurveSamples(samples) {
+    const points = Array.isArray(samples) ? samples : [];
+    let end = -1;
+    for (let i = 0; i < points.length; i++) {
+      const flow = Number(points[i] && points[i].flow_mls);
+      const head = Number(points[i] && points[i].head_bar);
+      if (flow > 0 && head > 0) end = i;
+    }
+    if (end < 0) return points.slice();
+    return points.slice(0, end + 1);
+  }
+
   // Live samples while a shot runs. The saved curve in Ready. Nothing
   // else, including a shot that has not produced a point yet.
   function heroCurveSlot(view) {
@@ -366,19 +381,12 @@
       };
     }
     if (state === "ready") {
-      if (last.length) {
+      const saved = pourCurveSamples(last.length ? last : live);
+      if (saved.length) {
         return {
           hidden: false,
-          source: "last",
-          samples: last,
-          label: "Last shot's pressure",
-        };
-      }
-      if (live.length) {
-        return {
-          hidden: false,
-          source: "live",
-          samples: live,
+          source: last.length ? "last" : "live",
+          samples: saved,
           label: "Last shot's pressure",
         };
       }
@@ -433,7 +441,6 @@
           : value.toFixed(0);
       return index === 0 || index === marks.length - 1 ? text + " s" : text;
     });
-    const head = points[points.length - 1].head_bar;
     return {
       width: HERO_CURVE_WIDTH,
       height: HERO_CURVE_HEIGHT,
@@ -448,7 +455,10 @@
         height: Number(bandHeight.toFixed(2)),
       },
       dot: { x: Number(last.x.toFixed(2)), y: Number(last.y.toFixed(2)) },
-      yLabel: head.toFixed(1),
+      // A fixed 9 bar mark, above the line. Not the live reading, so a
+      // shot that has just ended cannot label the axis 0.0.
+      yLabel: "9.0",
+      yLabelAt: Number(yOf(9).toFixed(2)),
       axis: axis,
     };
   }
@@ -502,6 +512,7 @@
     curveRequest: curveRequest,
     curveNeedsFull: curveNeedsFull,
     applyCurrentSamples: applyCurrentSamples,
+    pourCurveSamples: pourCurveSamples,
     heroCurveSlot: heroCurveSlot,
     heroCurveFigure: heroCurveFigure,
     READY_MIN_BAR: READY_MIN_BAR,

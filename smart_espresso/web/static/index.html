@@ -556,7 +556,7 @@
     font-size: 11px;
     font-weight: 600;
     color: var(--mute, var(--ink-faint));
-    transform: translateY(-130%);
+    transform: translateY(calc(-100% - 6px));
   }
 
   @media (min-width: 1000px) {
@@ -2360,7 +2360,7 @@ function paintHeroCurve(machine, shotActive) {
   dot.style.top = `${figure.dot.y / figure.height * 100}%`;
   const label = document.getElementById('hero-yl');
   label.textContent = figure.yLabel;
-  label.style.top = `${figure.dot.y / figure.height * 100}%`;
+  label.style.top = `${figure.yLabelAt / figure.height * 100}%`;
   const axis = document.getElementById('hero-curve-axis').querySelectorAll('span');
   figure.axis.forEach((text, index) => {
     if (axis[index]) axis[index].textContent = text;

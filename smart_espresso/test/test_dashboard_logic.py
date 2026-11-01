@@ -537,6 +537,37 @@ class TestHeroCurve:
         assert nxt["label"] == "This shot's pressure"
         assert nxt["source"] == "live"
 
+    def test_ready_curve_ends_while_water_was_still_flowing(self):
+        # The head falls to 0 while the meter is still ticking. That tail
+        # is not the pour. The frozen line stops at the last flow > 0
+        # sample that still has pressure, and the dot sits on it.
+        saved = [
+            {"t": 0, "head_bar": 0.4, "flow_mls": 0.5},
+            {"t": 6, "head_bar": 9, "flow_mls": 1.5},
+            {"t": 26, "head_bar": 9, "flow_mls": 1.2},
+            {"t": 26.13, "head_bar": 0, "flow_mls": 1.19},
+            {"t": 26.43, "head_bar": 0, "flow_mls": 1.19},
+            {"t": 26.63, "head_bar": 0, "flow_mls": 0},
+        ]
+        kept = call("logic.pourCurveSamples(%s)" % json.dumps(saved))
+        assert kept[-1]["t"] == 26
+        assert kept[-1]["head_bar"] == 9
+        assert kept[-1]["flow_mls"] > 0
+        assert all(point["head_bar"] > 0 or point["t"] == 0 for point in kept)
+        assert all(point["head_bar"] != 0 or point["flow_mls"] <= 0 for point in kept[1:])
+        ready = call(
+            "logic.heroCurveSlot({state:'ready', shotActive:false,"
+            " liveSamples:[], lastSamples:%s})" % json.dumps(saved)
+        )
+        assert ready["label"] == "Last shot's pressure"
+        assert ready["samples"][-1] == kept[-1]
+        figure = call("logic.heroCurveFigure(%s)" % json.dumps(ready["samples"]))
+        assert figure["yLabel"] == "9.0"
+        assert figure["yLabelAt"] == 25
+        assert figure["dot"]["x"] == 195
+        assert figure["dot"]["y"] == 25
+        assert "L195.00 100.00" not in figure["line"]
+
 
 class TestLastShotChip:
     """Look C drops the last-shot chip. Recent shots covers that glance."""
