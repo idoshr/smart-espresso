@@ -356,6 +356,7 @@ class TestHero:
         assert "var(--acc" in chip
         dot = _css_rule(self.page, ".state-chip .state-label::before")
         assert 'content: ""' in dot
+        assert "display: inline-block" in dot
         assert "width: 6px" in dot
         assert "display: none" in _css_rule(self.page, ".state-chip .lamp")
         timer = _css_rule(self.page, ".timer b")

@@ -334,10 +334,13 @@
   .state-chip .lamp { display: none; }
   .state-chip .state-label::before {
     content: "";
+    display: inline-block;
     width: 6px;
     height: 6px;
+    margin-right: 7px;
     border-radius: 50%;
     background: var(--card);
+    vertical-align: middle;
     flex: none;
   }
   .state-label.pulse::before { animation: lamp-pulse 1.6s ease-in-out infinite; }
