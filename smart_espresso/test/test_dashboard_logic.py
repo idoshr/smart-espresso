@@ -170,13 +170,19 @@ class TestGlance:
         )
         assert ready["replace"] is True
         assert ready["showShot"] is False
+        assert ready["label"] == "Offline"
         assert "Ready to pull" not in ready["label"]
-        assert "Last seen 40 s ago" in ready["label"]
+        assert "Can't reach" not in ready["label"]
+        assert "Same Wi-Fi" not in ready["label"]
+        banner = call("logic.offlineBanner(false, 3, 1000, 41000)")
+        assert "Can't reach the machine. Last seen 40 s ago" in banner["title"]
+        assert "Same Wi-Fi" in banner["title"]
         brewing = call(
             "logic.shownState({state:'brewing', label:'Pulling a shot',"
             " shot:{seconds:20, ml:30}}, 9, false, true, 1000, 41000)"
         )
         assert brewing["showShot"] is False
+        assert brewing["label"] == "Offline"
         assert "Pulling a shot" not in brewing["label"]
         live = call(
             "logic.shownState({state:'ready', label:'Ready to pull', shot:null},"
@@ -348,6 +354,10 @@ class TestHero:
         assert "font-size: 12.5px" in chip
         assert "font-weight: 700" in chip
         assert "var(--acc" in chip
+        dot = _css_rule(self.page, ".state-chip .state-label::before")
+        assert 'content: ""' in dot
+        assert "width: 6px" in dot
+        assert "display: none" in _css_rule(self.page, ".state-chip .lamp")
         timer = _css_rule(self.page, ".timer b")
         assert "font-size: 62px" in timer
         assert "font-weight: 700" in timer
