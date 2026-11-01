@@ -402,6 +402,12 @@ class TestPhoneHeader:
         assert "var(--mute" in today
         gap = _css_rule(self.page, "header .conn + .tagline")
         assert "margin-left: 6px" in gap
+        narrow = re.search(
+            r"@media \(max-width: 359px\)\s*\{([^}]*)\}", self.page
+        )
+        assert narrow is not None
+        assert "header .tagline" in narrow.group(1)
+        assert "display: none" in narrow.group(1)
         assert "todayLine(" in self.page
 
     def test_title_stays_whole_at_768_and_1280_with_connecting(self):
