@@ -591,44 +591,71 @@
     border-right: 1.5px solid var(--ink);
   }
 
-  /* ---- pressure rings ---- */
-  .rings { display: flex; flex-wrap: wrap; gap: 12px; }
-  .rings > * { flex: 1 1 45%; min-width: 45%; padding: 14px 12px 12px; }
-
-  /* Very narrow phones: one dial per row beats two cramped ones. */
-  @media (max-width: 340px) {
-    .rings > * { flex-basis: 100%; min-width: 100%; }
+  /* One card, two linear meters. Head is 0–12 bar and turns accent
+     inside 8–10. Boiler is 0–2 bar and stays ink. */
+  .meters {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 18px;
   }
 
-  .ring { width: 100%; height: auto; display: block; }
-
-  .ring-read {
-    text-align: center;
-    margin-top: -34px;
-    padding-bottom: 8px;
-  }
-
-  .ring-read b {
-    font-family: var(--display);
-    font-size: 26px;
+  .meter-label {
+    font-size: 12.5px;
     font-weight: 600;
-    letter-spacing: -.02em;
+    color: var(--mute, var(--ink-faint));
+  }
+
+  .meter-num {
+    margin-top: 4px;
+    font-family: var(--display);
+    font-size: 28px;
+    font-weight: 700;
+    letter-spacing: -.03em;
+    line-height: 1.1;
     font-variant-numeric: tabular-nums;
-    display: block;
-    line-height: 1;
   }
 
-  .ring-read span {
-    font-family: var(--mono);
+  .meter-num b { font-weight: 700; }
+
+  .meter-num small {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--mute, var(--ink-faint));
+    margin-left: 3px;
+    letter-spacing: 0;
+  }
+
+  .meter {
+    position: relative;
+    height: 6px;
+    margin-top: 8px;
+    border-radius: 3px;
+    background: var(--bg);
+  }
+
+  .meter i {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    border-radius: 3px;
+    background: var(--ink);
+  }
+
+  .meter i.hot { background: var(--acc, var(--crema-ink)); }
+
+  .meter-scale {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 5px;
     font-size: 11px;
-    letter-spacing: .1em;
-    color: var(--ink-faint);
+    font-weight: 500;
+    color: var(--mute, var(--ink-faint));
   }
 
-  .ring-foot {
-    font-size: 11.5px;
-    color: var(--ink-soft);
-    text-align: center;
+  @media (min-width: 1000px) {
+    .meters { grid-template-columns: 1fr; gap: 18px; }
+    .meter-num { font-size: 38px; }
   }
 
   /* ---- figures ---- */
@@ -1459,22 +1486,9 @@
 <script>
 // What a barista actually watches for: 9 bar at the group, a boiler sitting
 // around 1 bar, and a double landing in the 25-30 second window.
-const GUIDES = {
-  head:   { band: [8, 10], accent: 'var(--ink)', soft: 'var(--bg)',
-            caption: '9 bar is the sweet spot' },
-  boiler: { band: [0.8, 1.4], accent: 'var(--ink)', soft: 'var(--bg)',
-            caption: 'steam holds near 1 bar' },
-};
-
 const SHOT_WINDOW = [25, 30];   // seconds: a well-paced double
 const SHOT_SCALE = 40;          // seconds shown by the shot progress track
 const DOSE_G = 18;              // the double basket's dose; ratio is a guide, not a law
-
-// Dials are scaled to the working range, not the sensor's ceiling: each
-// dial spans ~1.75x its target band's top, so the sweet spot lands near
-// mid-scale instead of buried in the first quarter (a 5 bar boiler sensor
-// whose whole life happens below 1.6 bar reads as flat-left otherwise).
-const RING_RANGE_FACTOR = 1.75;
 
 // A small line icon per state, so heating and brewing are told apart by
 // shape as well as colour. Stroke inherits the state colour.
@@ -1498,9 +1512,6 @@ const GLYPHS = {
     '<path d="M9.7 9.8a2.3 2.3 0 1 1 3.1 2.1c-.7.3-.8.9-.8 1.6M12 16.6v.3"/>',
 };
 
-// Open ring: 240 degrees, gap at the bottom.
-const SWEEP = 240, START = -120, CX = 60, CY = 58, R = 44;
-
 // Sensor names and messages come from the machine's own configuration today,
 // but escaping keeps a name pulled from elsewhere (a Home Assistant entity,
 // say) from turning into markup on the dashboard.
@@ -1508,38 +1519,6 @@ const escapeHtml = value => String(value).replace(
   /[&<>"']/g,
   c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]),
 );
-
-function guideFor(name) {
-  const key = name.toLowerCase();
-  return GUIDES[Object.keys(GUIDES).find(k => key.includes(k))] || {};
-}
-
-// The bar range a dial actually shows: the target band's top times the
-// range factor, capped by the sensor's own ceiling (never beyond it).
-function dialMaxFor(sensor) {
-  const guide = guideFor(sensor.name);
-  if (guide.band) {
-    const span = guide.band[1] * RING_RANGE_FACTOR;
-    return Math.min(sensor.max_bar || span, span);
-  }
-  return sensor.max_bar || 1;
-}
-
-function polar(radius, degrees) {
-  const rad = (degrees - 90) * Math.PI / 180;
-  return [CX + radius * Math.cos(rad), CY + radius * Math.sin(rad)];
-}
-
-function angleFor(ratio) {
-  return START + SWEEP * Math.max(0, Math.min(1, ratio));
-}
-
-function arcPath(radius, fromDeg, toDeg) {
-  const [x1, y1] = polar(radius, fromDeg);
-  const [x2, y2] = polar(radius, toDeg);
-  const large = Math.abs(toDeg - fromDeg) > 180 ? 1 : 0;
-  return `M ${x1.toFixed(2)} ${y1.toFixed(2)} A ${radius} ${radius} 0 ${large} 1 ${x2.toFixed(2)} ${y2.toFixed(2)}`;
-}
 
 // Brew ratio against the basket's dose: 36 ml from 18 g reads as 1:2.
 // TODO(#26): show this once a real dose is stored. Hidden until then.
@@ -1750,113 +1729,39 @@ if ('IntersectionObserver' in window) {
   }, { passive: true });
 }
 
-// ---- pressure rings ------------------------------------------------------
-// Built once per sensor and updated in place: re-creating the SVG every
-// poll would drop the element mid-transition, so the arc would tick in
-// one-second steps instead of gliding. The arc fills via a normalised
-// pathLength (dash = whole arc, offset = the empty part), which animates
-// in every browser, not just the Chromium `d` property.
+// ---- pressure meters -----------------------------------------------------
+// One card. Head is a fixed 0–12 bar track (accent inside 8–10). Boiler
+// is a fixed 0–2 bar track in ink. The dials are gone.
 
-const ringEls = new Map();
-let ringsKey = '';
-
-function buildRings(pressure) {
-  ringsKey = pressure.map(s => `${s.name}@${s.max_bar}`).join('|');
-  ringEls.clear();
-  document.getElementById('rings').innerHTML = pressure.map(sensor => {
-    const max = sensor.max_bar || 1;
-    const dial = dialMaxFor(sensor);
-    const guide = guideFor(sensor.name);
-    const accent = guide.accent || 'var(--water)';
-    const soft = guide.soft || 'var(--water-soft)';
-    const label = escapeHtml(sensor.name);
-
-    // The target band rides on the same track as the reading. Past its
-    // top (only when the dial is cropped below the sensor ceiling) a clay
-    // mark is drawn, then shown only once the reading nears that band —
-    // hidden at rest, so 0 bar does not look like a warning.
-    let band = '';
-    if (guide.band) {
-      const [from, to] = guide.band;
-      band =
-        `<path d="${arcPath(R - 7, angleFor(from / dial), angleFor(to / dial))}" fill="none"
-              stroke="var(--ink-soft)" stroke-width="3" stroke-linecap="round"/>` +
-        (dial > to
-          ? `<path class="ring-over" d="${arcPath(R - 7, angleFor(to / dial), angleFor(1))}" fill="none"
-                stroke="var(--alert)" stroke-width="3" stroke-linecap="round"
-                visibility="hidden"/>`
-          : '');
-    }
-
-    return `
-    <div class="card">
-      <div class="card-head" style="justify-content:center;margin-bottom:2px">
-        <span class="title">${label}</span>
-      </div>
-      <svg class="ring" viewBox="0 0 120 100" role="img" aria-label="${label} 0 bar">
-        <path d="${arcPath(R - 7, angleFor(0), angleFor(1))}" fill="none" stroke="${soft}"
-              stroke-width="9" stroke-linecap="round"/>
-        <path class="ring-value" d="${arcPath(R - 7, angleFor(0), angleFor(1))}" fill="none"
-              stroke="${accent}" stroke-width="9" stroke-linecap="round"
-              pathLength="1" stroke-dasharray="1" stroke-dashoffset="1"
-              visibility="hidden"
-              style="transition:stroke-dashoffset .3s ease"/>
-        ${band}
-      </svg>
-      <div class="ring-read"><b>0.0</b><span>bar</span></div>
-      <div class="ring-foot">${guide.caption || `up to ${max} bar`}</div>
+function renderMeters(pressure) {
+  const host = document.getElementById('rings');
+  const sensors = (pressure || []).slice().sort((a, b) => {
+    const rank = (name) => {
+      const key = String(name || '').toLowerCase();
+      if (key.includes('head')) return 0;
+      if (key.includes('boiler') || key.includes('steam')) return 1;
+      return 2;
+    };
+    return rank(a.name) - rank(b.name);
+  });
+  if (!sensors.length) {
+    host.innerHTML = '';
+    return;
+  }
+  host.innerHTML = `<div class="card meters">${sensors.map((sensor) => {
+    const spec = DashboardLogic.meterSpec(sensor.name);
+    const fault = DashboardLogic.readingFaulted(sensor, 'bar');
+    const reading = fault ? '—' : DashboardLogic.formatReading(sensor.bar, 1);
+    const fraction = fault ? 0 : DashboardLogic.meterFraction(sensor.bar, spec.max);
+    const hot = !fault && DashboardLogic.meterHot(sensor.bar, spec.band);
+    const label = escapeHtml(spec.label);
+    return `<div>
+      <div class="meter-label">${label}</div>
+      <div class="meter-num"><b>${reading}</b><small>bar</small></div>
+      <div class="meter" role="img" aria-label="${label} ${reading} bar"><i class="${hot ? 'hot' : ''}" style="width:${(fraction * 100).toFixed(1)}%"></i></div>
+      <div class="meter-scale"><span>0</span><span>${spec.max} bar</span></div>
     </div>`;
-  }).join('');
-
-  const cards = document.getElementById('rings').children;
-  pressure.forEach((sensor, i) => {
-    const guide = guideFor(sensor.name);
-    ringEls.set(i, {
-      value: cards[i].querySelector('.ring-value'),
-      read: cards[i].querySelector('.ring-read b'),
-      svg: cards[i].querySelector('svg'),
-      dial: dialMaxFor(sensor),
-      accent: guide.accent || 'var(--water-ink)',
-      over: cards[i].querySelector('.ring-over'),
-      // The band's top (or null): the render path reads the overshoot
-      // threshold from here instead of re-scanning GUIDES per sample.
-      bandFrom: guide.band ? guide.band[0] : null,
-      bandTop: guide.band ? guide.band[1] : null,
-    });
-  });
-}
-
-function renderRings(pressure) {
-  const key = pressure.map(s => `${s.name}@${s.max_bar}`).join('|');
-  if (key !== ringsKey) buildRings(pressure);
-
-  pressure.forEach((sensor, i) => {
-    const el = ringEls.get(i);
-    if (!el) return;
-    if (DashboardLogic.readingFaulted(sensor, 'bar')) {
-      el.value.style.visibility = 'hidden';
-      el.read.textContent = '—';
-      if (el.over) el.over.style.visibility = 'hidden';
-      el.svg.setAttribute('aria-label', `${sensor.name} no reading`);
-      return;
-    }
-    const ratio = Math.max(0, Math.min(1, sensor.bar / el.dial));
-    el.value.setAttribute('stroke-dashoffset', (1 - ratio).toFixed(4));
-    el.value.style.visibility = ratio > 0 ? 'visible' : 'hidden';
-    // Past the band's top the fill itself turns clay: the geometry says
-    // "high", the colour says "high is wrong".
-    const over = el.bandTop != null && sensor.bar > el.bandTop;
-    el.value.setAttribute('stroke', over ? 'var(--alert)' : el.accent);
-    // At rest the clay "past the band" arc reads as a warning. Keep it
-    // hidden until the needle is actually near the band.
-    if (el.over) {
-      const show = DashboardLogic.showOverBand(sensor.bar, el.bandFrom);
-      el.over.style.visibility = show ? 'visible' : 'hidden';
-    }
-    el.read.textContent = DashboardLogic.formatReading(sensor.bar, 1);
-    el.svg.setAttribute('aria-label',
-      `${sensor.name} ${DashboardLogic.formatReading(sensor.bar, 1)} bar`);
-  });
+  }).join('')}</div>`;
 }
 
 // ---- recent pulls --------------------------------------------------------
@@ -2303,7 +2208,7 @@ function renderToday(today) {
 
 function render(data) {
   renderState(data.machine, data.pressure);
-  renderRings(data.pressure);
+  renderMeters(data.pressure);
   renderPulls(data.machine.history || []);
   renderHistory(data.shots);
   renderToday(data.machine && data.machine.today);
