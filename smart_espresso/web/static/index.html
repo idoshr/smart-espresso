@@ -121,13 +121,10 @@
     margin: 0;
   }
 
-  /* The title yields before the status pills do. At 320 px a nowrap title
-     otherwise forces the page to scroll sideways. */
+  /* The title never truncates. The today line is what yields: it
+     ellipsizes, and below 375 it hides because it cannot fit. */
   header h1 {
-    flex: 1 1 auto;
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    flex: 0 0 auto;
     white-space: nowrap;
     font-size: 20px;
     font-weight: 800;
@@ -137,9 +134,11 @@
   .header-tools {
     display: flex;
     align-items: center;
-    flex: none;
+    flex: 1 1 auto;
+    min-width: 0;
     margin-left: auto;
     gap: 0;
+    overflow: hidden;
   }
 
   /* 44 px tap area. The visible circle or pill inside is 36 px tall,
@@ -222,8 +221,11 @@
   /* Today sits on the right of the one-line header. An empty line
      (the first shot of the day, still running) must not leave a gap. */
   header .tagline {
-    flex: none;
+    flex: 1 1 auto;
+    min-width: 0;
     margin: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
     font-family: var(--body);
     font-size: 12.5px;
     font-weight: 500;

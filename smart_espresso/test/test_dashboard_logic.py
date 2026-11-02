@@ -472,6 +472,10 @@ class TestTodayLine:
         assert (
             call("logic.todayLine({shots:2, ml:68}, true)") == "2 shots · 68 ml today"
         )
+        assert (
+            call("logic.todayLine({shots:12, ml:1234}, false)")
+            == "12 shots · 1,234 ml today"
+        )
 
     def test_the_empty_line_is_removed_from_the_header(self):
         page = (
@@ -557,12 +561,14 @@ class TestPhoneHeader:
         assert 'id="tagline-card"' not in self.page
         assert "header .tagline:empty { display: none" in self.page
         title = _css_rule(self.page, "header h1")
-        assert "font-size: 20px" in title
-        assert "font-weight: 800" in title
+        assert "flex: 0 0 auto" in title
+        assert "text-overflow: ellipsis" not in title
         today = _css_rule(self.page, "header .tagline")
         assert "font-size: 12.5px" in today
         assert "font-weight: 500" in today
         assert "font-variant-numeric: tabular-nums" in today
+        assert "min-width: 0" in today
+        assert "text-overflow: ellipsis" in today
         assert "var(--mute" in today
         gap = _css_rule(self.page, "header .conn + .tagline")
         assert "margin-left: 6px" in gap
@@ -596,13 +602,14 @@ class TestPhoneHeader:
         assert "@media (max-width: 480px)" not in self.page
 
     def test_narrow_phones_do_not_scroll_sideways(self):
-        # 320 and 360 used to overflow: the title could not shrink, so the
-        # connecting pill stuck out. The title ellipsizes instead.
+        # The title stays whole. A long today line ellipsizes instead.
         title = _css_rule(self.page, "header h1")
-        assert "min-width: 0" in title
-        assert "overflow: hidden" in title
-        assert "text-overflow: ellipsis" in title
+        assert "flex: 0 0 auto" in title
         assert "white-space: nowrap" in title
+        today = _css_rule(self.page, "header .tagline")
+        assert "min-width: 0" in today
+        assert "overflow: hidden" in today
+        assert "text-overflow: ellipsis" in today
         assert 'class="header-tools"' in self.page
         face = _css_rule(self.page, ".header-tools .pill-face")
         assert "height: 36px" in face
