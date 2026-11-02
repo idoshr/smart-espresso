@@ -150,7 +150,24 @@ class TestGlance:
         detail = call(
             "logic.heroDetail({state:'overpressure', since_seconds:4, shot:null}, 1.9)"
         )
-        assert detail == "for 4 s\nCheck the pressurestat"
+        assert call(
+            "logic.heroDetail({state:'overpressure', since_seconds:4, shot:null}, 1.9)"
+        ) == ("Check the pressurestat")
+        assert call(
+            "logic.heroDetail({state:'overpressure', since_seconds:59.9, shot:null}, 1.9)"
+        ) == ("Check the pressurestat")
+        assert (
+            call(
+                "logic.heroDetail({state:'overpressure', since_seconds:60, shot:null}, 1.9)"
+            )
+            == "for 1 min · Check the pressurestat"
+        )
+        assert (
+            call(
+                "logic.heroDetail({state:'overpressure', since_seconds:120, shot:null}, 1.9)"
+            )
+            == "for 2 min · Check the pressurestat"
+        )
         assert "Pressure high" not in detail
         assert "pressurestat. for" not in detail
 
@@ -441,6 +458,7 @@ class TestHero:
         assert "font-size: 12.5px" in label
         assert "font-weight: 700" in label
         assert "border-radius: 99px" in label
+        assert "letter-spacing: 0" in label
         assert "padding: 5px 12px" in label
         assert "gap: 7px" in label
         assert "var(--acc" in _css_rule(self.page, ".state.live .state-label")
@@ -448,6 +466,8 @@ class TestHero:
         assert 'content: ""' in dot
         assert "width: 6px" in dot
         assert "display: none" in _css_rule(self.page, ".state-chip .lamp")
+        assert "chip.classList.toggle('offline', offline.replace)" in self.page
+        assert "stateCard.classList.toggle('offline', offline.replace)" in self.page
         offline = _css_rule(self.page, ".state-chip.offline .state-label")
         assert "background: transparent" in offline
         assert "border: 1px dashed var(--mute" in offline
@@ -494,7 +514,7 @@ class TestHero:
         pressure = call(
             "logic.heroDetail({state:'overpressure', since_seconds:4, shot:null}, 1.9)"
         )
-        assert pressure == "for 4 s\nCheck the pressurestat"
+        assert pressure == "Check the pressurestat"
         assert "Pressure high" not in pressure
 
     def test_ready_detail_waits_until_a_minute(self):

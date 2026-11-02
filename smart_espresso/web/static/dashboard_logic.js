@@ -197,11 +197,9 @@
       return eta ? base + " · " + eta + " to go" : base;
     }
     if (machine.state === "overpressure") {
-      return (
-        "for " +
-        formatSpokenDuration(machine.since_seconds) +
-        "\nCheck the pressurestat"
-      );
+      const check = "Check the pressurestat";
+      if (!(Number(machine.since_seconds) >= 60)) return check;
+      return "for " + formatSpokenDuration(machine.since_seconds) + " · " + check;
     }
     if (machine.state === "ready" && !(Number(machine.since_seconds) >= 60)) {
       return "";
