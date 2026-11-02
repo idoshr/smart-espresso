@@ -26,11 +26,11 @@ def call(expression):
 
 class TestConnectionCopy:
     def test_pill_stays_connecting_until_a_reading_exists(self):
-        assert call("logic.pillText(false, null)") == "connecting…"
-        assert call("logic.pillText(false, null)") != "live"
+        assert call("logic.pillText(false, null)") == "Connecting…"
+        assert call("logic.pillText(false, null)") != "Live"
 
     def test_pill_is_live_only_while_connected(self):
-        assert call("logic.pillText(true, 1000)") == "live"
+        assert call("logic.pillText(true, 1000)") == "Live"
 
     def test_pill_is_offline_after_a_reading_was_lost(self):
         assert call("logic.pillText(false, 1000)") == "offline"
@@ -110,9 +110,9 @@ class TestOfflineRules:
         )
 
     def test_shot_timer_does_not_advance_while_offline(self):
-        assert call("logic.displayedShotText(false, '12s', '13s')") == "12s"
-        assert call("logic.displayedShotText(true, '12s', '13s')") == "13s"
-        assert call("logic.displayedShotText(false, null, '4s')") == "4s"
+        assert call("logic.displayedShotText(false, '12 s', '13 s')") == "12 s"
+        assert call("logic.displayedShotText(true, '12 s', '13 s')") == "13 s"
+        assert call("logic.displayedShotText(false, null, '4 s')") == "4 s"
 
     def test_skeletons_only_before_the_first_payload(self):
         assert call("logic.showSkeletons(false)") is True
@@ -124,12 +124,71 @@ class TestGlance:
         ready = call(
             "logic.heroDetail({state:'ready', since_seconds:600, shot:null}, 1.1)"
         )
-        assert ready == "Ready for 10 min"
+        assert ready == "for 10 min"
         heating = call(
-            "logic.heroDetail({state:'heating', since_seconds:150, shot:null}, 0.6)"
+            "logic.heroDetail({state:'heating', since_seconds:30, shot:null}, 0.3)"
         )
-        assert heating.startswith("Warming up · 0.6 of 0.8 bar")
-        assert "about" in heating and "min" in heating
+        assert heating == "0.3 of 0.8 bar · about 2 min to go"
+
+    def test_each_state_has_its_own_pill_class(self):
+        assert call("logic.pillKind('Off')") == "off"
+        assert call("logic.pillKind('Warming up')") == "heating"
+        assert call("logic.pillKind('Ready to pull')") == "ready"
+        assert call("logic.pillKind('Pulling a shot')") == "live"
+        assert call("logic.pillKind('Steaming milk')") == "live"
+        assert call("logic.pillKind('Water running')") == "live"
+        assert call("logic.pillKind('No sensor reading')") == "unknown"
+        assert (
+            call("logic.pillKind('Pressure high. Check the pressurestat.')") == "alert"
+        )
+        assert call("logic.pillLabel('Pressure high. Check the pressurestat.')") == (
+            "Pressure high"
+        )
+        assert call("logic.pillKind('connecting…')") == "quiet"
+
+    def test_pressure_high_puts_the_check_on_its_own_line(self):
+        detail = call(
+            "logic.heroDetail({state:'overpressure', since_seconds:4, shot:null}, 1.9)"
+        )
+        assert detail == "for 4 s\nCheck the pressurestat"
+        assert "Pressure high" not in detail
+        assert "pressurestat. for" not in detail
+
+    def test_detail_never_repeats_the_pill(self):
+        assert (
+            call(
+                "logic.heroDetail({state:'flushing', since_seconds:26, shot:null}, null)"
+            )
+            == "for 26 s"
+        )
+        assert (
+            call("logic.heroDetail({state:'off', since_seconds:4, shot:null}, null)")
+            == "for 4 s"
+        )
+        assert (
+            call("logic.heroDetail({state:'steaming', since_seconds:26, shot:null}, 1)")
+            == "for 26 s"
+        )
+        assert (
+            call(
+                "logic.heroDetail({state:'unknown', since_seconds:8, shot:null}, null)"
+            )
+            == "for 8 s"
+        )
+        aiming = call(
+            "logic.heroDetail({state:'brewing', since_seconds:12, shot:{seconds:12}}, null)"
+        )
+        assert aiming == "Aiming for 25 to 30 s"
+        for phrase in (
+            "Water running",
+            "Warming up",
+            "Off for",
+            "Ready for",
+            "Steaming milk",
+            "No sensor reading",
+            "Pressure high for",
+        ):
+            assert phrase not in aiming
 
     def test_warming_bar_and_eta_need_a_real_slope(self):
         assert call("logic.warmingProgress(0.4)") == 0.5
@@ -224,18 +283,15 @@ class TestGlance:
             "buzzedInWindow": False,
         }
 
-    def test_state_bands_are_distinct_colours(self):
+    def test_state_is_a_pill_and_glyphs_stay_distinct(self):
         page = (
             Path(__file__).resolve().parents[1] / "web" / "static" / "index.html"
         ).read_text(encoding="utf-8")
-        colors = dict(
-            re.findall(
-                r"--state-(off|heating|ready|brewing|steaming):\s*(#[0-9A-Fa-f]{6})",
-                page,
-            )
-        )
-        assert set(colors) == {"off", "heating", "ready", "brewing", "steaming"}
-        assert len(set(colors.values())) == 5
+        # Colour means live, not a band per state. The five glyphs still differ.
+        assert "--state-off:" not in page
+        assert "applyPill(card, presentation.label)" in page
+        assert call("logic.pillKind('Pulling a shot')") == "live"
+        assert call("logic.pillKind('Water running')") == "live"
         glyphs = re.findall(
             r"(off|heating|ready|brewing|steaming):\s+'([^']+)'",
             page,
@@ -279,7 +335,7 @@ class TestShippedShell:
         self.page = page
 
     def test_markup_does_not_ship_the_live_pill(self):
-        assert 'id="conn">connecting…' in self.page
+        assert 'id="conn">Connecting…' in self.page
         assert 'id="conn">live' not in self.page
         assert 'class="dot off"' in self.page
 
@@ -293,7 +349,8 @@ class TestShippedShell:
         assert 'id="tank-card" hidden' in self.page
 
     def test_connecting_screen_has_skeletons_and_no_live_lamp(self):
-        assert 'id="state-label" aria-live="polite">Connecting…' in self.page
+        assert 'id="state-label" aria-live="polite"' in self.page
+        assert 'id="state-label-text">Connecting…' in self.page
         start = self.page.index('id="skeletons"')
         end = self.page.index("<!-- end skeletons -->")
         block = self.page[start:end]
@@ -378,3 +435,163 @@ class TestLastShotChip:
         assert "margin-top: 16px" in chip
         assert "margin-top: 12px" in _css_rule(self.page, ".warm")
         assert "margin-top: 12px" in _css_rule(self.page, ".shot")
+
+
+class TestWording:
+    def setup_method(self):
+        self.page = (
+            Path(__file__).resolve().parents[1] / "web" / "static" / "index.html"
+        ).read_text(encoding="utf-8")
+
+    def test_units_are_spaced_and_pressure_says_bar(self):
+        assert 'id="shot-seconds">0 s<' in self.page
+        assert 'id="bb-time">0 s<' in self.page
+        assert "${machine.shot.seconds.toFixed(0)} s" in self.page
+        assert "${Math.floor(seconds)} s" in self.page
+        assert ">BAR<" not in self.page
+        assert "<span>bar</span>" in self.page
+
+    def test_live_pill_and_last_shot_chip_are_sentence_case(self):
+        assert "Last shot ${last.seconds.toFixed(0)} s" in self.page
+        assert "last shot ${" not in self.page
+        assert call("logic.pillText(true, 1000)") == "Live"
+
+    def test_only_the_timer_stays_centred_during_a_shot(self):
+        state = _css_rule(self.page, ".state")
+        assert "align-items: stretch" in state
+        assert "text-align: left" in state
+        assert "text-align: left" in _css_rule(self.page, ".state-detail")
+        assert "justify-content: flex-start" in _css_rule(self.page, ".state-band")
+        assert "text-align: center" in _css_rule(self.page, ".shot")
+        assert "font-variant-numeric: tabular-nums" in _css_rule(self.page, ".shot b")
+        assert "font-variant-numeric: tabular-nums" in _css_rule(
+            self.page, ".ring-read b"
+        )
+        assert "font-variant-numeric: tabular-nums" in _css_rule(self.page, ".figure b")
+        # The connection pill shares the class live. Unscoped, it centers the card.
+        assert re.search(r"(^|\n)\s*\.live\s*\{", self.page) is None
+        assert "header .live {" in self.page
+
+    def test_only_shot_history_shows_a_count(self):
+        assert "history.length} shot" not in self.page
+        assert "`${count} saved`" in self.page
+        assert "'1 saved'" in self.page
+
+    def test_live_pill_paints_its_dot(self):
+        dot = _css_rule(self.page, ".state.live .state-label::before")
+        assert 'content: ""' in dot
+        assert "display: inline-flex" in dot
+        assert "width: 6px" in dot
+        assert "height: 6px" in dot
+        assert "border-radius: 50%" in dot
+
+    def test_warming_pill_has_an_espresso_ring(self):
+        assert call("logic.pillKind('Warming up')") == "heating"
+        heating = _css_rule(self.page, ".state.heating .state-label")
+        assert "border-color: var(--ink)" in heating
+        ring = _css_rule(self.page, ".state.heating .state-label::before")
+        assert "border-radius: 50%" in ring
+        assert "background: transparent" in ring
+
+    def test_alert_mark_is_hidden_from_the_name_and_titles_are_sentence_case(self):
+        assert 'class="alert-mark"' in self.page
+        assert 'aria-hidden="true"' in self.page
+        assert ">!</span>" in self.page
+        assert "#FFB09A" in self.page
+        assert "#F08A6B" not in self.page
+        assert "text-transform: uppercase" not in _css_rule(self.page, ".title")
+        assert 'content: "−"' in _css_rule(self.page, ".mark.fast::before")
+
+
+class TestPhoneHeader:
+    """On a phone the today line wraps the header to four lines."""
+
+    def setup_method(self):
+        self.page = (
+            Path(__file__).resolve().parents[1] / "web" / "static" / "index.html"
+        ).read_text(encoding="utf-8")
+
+    def test_today_line_moves_into_the_state_card_on_a_phone(self):
+        assert 'id="tagline-card"' in self.page
+        phone = re.search(r"@media \(max-width: 999px\)\s*\{([^}]*)\}", self.page)
+        assert phone is not None
+        assert "header .tagline" in phone.group(1)
+        assert "display: none" in phone.group(1)
+        wide_at = self.page.find("@media (min-width: 1000px)")
+        assert wide_at > 0
+        wide = self.page[wide_at : wide_at + 400]
+        assert "#tagline-card" in wide
+        assert "display: none" in wide
+        # One sentence, written to both slots. No second wording.
+        assert "getElementById('tagline-card').textContent = text" in self.page
+        assert "getElementById('tagline').textContent = text" in self.page
+
+    def test_title_stays_whole_at_768_and_1280_with_connecting(self):
+        # A labelled wake control plus "Connecting…" is about 438 px. The
+        # header column is about 424, so at 768 the title was cut to
+        # "Smart Espre…" and at 1280 the title row wrapped. The icon-only
+        # rules live in the base sheet, so they apply at those widths and
+        # not only under 480 px. The words stay for the accessible name.
+        assert 'aria-label="Keep screen on"' in self.page
+        assert ">Keep screen on<" in self.page
+        assert 'id="conn">Connecting…' in self.page
+        # Top-level rules (two-space indent), not a max-width media query.
+        # A 480 px query would leave 768 and 1280 on the labelled control.
+        assert re.search(r"^  #wake-text \{", self.page, re.M)
+        assert re.search(r"^  #wake \{", self.page, re.M)
+        hidden = _css_rule(self.page, "#wake-text")
+        assert "position: absolute" in hidden
+        assert "width: 1px" in hidden
+        wake = _css_rule(self.page, "#wake")
+        assert "width: 44px" in wake
+        face = _css_rule(self.page, "#wake .pill-face")
+        assert "width: 36px" in face
+        assert "border-radius: 50%" in face
+        assert "@media (max-width: 480px)" not in self.page
+
+    def test_narrow_phones_do_not_scroll_sideways(self):
+        # 320 and 360 used to overflow: the title could not shrink, so the
+        # connecting pill stuck out. The title ellipsizes instead.
+        title = _css_rule(self.page, "header h1")
+        assert "min-width: 0" in title
+        assert "overflow: hidden" in title
+        assert "text-overflow: ellipsis" in title
+        assert "white-space: nowrap" in title
+        assert 'class="header-tools"' in self.page
+        face = _css_rule(self.page, ".header-tools .pill-face")
+        assert "height: 36px" in face
+        tools = _css_rule(self.page, ".header-tools > .live")
+        assert "min-height: 44px" in tools
+        assert "height: 44px" in tools
+
+    def test_wake_icon_toggles_with_aria_pressed(self):
+        assert 'aria-label="Keep screen on"' in self.page
+        assert 'title="Keep screen on"' in self.page
+        assert 'aria-pressed="false"' in self.page
+        assert 'class="wake-icon"' in self.page
+        assert 'stroke="currentColor"' in self.page
+        assert 'stroke-width="2"' in self.page
+        icon = self.page.split('class="wake-icon"', 1)[1].split("</svg>", 1)[0]
+        assert (
+            'aria-hidden="true"'
+            in self.page[self.page.index("<svg") : self.page.index("</svg>")]
+        )
+        assert "http" not in icon
+        icon_box = _css_rule(self.page, ".wake-icon")
+        assert "width: 20px" in icon_box
+        assert "height: 20px" in icon_box
+        assert "setAttribute('aria-pressed', String(on))" in self.page
+        assert "classList.toggle('on', on)" in self.page
+        # Tooltip follows the toggle. The accessible name does not.
+        assert (
+            "setAttribute('title', on ? 'Screen stays on' : 'Keep screen on')"
+            in self.page
+        )
+        ui = self.page.split("const setUI = (on) => {", 1)[1].split("};", 1)[0]
+        assert "aria-label" not in ui
+        off_face = _css_rule(self.page, "#wake .pill-face")
+        assert "border-color: var(--ink-faint)" in off_face
+        pressed = _css_rule(self.page, "button#wake.on .pill-face")
+        assert "background: var(--ink)" in pressed
+        assert "color: var(--card)" in pressed
+        assert "border-color: var(--ink)" in pressed
