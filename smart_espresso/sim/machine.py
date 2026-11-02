@@ -20,6 +20,10 @@ def head_voltage(bar: float) -> float:
     return 0.5 + max(bar, 0.0) / _HEAD_BAR_PER_VOLT
 
 
+# A simulated shot eases from 0 up to its target instead of appearing at 9 bar.
+SHOT_HEAD_RAMP_S = 6.0
+
+
 def boiler_voltage(bar: float) -> float:
     return 0.5 + max(bar, 0.0) / _BOILER_BAR_PER_VOLT
 
@@ -173,6 +177,21 @@ class SimulatedMachine:
             return self.segments[-1]
         return self.segments[0]
 
+    def _head_bar(self, segment, t):
+        """Head pressure for one segment. Shots ramp over the first 6 s."""
+        target = segment.head_bar
+        if segment.kind != "shot" or target <= 0:
+            return target
+        elapsed = t - segment.start
+        if elapsed >= SHOT_HEAD_RAMP_S:
+            return target
+        if elapsed <= 0:
+            return 0.0
+        frac = elapsed / SHOT_HEAD_RAMP_S
+        # Smoothstep, so the line leaves 0 and arrives at the target gently.
+        frac = frac * frac * (3.0 - 2.0 * frac)
+        return target * frac
+
     def _boiler_bar(self, segment, t):
         if segment.boiler_from is None or segment.end <= segment.start:
             return segment.boiler_bar
@@ -190,7 +209,7 @@ class SimulatedMachine:
         if self.loop and self.duration > 0:
             local_t = t % self.duration
         if channel == self.HEAD:
-            return head_voltage(segment.head_bar)
+            return head_voltage(self._head_bar(segment, local_t))
         if channel == self.BOILER:
             return boiler_voltage(self._boiler_bar(segment, local_t))
         if channel == self.FLOW:

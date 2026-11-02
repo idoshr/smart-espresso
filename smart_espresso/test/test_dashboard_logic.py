@@ -150,7 +150,24 @@ class TestGlance:
         detail = call(
             "logic.heroDetail({state:'overpressure', since_seconds:4, shot:null}, 1.9)"
         )
-        assert detail == "for 4 s\nCheck the pressurestat"
+        assert call(
+            "logic.heroDetail({state:'overpressure', since_seconds:4, shot:null}, 1.9)"
+        ) == ("Check the pressurestat")
+        assert call(
+            "logic.heroDetail({state:'overpressure', since_seconds:59.9, shot:null}, 1.9)"
+        ) == ("Check the pressurestat")
+        assert (
+            call(
+                "logic.heroDetail({state:'overpressure', since_seconds:60, shot:null}, 1.9)"
+            )
+            == "for 1 min · Check the pressurestat"
+        )
+        assert (
+            call(
+                "logic.heroDetail({state:'overpressure', since_seconds:120, shot:null}, 1.9)"
+            )
+            == "for 2 min · Check the pressurestat"
+        )
         assert "Pressure high" not in detail
         assert "pressurestat. for" not in detail
 
@@ -163,7 +180,7 @@ class TestGlance:
         )
         assert (
             call("logic.heroDetail({state:'off', since_seconds:4, shot:null}, null)")
-            == "for 4 s"
+            == ""
         )
         assert (
             call("logic.heroDetail({state:'steaming', since_seconds:26, shot:null}, 1)")
@@ -228,13 +245,20 @@ class TestGlance:
         )
         assert ready["replace"] is True
         assert ready["showShot"] is False
+        assert ready["label"] == "Offline"
+        assert ready["detail"] == "Readings below are from before it went offline."
         assert "Ready to pull" not in ready["label"]
-        assert "Last seen 40 s ago" in ready["label"]
+        assert "Can't reach" not in ready["detail"]
+        assert "Same Wi-Fi" not in ready["detail"]
+        banner = call("logic.offlineBanner(false, 3, 1000, 41000)")
+        assert "Can't reach the machine. Last seen 40 s ago" in banner["title"]
+        assert "Same Wi-Fi" in banner["title"]
         brewing = call(
             "logic.shownState({state:'brewing', label:'Pulling a shot',"
             " shot:{seconds:20, ml:30}}, 9, false, true, 1000, 41000)"
         )
         assert brewing["showShot"] is False
+        assert brewing["label"] == "Offline"
         assert "Pulling a shot" not in brewing["label"]
         live = call(
             "logic.shownState({state:'ready', label:'Ready to pull', shot:null},"
@@ -413,28 +437,287 @@ class TestWaterCard:
         assert "border-radius: 0" in bar
         assert "min-width: 8px" in bar
         assert "max-width: 10px" in bar
-        # 326 px of card, 9 px bars and 4 px gaps: 25 blocks, not 40 hairlines.
         assert len(call("logic.flowBars(Array(40).fill(1), 326)")) == 25
         wide = self.page[self.page.find("@media (min-width: 1000px)") :]
         assert "height: 170px" in wide
 
 
-class TestLastShotChip:
-    """The chip is an inline span on main, so its box rules do nothing."""
+class TestHero:
+    """The state card is the look C hero: chip, timer, verdict, window."""
 
     def setup_method(self):
         self.page = (
             Path(__file__).resolve().parents[1] / "web" / "static" / "index.html"
         ).read_text(encoding="utf-8")
 
-    def test_chip_stays_inside_the_card_and_clears_the_track(self):
-        chip = _css_rule(self.page, ".last-pull")
-        assert "display: inline-block" in chip
-        assert "max-width: 100%" in chip
-        assert "text-overflow: ellipsis" in chip
-        assert "margin-top: 16px" in chip
-        assert "margin-top: 12px" in _css_rule(self.page, ".warm")
-        assert "margin-top: 12px" in _css_rule(self.page, ".shot")
+    def test_chip_timer_and_window_match_the_hero(self):
+        chip = _css_rule(self.page, ".state-chip")
+        assert "border: none" in chip
+        assert "background: transparent" in chip
+        label = _css_rule(self.page, ".state-label")
+        assert "font-size: 12.5px" in label
+        assert "font-weight: 700" in label
+        assert "border-radius: 99px" in label
+        assert "letter-spacing: 0" in label
+        assert "padding: 5px 12px" in label
+        assert "gap: 7px" in label
+        assert "var(--acc" in _css_rule(self.page, ".state.live .state-label")
+        dot = _css_rule(self.page, ".state.live .state-label::before")
+        assert 'content: ""' in dot
+        assert "width: 6px" in dot
+        assert "display: none" in _css_rule(self.page, ".state-chip .lamp")
+        assert "chip.classList.toggle('offline', offline.replace)" in self.page
+        assert "stateCard.classList.toggle('offline', offline.replace)" in self.page
+        offline = _css_rule(self.page, ".state-chip.offline .state-label")
+        assert "background: transparent" in offline
+        assert "border: 1px dashed var(--mute" in offline
+        assert "var(--mute" in offline
+        timer = _css_rule(self.page, ".timer b")
+        assert "font-size: 62px" in timer
+        assert "font-weight: 700" in timer
+        assert "letter-spacing: -.05em" in timer
+        unit = _css_rule(self.page, ".timer small")
+        assert "font-size: 22px" in unit
+        assert "font-weight: 600" in unit
+        verdict = _css_rule(self.page, ".hint b")
+        assert "font-size: 14px" in verdict
+        assert "font-weight: 700" in verdict
+        assert "var(--acc" in verdict
+        track = _css_rule(self.page, ".shot-track")
+        assert "height: 6px" in track
+        window = _css_rule(self.page, ".shot-track u")
+        assert "border: 1.5px solid var(--acc" in window
+        assert "border-radius: 5px" in window
+        assert 'id="shot-ml"' not in self.page
+        assert 'id="shot-curve"' not in self.page
+        assert "Pressure, this shot" not in self.page
+        assert "This shot's pressure" in self.page
+        assert 'id="shot-verdict"' in self.page
+        assert ">0 s<" in self.page
+        assert ">25–30 s<" in self.page
+        assert ">40 s<" in self.page
+        wide = self.page[self.page.find("@media (min-width: 1000px)") :]
+        assert "font-size: 140px" in wide
+        assert "font-size: 40px" in wide
+        assert "height: 8px" in wide
+
+    def test_aim_stays_and_the_verdict_is_its_own_line(self):
+        for seconds in (12, 26, 34):
+            detail = call(
+                "logic.heroDetail({state:'brewing', since_seconds:1,"
+                " shot:{seconds:%s, ml:30}}, null)" % seconds
+            )
+            assert detail == "Aiming for 25 to 30 s"
+        assert call("logic.liveVerdict(12, 25, 30)") == "Short"
+        assert call("logic.liveVerdict(26, 25, 30)") == "On target"
+        assert call("logic.liveVerdict(34, 25, 30)") == "Long"
+        pressure = call(
+            "logic.heroDetail({state:'overpressure', since_seconds:4, shot:null}, 1.9)"
+        )
+        assert pressure == "Check the pressurestat"
+        assert "Pressure high" not in pressure
+
+    def test_ready_detail_waits_until_a_minute(self):
+        # since_seconds is the age of this Ready visit, not the last poll.
+        young = "{state:'ready', since_seconds:%s, shot:null}"
+        for seconds in (0, 0.4, 59, 59.9):
+            assert call("logic.heroDetail(%s, 1.2)" % (young % seconds)) == ""
+        assert call("logic.heroDetail(%s, 1.2)" % (young % 60)) == "for 1 min"
+        assert call("logic.heroDetail(%s, 1.2)" % (young % 120)) == "for 2 min"
+
+    def test_off_detail_waits_until_a_minute(self):
+        young = "{state:'off', since_seconds:%s, shot:null}"
+        for seconds in (0, 2, 59, 59.9):
+            assert call("logic.heroDetail(%s, null)" % (young % seconds)) == ""
+        assert call("logic.heroDetail(%s, null)" % (young % 60)) == "for 1 min"
+        assert call("logic.heroDetail(%s, null)" % (young % 120)) == "for 2 min"
+
+
+class TestHeroCurve:
+    """The hero curve: live tail, a reset on the next shot, last curve in Ready."""
+
+    def setup_method(self):
+        self.page = (
+            Path(__file__).resolve().parents[1] / "web" / "static" / "index.html"
+        ).read_text(encoding="utf-8")
+
+    def test_markup_sits_under_the_axis_and_starts_hidden(self):
+        axis = self.page.find('id="shot-window"')
+        curve = self.page.find('id="hero-curve"')
+        assert axis != -1 and curve > axis
+        assert 'id="hero-curve" hidden' in self.page
+        assert "This shot's pressure" in self.page
+        assert ">bar<" in self.page
+        label = _css_rule(self.page, "#hero-curve .lbl")
+        assert "font-size: 12.5px" in label
+        assert "font-weight: 600" in label
+        chart = _css_rule(self.page, "#hero-curve .chart")
+        assert "height: 62px" in chart
+        line = _css_rule(self.page, "#hero-curve .curve-line")
+        assert "stroke: var(--acc" in line
+        assert 'id="hero-band"' not in self.page
+        assert "#hero-curve .band" not in self.page
+        wide = self.page[self.page.find("@media (min-width: 1000px)") :]
+        assert "height: 220px" in wide
+
+    def test_append_uses_the_after_cursor_and_skips_points_already_held(self):
+        first = call(
+            "logic.applyCurrentSamples({startedAt:null, samples:[]},"
+            " {active:true, started_at:'shot-a',"
+            " samples:[{t:0.25, head_bar:2},{t:0.5, head_bar:4}]})"
+        )
+        assert first["startedAt"] == "shot-a"
+        assert [point["t"] for point in first["samples"]] == [0.25, 0.5]
+        assert call("logic.curveRequest(%s)" % json.dumps(first)) == {"after": 0.5}
+        # The server returns only t > after. The point at the cursor stays put.
+        second = call(
+            "logic.applyCurrentSamples(%s,"
+            " {active:true, started_at:'shot-a',"
+            " samples:[{t:0.5, head_bar:4},{t:0.75, head_bar:9}]})" % json.dumps(first)
+        )
+        assert [point["t"] for point in second["samples"]] == [0.25, 0.5, 0.75]
+        assert [point["head_bar"] for point in second["samples"]] == [2, 4, 9]
+
+    def test_a_new_started_at_replaces_the_curve(self):
+        held = {
+            "startedAt": "shot-a",
+            "samples": [{"t": 26, "head_bar": 9}],
+        }
+        assert call(
+            "logic.curveNeedsFull(%s, {active:true, started_at:'shot-b', samples:[]})"
+            % json.dumps(held)
+        )
+        reset = call(
+            "logic.applyCurrentSamples(%s,"
+            " {active:true, started_at:'shot-b', samples:[{t:0.25, head_bar:1}]})"
+            % json.dumps(held)
+        )
+        assert reset["startedAt"] == "shot-b"
+        assert [point["t"] for point in reset["samples"]] == [0.25]
+        assert (
+            call(
+                "logic.curveNeedsFull({startedAt:null, samples:[]},"
+                " {active:true, started_at:'shot-b', samples:[]})"
+            )
+            is False
+        )
+
+    def test_ready_keeps_the_last_curve_and_an_empty_slot_stays_hidden(self):
+        last = [{"t": 26, "head_bar": 9.0}]
+        ready = call(
+            "logic.heroCurveSlot({state:'ready', shotActive:false,"
+            " liveSamples:[], lastSamples:%s})" % json.dumps(last)
+        )
+        assert ready["hidden"] is False
+        assert ready["source"] == "last"
+        assert ready["label"] == "Last shot's pressure"
+        assert ready["samples"] == last
+        live = [{"t": 10, "head_bar": 8}]
+        brewing = call(
+            "logic.heroCurveSlot({state:'brewing', shotActive:true,"
+            " liveSamples:%s, lastSamples:%s})" % (json.dumps(live), json.dumps(last))
+        )
+        assert brewing["hidden"] is False
+        assert brewing["source"] == "live"
+        assert brewing["label"] == "This shot's pressure"
+        assert brewing["samples"] == live
+        for state in ("ready", "heating", "off"):
+            empty = call(
+                "logic.heroCurveSlot({state:'%s', shotActive:false,"
+                " liveSamples:[], lastSamples:[]})" % state
+            )
+            assert empty["hidden"] is True
+            assert empty["samples"] == []
+        waiting = call(
+            "logic.heroCurveSlot({state:'brewing', shotActive:true,"
+            " liveSamples:[], lastSamples:[]})"
+        )
+        assert waiting["hidden"] is True
+
+    def test_the_line_is_head_pressure_on_a_40_second_scale(self):
+        figure = call(
+            "logic.heroCurveFigure(["
+            " {t:0, head_bar:0, boiler_bar:1.2},"
+            " {t:15, head_bar:9, boiler_bar:1.2},"
+            " {t:26, head_bar:9, boiler_bar:1.2}])"
+        )
+        assert figure["yLabel"] == "9.0"
+        assert figure["tMax"] == 40
+        assert figure["axis"] == ["0 s", "10", "20", "30", "40 s"]
+        assert figure["dot"]["x"] == 195
+        assert figure["dot"]["y"] == 25
+        assert "band" not in figure
+        assert "M0.00 100.00" in figure["line"]
+        assert "L195.00 25.00" in figure["line"]
+        # Boiler is not the drawn series: 1.2 bar would sit much lower.
+        assert "L150.00 90.00" not in figure["line"]
+        assert call("logic.heroCurveFigure([])") is None
+
+    def test_the_label_switches_with_the_shot(self):
+        saved = [{"t": 26, "head_bar": 9}]
+        running = call(
+            "logic.heroCurveSlot({state:'brewing', shotActive:true,"
+            " liveSamples:[{t:4, head_bar:6}], lastSamples:%s})" % json.dumps(saved)
+        )
+        assert running["label"] == "This shot's pressure"
+        ready = call(
+            "logic.heroCurveSlot({state:'ready', shotActive:false,"
+            " liveSamples:[], lastSamples:%s})" % json.dumps(saved)
+        )
+        assert ready["label"] == "Last shot's pressure"
+        nxt = call(
+            "logic.heroCurveSlot({state:'brewing', shotActive:true,"
+            " liveSamples:[{t:0.5, head_bar:1}], lastSamples:%s})" % json.dumps(saved)
+        )
+        assert nxt["label"] == "This shot's pressure"
+        assert nxt["source"] == "live"
+
+    def test_ready_curve_ends_while_water_was_still_flowing(self):
+        # The head falls to 0 while the meter is still ticking. That tail
+        # is not the pour. The frozen line stops at the last flow > 0
+        # sample that still has pressure, and the dot sits on it.
+        saved = [
+            {"t": 0, "head_bar": 0.4, "flow_mls": 0.5},
+            {"t": 6, "head_bar": 9, "flow_mls": 1.5},
+            {"t": 26, "head_bar": 9, "flow_mls": 1.2},
+            {"t": 26.13, "head_bar": 0, "flow_mls": 1.19},
+            {"t": 26.43, "head_bar": 0, "flow_mls": 1.19},
+            {"t": 26.63, "head_bar": 0, "flow_mls": 0},
+        ]
+        kept = call("logic.pourCurveSamples(%s)" % json.dumps(saved))
+        assert kept[-1]["t"] == 26
+        assert kept[-1]["head_bar"] == 9
+        assert kept[-1]["flow_mls"] > 0
+        assert all(point["head_bar"] > 0 or point["t"] == 0 for point in kept)
+        assert all(
+            point["head_bar"] != 0 or point["flow_mls"] <= 0 for point in kept[1:]
+        )
+        ready = call(
+            "logic.heroCurveSlot({state:'ready', shotActive:false,"
+            " liveSamples:[], lastSamples:%s})" % json.dumps(saved)
+        )
+        assert ready["label"] == "Last shot's pressure"
+        assert ready["samples"][-1] == kept[-1]
+        figure = call("logic.heroCurveFigure(%s)" % json.dumps(ready["samples"]))
+        assert figure["yLabel"] == "9.0"
+        assert figure["yLabelAt"] == 25
+        assert figure["dot"]["x"] == 195
+        assert figure["dot"]["y"] == 25
+        assert "L195.00 100.00" not in figure["line"]
+
+
+class TestLastShotChip:
+    """Look C drops the last-shot chip. Recent shots covers that glance."""
+
+    def setup_method(self):
+        self.page = (
+            Path(__file__).resolve().parents[1] / "web" / "static" / "index.html"
+        ).read_text(encoding="utf-8")
+
+    def test_last_shot_chip_is_absent(self):
+        assert 'id="last-pull"' not in self.page
+        assert "last-pull" not in self.page
+        assert "Last shot " not in self.page
 
 
 class TestWording:
@@ -444,15 +727,14 @@ class TestWording:
         ).read_text(encoding="utf-8")
 
     def test_units_are_spaced_and_pressure_says_bar(self):
-        assert 'id="shot-seconds">0 s<' in self.page
+        assert 'id="shot-seconds">0</b><small>s</small>' in self.page
         assert 'id="bb-time">0 s<' in self.page
-        assert "${machine.shot.seconds.toFixed(0)} s" in self.page
+        assert "machine.shot.seconds.toFixed(0)" in self.page
         assert "${Math.floor(seconds)} s" in self.page
         assert ">BAR<" not in self.page
         assert "<span>bar</span>" in self.page
 
     def test_live_pill_and_last_shot_chip_are_sentence_case(self):
-        assert "Last shot ${last.seconds.toFixed(0)} s" in self.page
         assert "last shot ${" not in self.page
         assert call("logic.pillText(true, 1000)") == "Live"
 
@@ -462,8 +744,8 @@ class TestWording:
         assert "text-align: left" in state
         assert "text-align: left" in _css_rule(self.page, ".state-detail")
         assert "justify-content: flex-start" in _css_rule(self.page, ".state-band")
-        assert "text-align: center" in _css_rule(self.page, ".shot")
-        assert "font-variant-numeric: tabular-nums" in _css_rule(self.page, ".shot b")
+        assert "text-align: left" in _css_rule(self.page, ".shot")
+        assert "font-variant-numeric: tabular-nums" in _css_rule(self.page, ".timer b")
         assert "font-variant-numeric: tabular-nums" in _css_rule(
             self.page, ".ring-read b"
         )
