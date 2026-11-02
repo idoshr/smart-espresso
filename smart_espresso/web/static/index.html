@@ -299,23 +299,81 @@
      open a hole under a short card in another. Recent shots is the
      vertical list on desktop and the four tiles on a phone. */
   @media (min-width: 1000px) {
-    body { max-width: 1440px; }
+    /* The grid fills the viewport under the header and above the bottom
+       inset. The minimum keeps a short window scrolling instead of
+       squashing the curve. */
+    body {
+      max-width: 1440px;
+      height: 100vh;
+      height: 100dvh;
+      min-height: 100vh;
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      /* Foot of the page. The columns end just above it. */
+      padding-bottom: 96px;
+      overflow: auto;
+    }
     .stack {
+      flex: 1 1 auto;
+      min-height: 460px;
       display: grid;
       grid-template-columns: repeat(3, minmax(280px, 1fr));
+      grid-template-rows: minmax(0, 1fr);
       gap: 8px;
-      align-items: start;
+      align-items: stretch;
     }
-    .desk-col { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
-    #desk-meters { grid-column: 2; }
-    #desk-side { grid-column: 3; }
-    #state { grid-column: 1; }
-    #tank-room { display: flex; flex-direction: column; gap: 8px; }
-    /* Four rows, content height. The link opens the rest of the log. */
-    #recent-tiles {
+    .desk-col {
       display: flex;
       flex-direction: column;
       gap: 8px;
+      min-width: 0;
+      min-height: 0;
+      height: 100%;
+    }
+    #desk-meters { grid-column: 2; }
+    #desk-side { grid-column: 3; }
+    #state {
+      grid-column: 1;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+      height: 100%;
+    }
+    #state .state-body {
+      flex: 1 1 auto;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
+    #hero-curve {
+      flex: 1 1 auto;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
+    #rings { flex: 0 0 auto; }
+    #flow-card {
+      flex: 1 1 auto;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
+    #tank-room { display: flex; flex-direction: column; gap: 8px; flex: 0 0 auto; }
+    #pulls-card {
+      flex: 1 1 auto;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
+    /* Four rows, spread to the card bottom. The link opens the rest. */
+    #recent-tiles {
+      flex: 1 1 auto;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      gap: 8px;
+      min-height: 0;
     }
   }
 
@@ -740,7 +798,7 @@
     .shot-track { height: 8px; margin-top: 22px; }
     .tl { font-size: 12px; }
     #hero-curve .cvh { margin-top: 22px; }
-    #hero-curve .chart { height: 112px; margin-top: 12px; }
+    #hero-curve .chart { flex: 1 1 auto; height: auto; min-height: 180px; margin-top: 12px; }
     #hero-curve .yl { font-size: 12px; }
   }
 
@@ -1023,7 +1081,7 @@
   }
   #flow-card .peak b { color: var(--ink); font-weight: 700; }
   @media (min-width: 1000px) {
-    #flow-card .chart { height: 56px; }
+    #flow-card .chart { flex: 1 1 auto; height: auto; min-height: 72px; }
   }
 
   .chart.empty { height: 22px; }
@@ -1178,7 +1236,7 @@
     }
     .recent-tile .ml { grid-area: ml; font-size: 22px; }
     .recent-tile .t { grid-area: when; margin-top: 0; }
-    .recent-tile .recent-bar { grid-area: bar; margin: 0; height: 6px; }
+    .recent-tile .recent-bar { grid-area: bar; margin: 0; height: 6px; align-self: center; }
     .recent-tile .v { grid-area: verdict; white-space: nowrap; font-size: 13px; }
   }
 

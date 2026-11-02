@@ -585,7 +585,10 @@ class TestWaterCard:
         assert "max-width: 10px" in bar
         assert len(call("logic.flowBars(Array(40).fill(1), 326)")) == 25
         wide = self.page[self.page.find("@media (min-width: 1000px)") :]
-        assert "height: 56px" in wide
+        assert (
+            "#flow-card .chart { flex: 1 1 auto; height: auto; min-height: 72px; }"
+            in wide
+        )
 
 
 class TestMeters:
@@ -762,7 +765,10 @@ class TestHeroCurve:
         assert 'id="hero-band"' not in self.page
         assert "#hero-curve .band" not in self.page
         wide = self.page[self.page.find("@media (min-width: 1000px)") :]
-        assert "height: 112px" in wide
+        assert (
+            "#hero-curve .chart { flex: 1 1 auto; height: auto; min-height: 180px;"
+            in wide
+        )
 
     def test_append_uses_the_after_cursor_and_skips_points_already_held(self):
         first = call(
@@ -1138,7 +1144,7 @@ class TestDesktopGrid:
     def test_three_columns_from_1000(self):
         at = self.page.find("grid-template-columns: repeat(3, minmax(280px, 1fr))")
         assert at > 0
-        block = self.page[at - 400 : at + 1600]
+        block = self.page[at - 1200 : at + 4000]
         assert "@media (min-width: 1000px)" in block
         assert "max-width: 1440px" in block
         assert "gap: 8px" in block
@@ -1146,13 +1152,17 @@ class TestDesktopGrid:
         assert "min-width: 1024px" not in self.page
         assert "#desk-meters { grid-column: 2; }" in block
         assert "#desk-side { grid-column: 3; }" in block
-        assert "#state { grid-column: 1;" in block
+        assert "#state {\n      grid-column: 1;" in block
         assert (
-            "#tank-room { display: flex; flex-direction: column; gap: 8px; }" in block
+            "#tank-room { display: flex; flex-direction: column; gap: 8px; flex: 0 0 auto; }"
+            in block
         )
-        assert "align-items: start" in block
+        assert "align-items: stretch" in block
+        assert "min-height: 100dvh" in block
+        assert "justify-content: space-between" in block
         assert "#recent-tiles { display: none; }" not in block
-        assert "#pulls-card { flex: 1" not in block
+        assert "#pulls-card {" in block
+        assert "flex: 1 1 auto" in block
         assert 'grid-template-areas: "ml bar verdict" "when bar verdict"' in self.page
         assert ".recent-tile .v { grid-area: verdict; white-space: nowrap;" in self.page
         assert "syncDeskRecent" in self.page
