@@ -201,7 +201,13 @@
       if (!(Number(machine.since_seconds) >= 60)) return check;
       return "for " + formatSpokenDuration(machine.since_seconds) + " · " + check;
     }
-    if (machine.state === "ready" && !(Number(machine.since_seconds) >= 60)) {
+    // since_seconds is how long the published state has been held, counted
+    // from the transition into it. A Ready or Off line before a minute is
+    // just "for 0 s", so the line stays hidden until the minute is real.
+    if (
+      (machine.state === "ready" || machine.state === "off") &&
+      !(Number(machine.since_seconds) >= 60)
+    ) {
       return "";
     }
     return durationLine(machine.state, machine.since_seconds);
