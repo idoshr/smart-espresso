@@ -158,4 +158,4 @@ class TestDashboardContrast:
         assert "fonts.googleapis.com" not in self.worker
         assert "fonts.gstatic.com" not in self.worker
         assert "/fonts/manrope.woff2" in self.worker
-        assert "espresso-shell-v77" in self.worker
+        assert "espresso-shell-v84" in self.worker

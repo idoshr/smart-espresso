@@ -421,6 +421,9 @@ class TestShippedShell:
         when = _css_rule(self.page, ".recent-tile .t")
         assert "white-space: nowrap" not in when
         assert "min-width: 0" in when
+        assert "white-space: nowrap" in _css_rule(self.page, ".recent-tile .t-time")
+        assert "t-day" in self.page
+        assert "shotWhenParts" in self.page
         assert "min-width: 0" in _css_rule(self.page, ".recent-tile")
         bar = _css_rule(self.page, ".recent-bar")
         assert "height: 4px" in bar

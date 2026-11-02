@@ -1156,6 +1156,8 @@
     min-width: 0;
     font-variant-numeric: tabular-nums;
   }
+  .recent-tile .t-day { display: block; }
+  .recent-tile .t-time { display: block; white-space: nowrap; }
 
   .card-head .all-shots {
     margin: 0;
@@ -1983,7 +1985,17 @@ function paintRecentTiles(tiles) {
 
     const when = document.createElement('span');
     when.className = 't';
-    when.textContent = shotWhen(shot.started_at);
+    const parts = shotWhenParts(shot.started_at);
+    if (parts.day) {
+      const day = document.createElement('span');
+      day.className = 't-day';
+      day.textContent = parts.day;
+      when.append(day);
+    }
+    const time = document.createElement('span');
+    time.className = 't-time';
+    time.textContent = parts.time;
+    when.append(time);
 
     button.append(ml, bar, verdict, when);
     host.appendChild(button);
@@ -2006,17 +2018,22 @@ let selectedShotId = null;
 const shotCache = new Map();
 let shotLoadToken = 0;
 
-function shotWhen(iso) {
+function shotWhenParts(iso) {
   const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return String(iso || '');
+  if (Number.isNaN(date.getTime())) return { day: '', time: String(iso || '') };
   const time = date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
   const today = new Date();
-  if (date.toDateString() === today.toDateString()) return time;
+  if (date.toDateString() === today.toDateString()) return { day: '', time: time };
   const yesterday = new Date(today);
   yesterday.setDate(today.getDate() - 1);
-  if (date.toDateString() === yesterday.toDateString()) return `Yesterday ${time}`;
+  if (date.toDateString() === yesterday.toDateString()) return { day: 'Yesterday', time: time };
   const day = date.toLocaleDateString([], { month: 'short', day: 'numeric' });
-  return `${day} ${time}`;
+  return { day: day, time: time };
+}
+
+function shotWhen(iso) {
+  const parts = shotWhenParts(iso);
+  return parts.day ? `${parts.day} ${parts.time}` : parts.time;
 }
 
 function renderHistory(block) {
