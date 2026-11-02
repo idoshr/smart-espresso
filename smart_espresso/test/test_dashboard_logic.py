@@ -985,6 +985,7 @@ class TestPhoneHeader:
         narrow = re.search(r"@media \(max-width: 374px\)\s*\{([^}]*)\}", self.page)
         assert narrow is not None
         assert "header .tagline" in narrow.group(1)
+        assert "header .conn" in narrow.group(1)
         assert "display: none" in narrow.group(1)
         assert "todayLine(" in self.page
 
