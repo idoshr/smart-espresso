@@ -590,6 +590,8 @@
     font-variant-numeric: tabular-nums;
   }
 
+  .meter-num b { font-weight: 700; }
+
   .meter-num small {
     font-size: 13px;
     font-weight: 600;
@@ -719,6 +721,27 @@
     margin-top: 16px;
     /* A dry window collapses to a thin quiet line, not a blank block. */
     transition: height .3s ease;
+  }
+
+  /* Water used: a short chart, the peak in the header, ink bars. */
+  #flow-card .chart { height: 26px; gap: 4px; }
+  #flow-card .chart.empty { height: 8px; }
+  #flow-card .bar {
+    flex: 1 1 8px;
+    min-width: 8px;
+    max-width: 10px;
+    border-radius: 0;
+  }
+  #flow-card .bar.on,
+  #flow-card .bar.now { background: var(--ink); }
+  #flow-card .peak {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--mute, var(--ink-faint));
+  }
+  #flow-card .peak b { color: var(--ink); font-weight: 700; }
+  @media (min-width: 1000px) {
+    #flow-card .chart { height: 170px; }
   }
 
   .chart.empty { height: 22px; }
@@ -1293,16 +1316,11 @@
   <div class="card" id="flow-card" hidden>
     <div class="card-head">
       <span class="title" id="flow-title">Water used, last 2 min</span>
-      <span class="note" id="flow-window"></span>
+      <span class="peak" id="flow-peak-line"><span id="flow-peak-label">3 s peak</span> <b id="flow-peak">0.0 ml/s</b></span>
     </div>
     <div class="figure"><b id="flow-recent">0</b><span>ml</span></div>
-    <div class="meta">
-      <span>now <b id="flow-rate">0.0 ml/s</b></span>
-      <span>all time <b id="flow-total">0 ml</b></span>
-      <span>peak <b id="flow-peak">0.0 ml/s</b></span>
-    </div>
     <div class="chart" id="flow-chart" aria-hidden="true"></div>
-    <div class="axis"><span id="flow-axis-start">-2:00</span><span>now</span></div>
+    <div class="axis"><span id="flow-axis-start">-2:00</span><span id="flow-axis-mid">−1:00</span><span>now</span></div>
   </div>
 
   <div class="card" id="tank-card" hidden>
@@ -1959,18 +1977,14 @@ let chartBars = [];
 function renderFlow(sensor) {
   const minutes = Math.round(sensor.window_seconds / 60);
   document.getElementById('flow-title').textContent = `Water used, last ${minutes} min`;
-  document.getElementById('flow-window').textContent = '';
+  document.getElementById('flow-peak-label').textContent =
+    `${Math.round(sensor.window_seconds / sensor.chart.length)} s peak`;
   document.getElementById('flow-recent').textContent =
     DashboardLogic.formatReading(sensor.recent_ml, 0);
-  document.getElementById('flow-rate').textContent = sensor.flow_rate_mls == null
-    ? '— ml/s'
-    : `${DashboardLogic.formatReading(sensor.flow_rate_mls, 1)} ml/s`;
-  document.getElementById('flow-total').textContent =
-    sensor.total_ml == null ? '—' : volText(sensor.total_ml);
   document.getElementById('flow-axis-start').textContent = `-${minutes}:00`;
+  document.getElementById('flow-axis-mid').textContent = `\u2212${minutes / 2}:00`;
 
   const peak = Math.max(...sensor.chart, 0.001);
-  const lastActive = sensor.chart.reduce((acc, ml, i) => (ml > 0 ? i : acc), -1);
 
   // One bucket spans window/length seconds; its peak is a flow rate too.
   const bucketSeconds = sensor.window_seconds / sensor.chart.length;
@@ -1978,13 +1992,14 @@ function renderFlow(sensor) {
     `${(peak / bucketSeconds).toFixed(1)} ml/s`;
 
   const chartEl = document.getElementById('flow-chart');
-  // No water in the whole window: the chart bows out of the way instead
-  // of holding a 64 px blank stage.
   chartEl.classList.toggle('empty', !sensor.chart.some(ml => ml > 0));
+  const grouped = DashboardLogic.flowBars(sensor.chart, chartEl.clientWidth || 300);
+  const groupedPeak = Math.max(...grouped, 0.001);
+  const groupedLast = grouped.reduce((acc, ml, i) => (ml > 0 ? i : acc), -1);
 
-  if (chartBars.length !== sensor.chart.length) {
+  if (chartBars.length !== grouped.length) {
     chartEl.innerHTML = '';
-    chartBars = sensor.chart.map(() => {
+    chartBars = grouped.map(() => {
       const bar = document.createElement('div');
       bar.className = 'bar';
       chartEl.appendChild(bar);
@@ -1992,11 +2007,11 @@ function renderFlow(sensor) {
     });
   }
 
-  sensor.chart.forEach((ml, i) => {
+  grouped.forEach((ml, i) => {
     const bar = chartBars[i];
-    bar.style.height = `${ml > 0 ? Math.max(5, Math.round((ml / peak) * 60)) : 3}px`;
+    bar.style.height = `${ml > 0 ? Math.max(12, Math.round((ml / groupedPeak) * 100)) : 8}%`;
     bar.className = ml > 0
-      ? `bar on${i === lastActive ? ' now' : ''}`
+      ? `bar on${i === groupedLast ? ' now' : ''}`
       : 'bar';
   });
 }
