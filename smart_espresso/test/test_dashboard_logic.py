@@ -234,9 +234,11 @@ class TestGlance:
         assert "Can't reach" not in ready["detail"]
         assert "Same Wi-Fi" not in ready["detail"]
         quiet = _css_rule(
-            Path(__file__).resolve().parents[1].joinpath(
-                "web/static/index.html"
-            ).read_text(encoding="utf-8"),
+            Path(__file__)
+            .resolve()
+            .parents[1]
+            .joinpath("web/static/index.html")
+            .read_text(encoding="utf-8"),
             ".state.offline .state-label",
         )
         assert "border: 1px dashed var(--mute" in quiet
@@ -458,21 +460,17 @@ class TestTodayLine:
     """Today's tally, including the first shot while it is still running."""
 
     def test_idle_with_no_shots_names_the_empty_day(self):
-        assert (
-            call("logic.todayLine({shots:0, ml:0}, false)") == "No shots yet today"
-        )
+        assert call("logic.todayLine({shots:0, ml:0}, false)") == "No shots yet today"
 
     def test_the_first_shot_of_the_day_leaves_the_line_empty(self):
         assert call("logic.todayLine({shots:0, ml:0}, true)") == ""
 
     def test_one_shot_and_two_shots(self):
         assert (
-            call("logic.todayLine({shots:1, ml:39}, false)")
-            == "1 shot · 39 ml today"
+            call("logic.todayLine({shots:1, ml:39}, false)") == "1 shot · 39 ml today"
         )
         assert (
-            call("logic.todayLine({shots:2, ml:68}, true)")
-            == "2 shots · 68 ml today"
+            call("logic.todayLine({shots:2, ml:68}, true)") == "2 shots · 68 ml today"
         )
 
     def test_the_empty_line_is_removed_from_the_header(self):
@@ -568,9 +566,7 @@ class TestPhoneHeader:
         assert "var(--mute" in today
         gap = _css_rule(self.page, "header .conn + .tagline")
         assert "margin-left: 6px" in gap
-        narrow = re.search(
-            r"@media \(max-width: 374px\)\s*\{([^}]*)\}", self.page
-        )
+        narrow = re.search(r"@media \(max-width: 374px\)\s*\{([^}]*)\}", self.page)
         assert narrow is not None
         assert "header .tagline" in narrow.group(1)
         assert "display: none" in narrow.group(1)
