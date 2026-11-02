@@ -702,6 +702,8 @@
     font-weight: 700;
     letter-spacing: -.02em;
     line-height: 1.2;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
   }
   .pair-lead small {
     font-size: 12px;
@@ -725,7 +727,7 @@
     gap: 8px;
     margin-top: 3px;
   }
-  .used-row .pair-sub { margin-top: 0; }
+  .used-row .pair-sub { margin-top: 0; font-variant-numeric: tabular-nums; }
   #tank-card .reset.refill-pill {
     width: 100%;
     display: flex;
@@ -765,6 +767,15 @@
     font-size: 12px;
     font-weight: 500;
     color: var(--mute, var(--ink-faint));
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  @media (max-width: 374px) {
+    .used-row { flex-wrap: wrap; }
+    #tank-card .reset.refill-inline {
+      flex-basis: 100%;
+      white-space: nowrap;
+    }
   }
   @media (min-width: 1000px) {
     .pair-lead { font-size: 28px; }
@@ -1205,6 +1216,13 @@
   button.reset[aria-disabled="true"] {
     cursor: default;
     border-color: var(--edge);
+  }
+  #tank-card .reset.refill-inline[aria-disabled="true"] {
+    color: var(--mute, var(--ink-faint));
+    pointer-events: none;
+  }
+  #tank-card .reset.refill-inline[aria-disabled="true"]:hover {
+    color: var(--mute, var(--ink-faint));
   }
 
   .toast {
