@@ -330,6 +330,22 @@
 
   // Four recent tiles. The bar is the yield against a 45 ml double.
   // Short carries a minus so the word is not the only signal.
+  // Desktop recent rows keep the day and the time on one line. Today is
+  // the locale time only. Yesterday is spelled out. Older shots are the
+  // short locale date, a comma, then the time. No fixed 12h or 24h.
+  function shotWhenLine(iso, now) {
+    const date = new Date(iso);
+    if (Number.isNaN(date.getTime())) return String(iso || "");
+    const time = date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+    const today = now ? new Date(now) : new Date();
+    if (date.toDateString() === today.toDateString()) return time;
+    const yesterday = new Date(today);
+    yesterday.setDate(today.getDate() - 1);
+    if (date.toDateString() === yesterday.toDateString()) return "Yesterday " + time;
+    const day = date.toLocaleDateString([], { month: "short", day: "numeric" });
+    return day + ", " + time;
+  }
+
   function recentTile(seconds, ml, windowLow, windowHigh) {
     const verdict = shotVerdict(seconds, windowLow, windowHigh);
     let label = "On target";
@@ -643,6 +659,7 @@
     humidityLabel: humidityLabel,
     tankMeterHidden: tankMeterHidden,
     refillControl: refillControl,
+    shotWhenLine: shotWhenLine,
     recentTile: recentTile,
     allShotsLink: allShotsLink,
     flowBars: flowBars,

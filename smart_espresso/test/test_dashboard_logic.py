@@ -464,6 +464,22 @@ class TestShippedShell:
         parts = json.loads(stamped.stdout)
         assert parts["oct"] == {"day": "Oct 31", "time": "8:42 AM"}
         assert parts["yest"] == {"day": "Yesterday", "time": "12:17 PM"}
+
+    def test_desktop_shot_line_is_one_locale_line(self):
+        now = "2026-11-02T15:00:00"
+        today = call("logic.shotWhenLine('2026-11-02T18:05:00', '%s')" % now)
+        yesterday = call("logic.shotWhenLine('2026-11-01T18:05:00', '%s')" % now)
+        older = call("logic.shotWhenLine('2026-10-31T08:42:00', '%s')" % now)
+        morning = call("logic.shotWhenLine('2026-11-02T08:42:00', '%s')" % now)
+        # Device locale, same clock as the phone parts test: 12-hour en-US.
+        assert today == "6:05 PM"
+        assert yesterday == "Yesterday 6:05 PM"
+        assert older == "Oct 31, 8:42 AM"
+        assert morning == "8:42 AM"
+        assert "Today" not in today
+        assert "Yest." not in yesterday
+
+    def test_recent_tiles_keep_a_fixed_bar(self):
         assert "min-width: 0" in _css_rule(self.page, ".recent-tile")
         bar = _css_rule(self.page, ".recent-bar")
         assert "height: 4px" in bar
@@ -1163,7 +1179,11 @@ class TestDesktopGrid:
         assert "#recent-tiles { display: none; }" not in block
         assert "#pulls-card {" in block
         assert "flex: 1 1 auto" in block
+        assert "grid-template-columns: 148px minmax(0, 1fr) 84px" in self.page
         assert 'grid-template-areas: "ml bar verdict" "when bar verdict"' in self.page
-        assert ".recent-tile .v { grid-area: verdict; white-space: nowrap;" in self.page
+        assert ".recent-tile .t-line" in self.page
+        assert "shotWhenLine" in self.page
+        assert "grid-area: verdict" in self.page
+        assert "white-space: nowrap" in _css_rule(self.page, ".recent-tile .t-line")
         assert "syncDeskRecent" in self.page
         assert "#history-card { grid-column" not in block

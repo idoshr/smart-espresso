@@ -316,7 +316,9 @@
     }
     .stack {
       flex: 1 1 auto;
-      min-height: 460px;
+      /* Shrinks under the offline banner so a full-height grid does not scroll. */
+      min-height: 0;
+      overflow: hidden;
       display: grid;
       grid-template-columns: repeat(3, minmax(280px, 1fr));
       grid-template-rows: minmax(0, 1fr);
@@ -365,15 +367,18 @@
       display: flex;
       flex-direction: column;
       min-height: 0;
+      overflow: hidden;
     }
-    /* Four rows, spread to the card bottom. The link opens the rest. */
+    /* Four rows, spread to the card bottom. The link opens the rest.
+       The rows can shrink; a 4th row that still will not fit is hidden. */
     #recent-tiles {
       flex: 1 1 auto;
       display: flex;
       flex-direction: column;
       justify-content: space-between;
-      gap: 8px;
+      gap: 4px;
       min-height: 0;
+      overflow: hidden;
     }
   }
 
@@ -1234,19 +1239,45 @@
   }
   .recent-tile .t-day { display: block; }
   .recent-tile .t-time { display: block; white-space: nowrap; }
+  .recent-tile .t-line { display: none; white-space: nowrap; }
   @media (min-width: 1000px) {
+    /* Fixed figure column sized for "Yesterday 12:17 PM", then the bar,
+       then a fixed verdict. Every bar starts and ends on the same x. */
     .recent-tile {
       display: grid;
-      grid-template-columns: auto minmax(0, 1fr) auto;
+      grid-template-columns: 148px minmax(0, 1fr) 84px;
       grid-template-areas: "ml bar verdict" "when bar verdict";
-      column-gap: 12px;
-      row-gap: 2px;
+      column-gap: 10px;
+      row-gap: 0;
       align-items: center;
     }
-    .recent-tile .ml { grid-area: ml; font-size: 22px; }
-    .recent-tile .t { grid-area: when; margin-top: 0; }
+    .recent-tile .ml { grid-area: ml; font-size: 20px; line-height: 1; }
+    .recent-tile .t { grid-area: when; margin-top: 0; line-height: 1; }
+    .recent-tile .t-day,
+    .recent-tile .t-time { display: none; }
+    .recent-tile .t-line {
+      display: block;
+      white-space: nowrap;
+      overflow: visible;
+    }
     .recent-tile .recent-bar { grid-area: bar; margin: 0; height: 6px; align-self: center; }
-    .recent-tile .v { grid-area: verdict; white-space: nowrap; font-size: 13px; }
+    .recent-tile .v {
+      grid-area: verdict;
+      justify-self: end;
+      width: 84px;
+      text-align: right;
+      white-space: nowrap;
+      font-size: 13px;
+    }
+  }
+  /* A short window plus the offline banner leaves a short Recent card.
+     Tighter rows keep four shots inside it; fitRecentRows hides the
+     fourth only when it still sticks out. */
+  @media (min-width: 1000px) and (max-height: 720px) {
+    #pulls-card { padding: 10px 14px 8px; }
+    #pulls-card .card-head { margin-bottom: 6px; }
+    .recent-tile .ml { font-size: 17px; line-height: 1; }
+    #recent-tiles { gap: 2px; }
   }
 
   .card-head .all-shots {
@@ -2102,10 +2133,15 @@ function paintRecentTiles(tiles) {
     time.className = 't-time';
     time.textContent = parts.time;
     when.append(time);
+    const line = document.createElement('span');
+    line.className = 't-line';
+    line.textContent = DashboardLogic.shotWhenLine(shot.started_at);
+    when.append(line);
 
     button.append(ml, bar, verdict, when);
     host.appendChild(button);
   });
+  requestAnimationFrame(fitRecentRows);
 }
 
 // ---- shot history --------------------------------------------------------
@@ -2538,6 +2574,7 @@ function paintOfflineChrome() {
   document.getElementById('bb-stale').hidden = !(stale && shotLive);
   document.getElementById('skeletons').hidden = !DashboardLogic.showSkeletons(hasPayload);
   syncTankControl();
+  fitRecentRows();
 }
 
 function setConnected(ok) {
@@ -2850,13 +2887,27 @@ document.getElementById('all-shots').addEventListener('click', () => {
   document.getElementById('all-shots').setAttribute('aria-expanded', String(open));
 });
 
+function fitRecentRows() {
+  if (!window.matchMedia('(min-width: 1000px)').matches) return;
+  const rows = [...document.querySelectorAll('#recent-tiles .recent-tile')];
+  rows.forEach(row => { row.hidden = false; });
+  const card = document.getElementById('pulls-card');
+  if (!card || rows.length < 4) return;
+  const limit = card.getBoundingClientRect().bottom + 1;
+  // Four rows is the normal list. Hide the fourth only when it still
+  // crosses the card, so a short offline window does not scroll.
+  if (rows[3].getBoundingClientRect().bottom > limit) rows[3].hidden = true;
+}
+
 function syncDeskRecent() {
   // Four rows on a phone and on desktop. The link opens the longer log.
   const list = document.getElementById('history-card');
   const link = document.getElementById('all-shots');
   if (!list || !link) return;
   list.hidden = link.getAttribute('aria-expanded') !== 'true';
+  fitRecentRows();
 }
+window.fitRecentRows = fitRecentRows;
 window.addEventListener('resize', syncDeskRecent);
 syncDeskRecent();
 
