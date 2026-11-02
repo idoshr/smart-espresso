@@ -391,6 +391,73 @@ def _css_rule(page, selector):
     return match.group(1)
 
 
+class TestTankLead:
+    def test_zero_shots_says_the_tank_is_probably_empty(self):
+        assert (
+            call("logic.tankLead(0)")
+            == "Tank's probably empty. Refill before the next shot."
+        )
+        assert call("logic.tankLead(1)") == "About 1 shot left"
+        assert call("logic.tankLead(16)") == "About 16 shots left"
+        assert call("logic.tankLead(43)") == "About 43 shots left"
+        assert call("logic.humidityLabel(45.2)") == "45% humidity"
+        assert call("logic.humidityLabel(45.6)") == "46% humidity"
+        assert call("logic.tankMeterHidden(0)") is True
+        assert call("logic.tankMeterHidden(12)") is False
+
+
+class TestRefillButton:
+    def setup_method(self):
+        self.page = (
+            Path(__file__).resolve().parents[1] / "web" / "static" / "index.html"
+        ).read_text(encoding="utf-8")
+
+    def test_short_label_keeps_the_full_accessible_name(self):
+        assert 'aria-label="I refilled the tank"' in self.page
+        assert 'class="refill-long">I refilled the tank<' in self.page
+        assert 'class="refill-short">I refilled it<' in self.page
+        assert "@container refill" in self.page
+        assert "tankMeterHidden" in self.page
+        assert "Reconnect to save the refill" in self.page
+        assert "Reconnect to mark the tank filled" not in self.page
+
+    def test_normal_refill_is_short_text_and_empty_stays_a_pill(self):
+        normal = call("logic.refillControl(false)")
+        assert normal["pill"] is False
+        assert normal["text"] == "I refilled it"
+        assert normal["name"] == "I refilled the tank"
+        empty = call("logic.refillControl(true)")
+        assert empty["pill"] is True
+        assert empty["long"] == "I refilled the tank"
+        assert empty["short"] == "I refilled it"
+        assert empty["name"] == "I refilled the tank"
+        assert 'id="tank-used-row"' in self.page
+        assert "refill-inline" in self.page
+        assert "refill-pill" in self.page
+        assert "min-width: 0" in _css_rule(self.page, ".pair-lead")
+        assert "white-space: nowrap" not in _css_rule(self.page, ".pair-lead")
+        narrow_lead = re.search(r"@media \(max-width: 339px\)\s*\{([^}]*)\}", self.page)
+        assert narrow_lead is not None
+        assert "font-size: 16px" in narrow_lead.group(1)
+        assert "font-variant-numeric: tabular-nums" in _css_rule(self.page, ".pair-sub")
+        assert "repeat(2, minmax(0, 1fr))" in _css_rule(self.page, ".pair")
+        assert "white-space: normal" in _css_rule(self.page, ".pair-lead.empty")
+        assert "white-space: nowrap" in _css_rule(
+            self.page, "#tank-card .reset.refill-inline"
+        )
+        narrow = re.search(
+            r"@media \(max-width: 399px\)\s*\{(?:[^{}]|\{[^{}]*\})*"
+            r"#tank-card \.reset\.refill-inline(?:[^{}]|\{[^{}]*\})*\}",
+            self.page,
+        )
+        assert narrow is not None
+        assert "flex-wrap: wrap" in narrow.group(0)
+        assert "text-align: left" in narrow.group(0)
+        assert "pointer-events: none" in _css_rule(
+            self.page, '#tank-card .reset.refill-inline[aria-disabled="true"]'
+        )
+
+
 class TestWaterCard:
     """The water card puts the peak in the header and shortens the chart."""
 
