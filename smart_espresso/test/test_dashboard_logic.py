@@ -433,12 +433,14 @@ class TestRefillButton:
         assert 'id="tank-used-row"' in self.page
         assert "refill-inline" in self.page
         assert "refill-pill" in self.page
-        assert "font-variant-numeric: tabular-nums" in _css_rule(self.page, ".pair-lead")
+        assert "font-variant-numeric: tabular-nums" in _css_rule(
+            self.page, ".pair-lead"
+        )
         assert "font-variant-numeric: tabular-nums" in _css_rule(self.page, ".pair-sub")
         narrow = re.search(r"@media \(max-width: 374px\)\s*\{([^}]*)\}", self.page)
         assert narrow is not None
         assert "flex-wrap: wrap" in narrow.group(1)
-        assert 'pointer-events: none' in _css_rule(
+        assert "pointer-events: none" in _css_rule(
             self.page, '#tank-card .reset.refill-inline[aria-disabled="true"]'
         )
 
