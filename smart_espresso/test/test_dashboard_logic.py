@@ -437,9 +437,23 @@ class TestRefillButton:
             self.page, ".pair-lead"
         )
         assert "font-variant-numeric: tabular-nums" in _css_rule(self.page, ".pair-sub")
-        narrow = re.search(r"@media \(max-width: 374px\)\s*\{([^}]*)\}", self.page)
+        assert "repeat(2, minmax(0, 1fr))" in _css_rule(self.page, ".pair")
+        assert "white-space: normal" in _css_rule(self.page, ".pair-lead.empty")
+        assert "white-space: nowrap" in _css_rule(
+            self.page, "#tank-card .reset.refill-inline"
+        )
+        narrow = re.search(
+            r"@media \(max-width: 399px\)\s*\{(?:[^{}]|\{[^{}]*\})*"
+            r"#tank-card \.reset\.refill-inline(?:[^{}]|\{[^{}]*\})*\}",
+            self.page,
+        )
         assert narrow is not None
+<<<<<<< HEAD
         assert "flex-wrap: wrap" in narrow.group(1)
+=======
+        assert "flex-wrap: wrap" in narrow.group(0)
+        assert "text-align: left" in narrow.group(0)
+>>>>>>> origin/cursor/tank-room-c-8855
         assert "pointer-events: none" in _css_rule(
             self.page, '#tank-card .reset.refill-inline[aria-disabled="true"]'
         )
