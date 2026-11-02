@@ -2233,6 +2233,8 @@ function paintOfflineChrome() {
     lastMachine, null, connected, hasPayload, lastSeenAt, Date.now()
   );
   document.getElementById('state').classList.toggle('offline', offline.replace);
+  const chip = document.querySelector('.state-chip');
+  if (chip) chip.classList.toggle('offline', offline.replace);
   if (offline.replace) {
     const offlineCard = document.getElementById('state');
     setStateLabel(applyPill(offlineCard, offline.label));
