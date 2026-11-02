@@ -448,12 +448,8 @@ class TestRefillButton:
             self.page,
         )
         assert narrow is not None
-<<<<<<< HEAD
-        assert "flex-wrap: wrap" in narrow.group(1)
-=======
         assert "flex-wrap: wrap" in narrow.group(0)
         assert "text-align: left" in narrow.group(0)
->>>>>>> origin/cursor/tank-room-c-8855
         assert "pointer-events: none" in _css_rule(
             self.page, '#tank-card .reset.refill-inline[aria-disabled="true"]'
         )
