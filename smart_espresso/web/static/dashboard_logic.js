@@ -163,6 +163,7 @@
     return whole + " s";
   }
 
+  // The pill already names the state. This line only says how long.
   function durationLine(state, sinceSeconds) {
     return "for " + formatSpokenDuration(sinceSeconds);
   }

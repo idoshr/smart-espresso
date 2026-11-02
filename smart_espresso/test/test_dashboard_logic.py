@@ -437,8 +437,9 @@ class TestHero:
         chip = _css_rule(self.page, ".state-chip")
         assert "font-size: 12.5px" in chip
         assert "font-weight: 700" in chip
-        assert "var(--acc" in chip
-        dot = _css_rule(self.page, ".state-chip .state-label::before")
+        assert "border-radius: 99px" in chip
+        assert "var(--acc" in _css_rule(self.page, ".state.live .state-chip")
+        dot = _css_rule(self.page, ".state.live .state-chip .state-label::before")
         assert 'content: ""' in dot
         assert "display: inline-block" in dot
         assert "width: 6px" in dot

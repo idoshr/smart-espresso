@@ -330,8 +330,8 @@
   /* The state card is the hero. The chip names the state; the timer,
      the aim and the window live in the body. Colours are look C tokens
      so a later palette rebase does not rewrite these rules. */
-  .state { padding: 14px 18px 10px; }  .state-band {
-    display: flex;
+  .state { padding: 14px 18px 10px; }
+  .state-band {    display: flex;
     align-self: stretch;
     width: 100%;
     align-items: center;
@@ -451,47 +451,62 @@
     padding: 0;
     text-align: left;
   }
-    flex-wrap: wrap;
-    gap: 8px;
-    min-height: 0;
-    padding: 0;
-    background: transparent;
-    color: inherit;
-  }
 
-  .state-chip {
+  /* Quiet by default (Off). Live, warming, ready, alert and unknown
+     each restyle this one pill. The mark is opt-in so Off has no dot. */  .state-chip {
     display: inline-flex;
     align-items: center;
     gap: 7px;
-    background: var(--acc, var(--crema-ink));
-    color: var(--card);
-    font-family: var(--display);
+    background: var(--bg);
+    color: var(--ink);    font-family: var(--display);
     font-size: 12.5px;
     font-weight: 700;
     line-height: 1.2;
-    border-radius: 99px;
+    border: 1px solid var(--mute, var(--ink-faint));    border-radius: 99px;
     padding: 5px 12px;
   }
 
   .state-chip .lamp { display: none; }
-  .state-chip.offline {
-    background: transparent;
-    color: var(--mute, var(--ink-faint));
-    border: 1px dashed var(--mute, var(--ink-faint));
-  }
-  .state-chip.offline .state-label::before { display: none; }
   .state-chip .state-label::before {
+    content: "";
+    display: none;
+    width: 6px;
+    height: 6px;
+    margin: 0;
+    border-radius: 50%;
+    background: var(--card);
+    flex: none;
+  }
+  .state.live .state-chip {
+    background: var(--acc, var(--crema-ink));
+    color: var(--card);
+    border-color: var(--acc, var(--crema-ink));
+  }
+  .state.live .state-chip .state-label::before {
     content: "";
     display: inline-block;
     width: 6px;
     height: 6px;
-    margin-right: 7px;
-    border-radius: 50%;
-    background: var(--card);
-    vertical-align: middle;
-    flex: none;
   }
-  .state-label.pulse::before { animation: lamp-pulse 1.6s ease-in-out infinite; }
+  .state.off .state-chip,
+  .state.quiet .state-chip {
+    background: var(--bg);
+    color: var(--ink);
+    border: 1px solid var(--mute, var(--ink-faint));
+  }  .state-chip.offline {
+    background: transparent;
+    color: var(--mute, var(--ink-faint));
+    border: 1px dashed var(--mute, var(--ink-faint));
+  }
+  .state.unknown .state-chip {
+    background: transparent;
+    color: var(--mute, var(--ink-faint));
+    border: 1px dashed var(--mute, var(--ink-faint));
+  }
+  .state-chip.offline .state-label::before,
+  .state.unknown .state-chip .state-label::before,
+  .state.alert .state-chip .state-label::before,
+  .state.off .state-chip .state-label::before { display: none; }  .state-label.pulse::before { animation: lamp-pulse 1.6s ease-in-out infinite; }
 
   .state-label {
     font-size: inherit;
@@ -514,15 +529,20 @@
     color: var(--ink);
     border: 1px solid var(--ink);
   }
-  .state.ready .state-chip {
+  .state.heating .state-chip .state-label::before {
+    content: "";
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    margin: 0;
+    border-radius: 50%;
+    border: 1.5px solid currentColor;
+    background: transparent;
+    flex: none;
+  }  .state.ready .state-chip {
     background: transparent;
     color: var(--acc, var(--crema-ink));
     border: 1px solid var(--acc, var(--crema-ink));
-  }
-  .state.unknown .state-chip {
-    background: transparent;
-    color: var(--mute, var(--ink-faint));
-    border: 1px dashed var(--mute, var(--ink-faint));
   }
   .state.alert .state-chip {
     background: var(--alert);
@@ -741,7 +761,6 @@
     #hero-curve .cvh { margin-top: 22px; }
     #hero-curve .chart { height: 220px; margin-top: 12px; }
     #hero-curve .yl { font-size: 12px; }  }
-
   /* ---- pressure rings ---- */
   .rings { display: flex; flex-wrap: wrap; gap: 12px; }
   .rings > * { flex: 1 1 45%; min-width: 45%; padding: 14px 12px 12px; }
@@ -1435,8 +1454,7 @@
         </div>
         <div class="tl" id="hero-curve-axis">
           <span>0 s</span><span>10</span><span>20</span><span>30</span><span>40 s</span>
-        </div>      </div>
-    </div>
+        </div>      </div>    </div>
   </div>
 
   <!-- end state -->
