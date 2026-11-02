@@ -444,6 +444,71 @@ class TestShotHistoryApi(unittest.TestCase):
         self.assertEqual(detail["samples"][0]["head_bar"], 9.1)
         self.assertEqual(detail["samples"][0]["flow_mls"], 1.8)
 
+    def test_current_is_empty_when_no_shot_is_running(self):
+        body = self.client.get("/api/shots/current").get_json()
+        self.assertEqual(body, {"active": False, "started_at": None, "samples": []})
+        # A finished shot is not the running one.
+        self.record(26.0, 36.4)
+        done = self.client.get("/api/shots/current").get_json()
+        self.assertEqual(done["active"], False)
+        self.assertEqual(done["samples"], [])
+
+    def test_current_returns_samples_while_a_shot_is_running(self):
+        before = set(self.client.get("/api/status").get_json())
+        self.history.open()
+        self.history.sample(0.0, 9.0, 1.2, 2.0)
+        self.history.sample(0.25, 9.1, 1.21, 2.1)
+        body = self.client.get("/api/shots/current").get_json()
+        self.assertEqual(body["active"], True)
+        self.assertIsInstance(body["started_at"], str)
+        self.assertNotEqual(body["started_at"], "")
+        self.assertEqual(
+            body["samples"],
+            [
+                {"t": 0.0, "head_bar": 9.0, "boiler_bar": 1.2, "flow_mls": 2.0},
+                {"t": 0.25, "head_bar": 9.1, "boiler_bar": 1.21, "flow_mls": 2.1},
+            ],
+        )
+        # The one-second status poll stays a summary. Curves stay off it.
+        status = self.client.get("/api/status").get_json()
+        self.assertEqual(set(status), before)
+        self.assertNotIn("samples", status["shots"])
+        self.assertIsNone(status["machine"]["shot"])
+
+    def test_current_after_returns_only_newer_samples(self):
+        self.history.open()
+        self.history.sample(0.0, 9.0, 1.2, 2.0)
+        self.history.sample(0.25, 9.1, 1.2, 2.1)
+        self.history.sample(0.5, 9.2, 1.2, 2.2)
+        tail = self.client.get("/api/shots/current?after=0.25").get_json()
+        self.assertEqual(tail["active"], True)
+        self.assertEqual([point["t"] for point in tail["samples"]], [0.5])
+        self.assertEqual(tail["samples"][0]["head_bar"], 9.2)
+        caught_up = self.client.get("/api/shots/current?after=0.5").get_json()
+        self.assertEqual(caught_up["active"], True)
+        self.assertEqual(caught_up["samples"], [])
+        self.assertEqual(
+            self.client.get("/api/shots/current?after=no").status_code, 400
+        )
+        self.assertEqual(
+            self.client.get("/api/shots/current?after=no").get_json()["error"],
+            "invalid after",
+        )
+        self.assertEqual(
+            self.client.get("/api/shots/current?after=inf").status_code, 400
+        )
+
+    def test_current_stops_at_the_480_sample_cap(self):
+        self.history.open()
+        for index in range(500):
+            self.history.sample(index * 0.25, 9.0, 1.2, 2.0)
+        body = self.client.get("/api/shots/current").get_json()
+        self.assertEqual(body["active"], True)
+        self.assertEqual(len(body["samples"]), 480)
+        self.assertEqual(body["samples"][0]["t"], 0.0)
+        self.assertEqual(body["samples"][-1]["t"], 119.75)
+        self.assertLess(body["samples"][-1]["t"], 499 * 0.25)
+
     def test_corrupt_file_does_not_break_the_server(self):
         path = os.path.join(self.directory.name, "broken.json")
         with open(path, "w") as file:
