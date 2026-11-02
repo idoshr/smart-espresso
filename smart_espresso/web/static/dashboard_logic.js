@@ -199,11 +199,9 @@
       return eta ? base + " · " + eta + " to go" : base;
     }
     if (machine.state === "overpressure") {
-      return (
-        "for " +
-        formatSpokenDuration(machine.since_seconds) +
-        "\nCheck the pressurestat"
-      );
+      const check = "Check the pressurestat";
+      if (!(Number(machine.since_seconds) >= 60)) return check;
+      return "for " + formatSpokenDuration(machine.since_seconds) + " · " + check;
     }
     // since_seconds is how long the published state has been held, counted
     // from the transition into it. A Ready line before a minute is just

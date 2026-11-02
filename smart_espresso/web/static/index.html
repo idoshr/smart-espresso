@@ -368,7 +368,7 @@
     font-family: var(--display);
     font-size: 12.5px;
     font-weight: 700;
-    letter-spacing: -.01em;
+    letter-spacing: 0;
     line-height: 1.2;
     border: 1px solid var(--mute);
     border-radius: 99px;
@@ -2275,7 +2275,9 @@ function paintOfflineChrome() {
     lastMachine, null, connected, hasPayload, lastSeenAt, Date.now()
   );
   const chip = document.querySelector('.state-chip');
+  const stateCard = document.getElementById('state');
   if (chip) chip.classList.toggle('offline', offline.replace);
+  if (stateCard) stateCard.classList.toggle('offline', offline.replace);
   if (offline.replace) {
     setStateLabel(applyPill(document.getElementById('state'), offline.label));
     const detailEl = document.getElementById('state-detail');
