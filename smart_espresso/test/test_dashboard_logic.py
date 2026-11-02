@@ -390,6 +390,12 @@ class TestShippedShell:
         assert "font-variant-numeric: tabular-nums" in _css_rule(
             self.page, ".recent-tile .t"
         )
+        tiles = _css_rule(self.page, ".recent-tiles")
+        assert "repeat(4, minmax(0, 1fr))" in tiles
+        when = _css_rule(self.page, ".recent-tile .t")
+        assert "white-space: nowrap" not in when
+        assert "min-width: 0" in when
+        assert "min-width: 0" in _css_rule(self.page, ".recent-tile")
         bar = _css_rule(self.page, ".recent-bar")
         assert "height: 4px" in bar
         assert call("logic.recentTile(26, 34, 25, 30)")["label"] == "On target"

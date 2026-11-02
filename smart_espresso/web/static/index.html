@@ -790,7 +790,7 @@
   /* Four ml tiles. The bar is ml/45. On target uses the accent. */
   .recent-tiles {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 12px;
     margin-top: 8px;
   }
@@ -798,6 +798,7 @@
   .recent-tile {
     display: block;
     width: 100%;
+    min-width: 0;
     margin: 0;
     padding: 0;
     border: 0;
@@ -852,7 +853,7 @@
     font-size: 11px;
     font-weight: 500;
     color: var(--mute, var(--ink-faint));
-    white-space: nowrap;
+    min-width: 0;
     font-variant-numeric: tabular-nums;
   }
 
