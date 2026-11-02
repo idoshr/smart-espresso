@@ -365,7 +365,7 @@
     background: var(--bg);
     color: var(--ink);
     font-family: var(--display);
-    font-size: 14px;
+    font-size: 12.5px;
     font-weight: 700;
     letter-spacing: -.01em;
     line-height: 1.2;
@@ -452,103 +452,30 @@
     text-align: left;
   }
 
-  /* Quiet by default (Off). Live, warming, ready, alert and unknown
-     each restyle this one pill. The mark is opt-in so Off has no dot. */  .state-chip {
+  /* Layout wrapper only. The pill is .state-label, so this box has
+     no border and no background of its own. */
+  .state-chip {
     display: inline-flex;
     align-items: center;
-    gap: 7px;
-    background: var(--bg);
-    color: var(--ink);    font-family: var(--display);
-    font-size: 12.5px;
-    font-weight: 700;
-    line-height: 1.2;
-    border: 1px solid var(--mute, var(--ink-faint));    border-radius: 99px;
-    padding: 5px 12px;
+    max-width: 100%;
+    border: none;
+    background: transparent;
+    padding: 0;
   }
 
   .state-chip .lamp { display: none; }
-  .state-chip .state-label::before {
-    content: "";
-    display: none;
-    width: 6px;
-    height: 6px;
-    margin: 0;
-    border-radius: 50%;
-    background: var(--card);
-    flex: none;
-  }
-  .state.live .state-chip {
-    background: var(--acc, var(--crema-ink));
-    color: var(--card);
-    border-color: var(--acc, var(--crema-ink));
-  }
-  .state.live .state-chip .state-label::before {
-    content: "";
-    display: inline-block;
-    width: 6px;
-    height: 6px;
-  }
-  .state.off .state-chip,
-  .state.quiet .state-chip {
-    background: var(--bg);
-    color: var(--ink);
-    border: 1px solid var(--mute, var(--ink-faint));
-  }  .state-chip.offline {
+  .state-label { text-wrap: balance; }
+  .state-chip.offline .state-label {
     background: transparent;
-    color: var(--mute, var(--ink-faint));
-    border: 1px dashed var(--mute, var(--ink-faint));
-  }
-  .state.unknown .state-chip {
-    background: transparent;
-    color: var(--mute, var(--ink-faint));
-    border: 1px dashed var(--mute, var(--ink-faint));
+    color: var(--mute);
+    border: 1px dashed var(--mute);
   }
   .state-chip.offline .state-label::before,
-  .state.unknown .state-chip .state-label::before,
-  .state.alert .state-chip .state-label::before,
-  .state.off .state-chip .state-label::before { display: none; }  .state-label.pulse::before { animation: lamp-pulse 1.6s ease-in-out infinite; }
-
-  .state-label {
-    font-size: inherit;
-    font-weight: inherit;
-    letter-spacing: 0;
-    line-height: inherit;
-    color: inherit;
-    text-wrap: balance;
-  }
+  .state.alert .state-label::before,
+  .state.off .state-label::before { display: none; }
+  .state-label.pulse::before { animation: lamp-pulse 1.6s ease-in-out infinite; }
 
   .state-body { padding: 0; }
-  .state-chip .state-label {
-    background: transparent;
-    border: none;
-    padding: 0;
-    color: inherit;
-  }
-  .state.heating .state-chip {
-    background: var(--bg);
-    color: var(--ink);
-    border: 1px solid var(--ink);
-  }
-  .state.heating .state-chip .state-label::before {
-    content: "";
-    display: inline-block;
-    width: 8px;
-    height: 8px;
-    margin: 0;
-    border-radius: 50%;
-    border: 1.5px solid currentColor;
-    background: transparent;
-    flex: none;
-  }  .state.ready .state-chip {
-    background: transparent;
-    color: var(--acc, var(--crema-ink));
-    border: 1px solid var(--acc, var(--crema-ink));
-  }
-  .state.alert .state-chip {
-    background: var(--alert);
-    color: var(--alert-ink);
-    border-color: var(--alert);
-  }
 
   .state-detail {
     margin-top: 8px;
@@ -751,7 +678,7 @@
   }
 
   @media (min-width: 1000px) {
-    .state-chip { font-size: 14px; padding: 7px 15px; }
+    .state-label { font-size: 14px; padding: 7px 15px; }
     .timer b { font-size: 140px; margin-top: 14px; }
     .timer small { font-size: 40px; }
     .hint { font-size: 15px; padding-bottom: 22px; }

@@ -435,16 +435,20 @@ class TestHero:
 
     def test_chip_timer_and_window_match_the_hero(self):
         chip = _css_rule(self.page, ".state-chip")
-        assert "font-size: 12.5px" in chip
-        assert "font-weight: 700" in chip
-        assert "border-radius: 99px" in chip
-        assert "var(--acc" in _css_rule(self.page, ".state.live .state-chip")
-        dot = _css_rule(self.page, ".state.live .state-chip .state-label::before")
+        assert "border: none" in chip
+        assert "background: transparent" in chip
+        label = _css_rule(self.page, ".state-label")
+        assert "font-size: 12.5px" in label
+        assert "font-weight: 700" in label
+        assert "border-radius: 99px" in label
+        assert "padding: 5px 12px" in label
+        assert "gap: 7px" in label
+        assert "var(--acc" in _css_rule(self.page, ".state.live .state-label")
+        dot = _css_rule(self.page, ".state.live .state-label::before")
         assert 'content: ""' in dot
-        assert "display: inline-block" in dot
         assert "width: 6px" in dot
         assert "display: none" in _css_rule(self.page, ".state-chip .lamp")
-        offline = _css_rule(self.page, ".state-chip.offline")
+        offline = _css_rule(self.page, ".state-chip.offline .state-label")
         assert "background: transparent" in offline
         assert "border: 1px dashed var(--mute" in offline
         assert "var(--mute" in offline
