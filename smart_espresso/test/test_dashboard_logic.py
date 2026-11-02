@@ -150,7 +150,24 @@ class TestGlance:
         detail = call(
             "logic.heroDetail({state:'overpressure', since_seconds:4, shot:null}, 1.9)"
         )
-        assert detail == "for 4 s\nCheck the pressurestat"
+        assert call(
+            "logic.heroDetail({state:'overpressure', since_seconds:4, shot:null}, 1.9)"
+        ) == ("Check the pressurestat")
+        assert call(
+            "logic.heroDetail({state:'overpressure', since_seconds:59.9, shot:null}, 1.9)"
+        ) == ("Check the pressurestat")
+        assert (
+            call(
+                "logic.heroDetail({state:'overpressure', since_seconds:60, shot:null}, 1.9)"
+            )
+            == "for 1 min · Check the pressurestat"
+        )
+        assert (
+            call(
+                "logic.heroDetail({state:'overpressure', since_seconds:120, shot:null}, 1.9)"
+            )
+            == "for 2 min · Check the pressurestat"
+        )
         assert "Pressure high" not in detail
         assert "pressurestat. for" not in detail
 
@@ -233,16 +250,6 @@ class TestGlance:
         assert "Ready to pull" not in ready["label"]
         assert "Can't reach" not in ready["detail"]
         assert "Same Wi-Fi" not in ready["detail"]
-        quiet = _css_rule(
-            Path(__file__)
-            .resolve()
-            .parents[1]
-            .joinpath("web/static/index.html")
-            .read_text(encoding="utf-8"),
-            ".state.offline .state-label",
-        )
-        assert "border: 1px dashed var(--mute" in quiet
-        assert "background: transparent" in quiet
         banner = call("logic.offlineBanner(false, 3, 1000, 41000)")
         assert "Can't reach the machine. Last seen 40 s ago" in banner["title"]
         assert "Same Wi-Fi" in banner["title"]
@@ -530,7 +537,6 @@ class TestWaterCard:
         assert "border-radius: 0" in bar
         assert "min-width: 8px" in bar
         assert "max-width: 10px" in bar
-        # 326 px of card, 9 px bars and 4 px gaps: 25 blocks, not 40 hairlines.
         assert len(call("logic.flowBars(Array(40).fill(1), 326)")) == 25
         wide = self.page[self.page.find("@media (min-width: 1000px)") :]
         assert "height: 170px" in wide
@@ -582,22 +588,102 @@ class TestMeters:
         assert "font-weight: 700" in _css_rule(self.page, ".meter-num b")
 
 
-class TestLastShotChip:
-    """The chip is an inline span on main, so its box rules do nothing."""
+class TestHero:
+    """The state card is the look C hero: chip, timer, verdict, window."""
 
     def setup_method(self):
         self.page = (
             Path(__file__).resolve().parents[1] / "web" / "static" / "index.html"
         ).read_text(encoding="utf-8")
 
-    def test_chip_stays_inside_the_card_and_clears_the_track(self):
-        chip = _css_rule(self.page, ".last-pull")
-        assert "display: inline-block" in chip
-        assert "max-width: 100%" in chip
-        assert "text-overflow: ellipsis" in chip
-        assert "margin-top: 16px" in chip
-        assert "margin-top: 12px" in _css_rule(self.page, ".warm")
-        assert "margin-top: 12px" in _css_rule(self.page, ".shot")
+    def test_chip_timer_and_window_match_the_hero(self):
+        chip = _css_rule(self.page, ".state-chip")
+        assert "border: none" in chip
+        assert "background: transparent" in chip
+        label = _css_rule(self.page, ".state-label")
+        assert "font-size: 12.5px" in label
+        assert "font-weight: 700" in label
+        assert "border-radius: 99px" in label
+        assert "letter-spacing: 0" in label
+        assert "padding: 5px 12px" in label
+        assert "gap: 7px" in label
+        assert "var(--acc" in _css_rule(self.page, ".state.live .state-label")
+        dot = _css_rule(self.page, ".state.live .state-label::before")
+        assert 'content: ""' in dot
+        assert "width: 6px" in dot
+        assert "display: none" in _css_rule(self.page, ".state-chip .lamp")
+        assert "chip.classList.toggle('offline', offline.replace)" in self.page
+        assert "stateCard.classList.toggle('offline', offline.replace)" in self.page
+        offline = _css_rule(self.page, ".state-chip.offline .state-label")
+        assert "background: transparent" in offline
+        assert "border: 1px dashed var(--mute" in offline
+        assert "var(--mute" in offline
+        timer = _css_rule(self.page, ".timer b")
+        assert "font-size: 62px" in timer
+        assert "font-weight: 700" in timer
+        assert "letter-spacing: -.05em" in timer
+        unit = _css_rule(self.page, ".timer small")
+        assert "font-size: 22px" in unit
+        assert "font-weight: 600" in unit
+        verdict = _css_rule(self.page, ".hint b")
+        assert "font-size: 14px" in verdict
+        assert "font-weight: 700" in verdict
+        assert "var(--acc" in verdict
+        track = _css_rule(self.page, ".shot-track")
+        assert "height: 6px" in track
+        window = _css_rule(self.page, ".shot-track u")
+        assert "border: 1.5px solid var(--acc" in window
+        assert "border-radius: 5px" in window
+        assert 'id="shot-ml"' not in self.page
+        assert 'id="shot-curve"' not in self.page
+        assert "Pressure, this shot" not in self.page
+        assert "This shot's pressure" not in self.page
+        assert 'id="shot-verdict"' in self.page
+        assert ">0 s<" in self.page
+        assert ">25–30 s<" in self.page
+        assert ">40 s<" in self.page
+        wide = self.page[self.page.find("@media (min-width: 1000px)") :]
+        assert "font-size: 140px" in wide
+        assert "font-size: 40px" in wide
+        assert "height: 8px" in wide
+
+    def test_aim_stays_and_the_verdict_is_its_own_line(self):
+        for seconds in (12, 26, 34):
+            detail = call(
+                "logic.heroDetail({state:'brewing', since_seconds:1,"
+                " shot:{seconds:%s, ml:30}}, null)" % seconds
+            )
+            assert detail == "Aiming for 25 to 30 s"
+        assert call("logic.liveVerdict(12, 25, 30)") == "Short"
+        assert call("logic.liveVerdict(26, 25, 30)") == "On target"
+        assert call("logic.liveVerdict(34, 25, 30)") == "Long"
+        pressure = call(
+            "logic.heroDetail({state:'overpressure', since_seconds:4, shot:null}, 1.9)"
+        )
+        assert pressure == "Check the pressurestat"
+        assert "Pressure high" not in pressure
+
+    def test_ready_detail_waits_until_a_minute(self):
+        # since_seconds is the age of this Ready visit, not the last poll.
+        young = "{state:'ready', since_seconds:%s, shot:null}"
+        for seconds in (0, 0.4, 59, 59.9):
+            assert call("logic.heroDetail(%s, 1.2)" % (young % seconds)) == ""
+        assert call("logic.heroDetail(%s, 1.2)" % (young % 60)) == "for 1 min"
+        assert call("logic.heroDetail(%s, 1.2)" % (young % 120)) == "for 2 min"
+
+
+class TestLastShotChip:
+    """Look C drops the last-shot chip. Recent shots covers that glance."""
+
+    def setup_method(self):
+        self.page = (
+            Path(__file__).resolve().parents[1] / "web" / "static" / "index.html"
+        ).read_text(encoding="utf-8")
+
+    def test_last_shot_chip_is_absent(self):
+        assert 'id="last-pull"' not in self.page
+        assert "last-pull" not in self.page
+        assert "Last shot " not in self.page
 
 
 class TestTodayLine:
@@ -635,14 +721,13 @@ class TestWording:
         ).read_text(encoding="utf-8")
 
     def test_units_are_spaced_and_pressure_says_bar(self):
-        assert 'id="shot-seconds">0 s<' in self.page
+        assert 'id="shot-seconds">0</b><small>s</small>' in self.page
         assert 'id="bb-time">0 s<' in self.page
-        assert "${machine.shot.seconds.toFixed(0)} s" in self.page
+        assert "machine.shot.seconds.toFixed(0)" in self.page
         assert ">BAR<" not in self.page
         assert "<small>bar</small>" in self.page
 
     def test_live_pill_and_last_shot_chip_are_sentence_case(self):
-        assert "Last shot ${last.seconds.toFixed(0)} s" in self.page
         assert "last shot ${" not in self.page
         assert call("logic.pillText(true, 1000)") == "Live"
 
@@ -652,8 +737,8 @@ class TestWording:
         assert "text-align: left" in state
         assert "text-align: left" in _css_rule(self.page, ".state-detail")
         assert "justify-content: flex-start" in _css_rule(self.page, ".state-band")
-        assert "text-align: center" in _css_rule(self.page, ".shot")
-        assert "font-variant-numeric: tabular-nums" in _css_rule(self.page, ".shot b")
+        assert "text-align: left" in _css_rule(self.page, ".shot")
+        assert "font-variant-numeric: tabular-nums" in _css_rule(self.page, ".timer b")
         assert "font-variant-numeric: tabular-nums" in _css_rule(
             self.page, ".meter-num"
         )
