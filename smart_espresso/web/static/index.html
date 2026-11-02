@@ -940,72 +940,87 @@
     border-left: 10px solid var(--ink);
   }
 
-  /* ---- recent pulls ---- */
-  .pulls-track {
-    position: relative;
-    /* The strip is one control. Ticks themselves are not targets, so the
-       track carries the 44 px hit area and a tap snaps to the nearest. */
-    height: 44px;
-    margin: 8px 0 2px;
+  /* Four ml tiles. The bar is ml/45. On target uses the accent. */
+  .recent-tiles {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 12px;
+    margin-top: 8px;
+  }
+
+  .recent-tile {
+    display: block;
+    width: 100%;
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: left;
     cursor: pointer;
   }
 
-  .pulls-track::before {
-    content: "";
-    position: absolute;
-    left: 0; right: 0;
-    top: 50%;
-    height: 3px;
-    transform: translateY(-50%);
-    border-radius: 3px;
-    background: var(--edge);
+  .recent-tile .ml {
+    font-size: 17px;
+    font-weight: 700;
+    letter-spacing: -.02em;
+    line-height: 1.1;
+    font-variant-numeric: tabular-nums;
   }
 
-  .pulls-track u {
-    position: absolute;
-    top: 14px; bottom: 14px;
-    border-left: 1px solid var(--ink-faint);
-    border-right: 1px solid var(--ink-faint);
-    background: transparent;
+  .recent-tile .ml small {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--mute, var(--ink-faint));
   }
 
-  .pulls-track:focus-visible {
-    outline: 2px solid var(--ink-soft);
-    outline-offset: 3px;
-    border-radius: 8px;
+  .recent-bar {
+    height: 4px;
+    margin: 5px 0 6px;
+    border-radius: 2px;
+    background: var(--bg);
   }
 
-  /* Marks are drawn, not pressed. pointer-events stay off so a thumb
-     always hits the track, which then picks the nearest pull. */
-  .pulls-track i.mark {
-    position: absolute;
+  .recent-bar i {
     display: block;
-    top: 50%;
-    margin-top: -8px;
-    pointer-events: none;
+    height: 100%;
+    border-radius: 2px;
+    background: var(--mute, var(--ink-faint));
   }
 
-  .pulls-track i.now { transform: scale(1.25); }
+  .recent-bar i.ok { background: var(--acc, var(--crema-ink)); }
 
-  .pulls-track i.sel {
-    border-radius: 50%;
-    outline: 2px solid var(--ink);
-    outline-offset: 2px;
+  .recent-tile .v {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--mute, var(--ink-faint));
   }
 
-  .pulls-legend {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px 14px;
-    margin: 8px 0 0;
-    font-size: 12px;
+  .recent-tile .v.ok { color: var(--acc, var(--crema-ink)); }
+
+  .recent-tile .t {
+    display: block;
+    margin-top: 2px;
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--mute, var(--ink-faint));
+    min-width: 0;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .card-head .all-shots {
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
     color: var(--ink);
-  }
-
-  .pulls-legend span {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
+    font: inherit;
+    font-size: 12.5px;
+    font-weight: 600;
+    white-space: nowrap;
+    cursor: pointer;
   }
 
   /* ---- saved shots ---- */
@@ -1421,31 +1436,6 @@
 
   <div class="rings" id="rings"></div>
 
-  <div class="card" id="pulls-card" hidden>
-    <div class="card-head">
-      <span class="title">Recent shots</span>
-      <span class="note" id="pulls-note" role="status"></span>
-    </div>
-    <div class="pulls-track" id="pulls-track" role="listbox" tabindex="0"
-         aria-label="Recent shots" aria-orientation="horizontal">
-      <u id="pulls-window"></u>
-    </div>
-    <div class="axis"><span>0 s</span><span id="pulls-axis-end">40 s</span></div>
-    <p class="pulls-legend">
-      <span><i class="mark fast" aria-hidden="true"></i> short</span>
-      <span><i class="mark good" aria-hidden="true"></i> on target</span>
-      <span><i class="mark long" aria-hidden="true"></i> long</span>
-    </p>
-  </div>
-
-  <div class="card" id="history-card" hidden>
-    <div class="card-head">
-      <span class="title">Shot history</span>
-      <span class="note" id="history-note"></span>
-    </div>
-    <div class="history-list" id="history-list"></div>
-  </div>
-
   <div class="card" id="flow-card" hidden>
     <div class="card-head">
       <span class="title" id="flow-title">Water used, last 2 min</span>
@@ -1475,6 +1465,18 @@
       <div class="pair-lead" id="room-temp">—</div>
       <div class="pair-sub" id="room-humidity">No sensor reading</div>
     </div>
+  </div>
+
+  <div class="card" id="pulls-card" hidden>
+    <div class="card-head">
+      <span class="title">Recent shots</span>
+      <button type="button" class="all-shots" id="all-shots" aria-expanded="false" hidden>All 0 shots ›</button>
+    </div>
+    <div class="recent-tiles" id="recent-tiles" aria-label="Recent shots"></div>
+    <div id="history-card" hidden>
+      <div class="history-list" id="history-list"></div>
+    </div>
+    <div class="history-detail" id="shot-sheet" hidden></div>
   </div>
 </div>
 
@@ -1764,76 +1766,85 @@ function renderMeters(pressure) {
   }).join('')}</div>`;
 }
 
-// ---- recent pulls --------------------------------------------------------
+// ---- recent shots --------------------------------------------------------
 
 let pullsSig = '';
-let pullHistory = [];
-let selectedPull = -1;
 
-function renderPulls(history) {
-  const cardEl = document.getElementById('pulls-card');
-  cardEl.hidden = !history.length;
-  if (!history.length) {
-    pullHistory = [];
-    selectedPull = -1;
-    // Forget the signature too: a pull that reappears with the same
-    // numbers (server restart, one new pull) must still rebuild.
-    pullsSig = '';
-    return;
-  }
+function renderRecent(block) {
+  const card = document.getElementById('pulls-card');
+  const recent = (block && block.recent) || [];
+  const count = (block && block.count) || recent.length;
+  card.hidden = count === 0 && recent.length === 0;
+  const link = document.getElementById('all-shots');
+  const linkInfo = DashboardLogic.allShotsLink(count, 4);
+  link.hidden = linkInfo.hidden;
+  link.textContent = linkInfo.text;
 
-  // Recorded pulls never change, so the strip is only redrawn when the
-  // sequence itself changes (a new pull, or one aging out of the memory).
-  // The yield rides along in the signature: two pulls of the same length
-  // with different volumes must still redraw the ticks.
-  const sig = history.map(s => `${s.seconds}:${s.ml}`).join(',');
+  const tiles = recent.slice(0, 4);
+  const sig = tiles.map(shot => `${shot.id}:${shot.seconds}:${shot.ml}:${shot.started_at}`).join(',');
   if (sig !== pullsSig) {
     pullsSig = sig;
-    pullHistory = history;
-    selectedPull = -1;   // a rebuilt strip has nothing selected
-    document.getElementById('pulls-track').removeAttribute('aria-activedescendant');
-
-    Object.assign(document.getElementById('pulls-window').style, windowStyle());
-
-    const track = document.getElementById('pulls-track');
-    track.querySelectorAll('i').forEach(tick => tick.remove());
-    history.forEach((shot, i) => {
-      const verdict = verdictOf(shot.seconds);
-      const tick = document.createElement('i');
-      tick.className = `mark ${verdict.key}${i === history.length - 1 ? ' now' : ''}`;
-      const along = Math.max(0, Math.min(1, shot.seconds / SHOT_SCALE));
-      tick.style.left = `${along * 100}%`;
-      tick.style.marginLeft = '-8px';
-      // The mark is not a target (overlapping ticks used to steal the tap).
-      // It stays an option so the track can point at it from the keyboard.
-      tick.id = `pull-${i}`;
-      tick.setAttribute('role', 'option');
-      tick.setAttribute('aria-selected', 'false');
-      tick.setAttribute('aria-label',
-        `shot ${i + 1}: ${shot.seconds.toFixed(0)} seconds, ${shot.ml.toFixed(0)} ml, ${verdict.label}`);
-      track.appendChild(tick);
-    });
+    paintRecentTiles(tiles);
   }
 
-  // The note is only the open tick. The count stays on Shot history.
-  const note = document.getElementById('pulls-note');
-  const sel = pullHistory[selectedPull];
-  note.textContent = sel
-    ? `${sel.seconds.toFixed(0)} s · ${sel.ml.toFixed(0)} ml · ${verdictOf(sel.seconds).label}`
-    : '';
+  const historySigNext = recent.map(shot => `${shot.id}:${shot.seconds}:${shot.ml}`).join(',');
+  if (!recent.length) {
+    historySig = '';
+    historyShots = [];
+    selectedShotId = null;
+    document.getElementById('shot-sheet').hidden = true;
+    document.getElementById('history-list').innerHTML = '';
+    return;
+  }
+  if (historySigNext === historySig) return;
+  historySig = historySigNext;
+  historyShots = recent;
+  if (!recent.some(shot => shot.id === selectedShotId)) {
+    selectedShotId = null;
+    document.getElementById('shot-sheet').hidden = true;
+  }
+  paintHistoryList();
+  if (selectedShotId != null) showShot(selectedShotId, false);
 }
 
-function selectPull(index, toggle) {
-  selectedPull = toggle && selectedPull === index ? -1 : index;
-  const track = document.getElementById('pulls-track');
-  track.querySelectorAll('i').forEach((tick, i) => {
-    const on = i === selectedPull;
-    tick.classList.toggle('sel', on);
-    tick.setAttribute('aria-selected', String(on));
+function paintRecentTiles(tiles) {
+  const host = document.getElementById('recent-tiles');
+  host.innerHTML = '';
+  tiles.forEach(shot => {
+    const tile = DashboardLogic.recentTile(
+      Number(shot.seconds), Number(shot.ml), SHOT_WINDOW[0], SHOT_WINDOW[1]
+    );
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'recent-tile';
+    button.addEventListener('click', () => toggleShot(shot.id));
+
+    const ml = document.createElement('div');
+    ml.className = 'ml';
+    ml.append(document.createTextNode(Number(shot.ml).toFixed(0)));
+    const unit = document.createElement('small');
+    unit.textContent = ' ml';
+    ml.append(unit);
+
+    const bar = document.createElement('div');
+    bar.className = 'recent-bar';
+    const fill = document.createElement('i');
+    if (tile.key === 'good') fill.className = 'ok';
+    fill.style.width = `${Math.round(tile.bar * 100)}%`;
+    bar.append(fill);
+
+    const verdict = document.createElement('div');
+    verdict.className = tile.key === 'good' ? 'v ok' : 'v';
+    if (tile.mark) verdict.append(document.createTextNode(tile.mark + ' '));
+    verdict.append(document.createTextNode(tile.label));
+
+    const when = document.createElement('span');
+    when.className = 't';
+    when.textContent = shotWhen(shot.started_at);
+
+    button.append(ml, bar, verdict, when);
+    host.appendChild(button);
   });
-  if (selectedPull >= 0) track.setAttribute('aria-activedescendant', `pull-${selectedPull}`);
-  else track.removeAttribute('aria-activedescendant');
-  renderPulls(pullHistory);   // same signature: only the note is rewritten
 }
 
 // ---- shot history --------------------------------------------------------
@@ -1860,33 +1871,13 @@ function shotWhen(iso) {
   if (date.toDateString() === today.toDateString()) return time;
   const yesterday = new Date(today);
   yesterday.setDate(today.getDate() - 1);
-  if (date.toDateString() === yesterday.toDateString()) return `yesterday ${time}`;
+  if (date.toDateString() === yesterday.toDateString()) return `Yesterday ${time}`;
   const day = date.toLocaleDateString([], { month: 'short', day: 'numeric' });
   return `${day} ${time}`;
 }
 
 function renderHistory(block) {
-  const card = document.getElementById('history-card');
-  const recent = (block && block.recent) || [];
-  if (!recent.length) {
-    card.hidden = true;
-    historySig = '';
-    historyShots = [];
-    selectedShotId = null;
-    return;
-  }
-  card.hidden = false;
-  const count = block.count || recent.length;
-  document.getElementById('history-note').textContent =
-    count === 1 ? '1 saved' : `${count} saved`;
-
-  const sig = recent.map(shot => `${shot.id}:${shot.seconds}:${shot.ml}`).join(',');
-  if (sig === historySig) return;
-  historySig = sig;
-  historyShots = recent;
-  if (!recent.some(shot => shot.id === selectedShotId)) selectedShotId = null;
-  paintHistoryList();
-  if (selectedShotId != null) showShot(selectedShotId, false);
+  renderRecent(block);
 }
 
 function paintHistoryList() {
@@ -1900,7 +1891,9 @@ function paintHistoryList() {
     button.setAttribute('aria-pressed', String(selected));
     button.setAttribute('aria-expanded', String(selected));
 
-    const verdict = verdictOf(Number(shot.seconds));
+    const verdict = DashboardLogic.recentTile(
+      Number(shot.seconds), Number(shot.ml), SHOT_WINDOW[0], SHOT_WINDOW[1]
+    );
     const mark = document.createElement('span');
     mark.className = `mark ${verdict.key}`;
     mark.setAttribute('aria-hidden', 'true');
@@ -1918,12 +1911,6 @@ function paintHistoryList() {
     button.addEventListener('click', () => toggleShot(shot.id));
     list.appendChild(button);
 
-    if (selected) {
-      const detail = document.createElement('div');
-      detail.className = 'history-detail';
-      detail.id = 'history-detail';
-      list.appendChild(detail);
-    }
   });
 }
 
@@ -1934,8 +1921,10 @@ function toggleShot(id) {
 }
 
 async function showShot(id, scroll) {
-  const detail = document.getElementById('history-detail');
+  const detail = document.getElementById('shot-sheet');
   if (!detail) return;
+  detail.hidden = false;
+  detail.className = 'history-detail';
   const token = ++shotLoadToken;
   const cached = shotCache.get(id);
   if (cached) {
@@ -2045,7 +2034,7 @@ function paintShot(detail, shot) {
     shotWhen(shot.started_at),
     `${seconds.toFixed(1)} s`,
     `${ml.toFixed(1)} ml`,
-    verdictOf(seconds).label,
+    DashboardLogic.recentTile(seconds, ml, SHOT_WINDOW[0], SHOT_WINDOW[1]).label,
   ];
   if (typeof shot.peak_head_bar === 'number') bits.push(`${shot.peak_head_bar.toFixed(1)} bar`);
   if (typeof shot.peak_flow_mls === 'number') bits.push(`${shot.peak_flow_mls.toFixed(1)} ml/s`);
@@ -2209,8 +2198,7 @@ function renderToday(today) {
 function render(data) {
   renderState(data.machine, data.pressure);
   renderMeters(data.pressure);
-  renderPulls(data.machine.history || []);
-  renderHistory(data.shots);
+  renderRecent(data.shots);
   renderToday(data.machine && data.machine.today);
 
   const flowCard = document.getElementById('flow-card');
@@ -2524,34 +2512,11 @@ wakeBtn.addEventListener('click', () => {
 
 if ('wakeLock' in navigator) wakeBtn.hidden = false;
 
-// Axis labels are derived from the scale, never hardcoded, so they follow
-// it when the extraction window moves.
-document.getElementById('pulls-axis-end').textContent = `${SHOT_SCALE} s`;
-
-// One target for the whole strip. A tap (or the arrow keys) resolves to
-// the nearest pull, including when the marks sit closer than a thumb.
-const pullsTrack = document.getElementById('pulls-track');
-pullsTrack.addEventListener('click', (event) => {
-  if (!pullHistory.length) return;
-  const rect = pullsTrack.getBoundingClientRect();
-  const centers = pullHistory.map(shot => {
-    const along = Math.max(0, Math.min(1, shot.seconds / SHOT_SCALE));
-    return rect.left + along * rect.width;
-  });
-  const index = DashboardLogic.nearestTickIndex(centers, event.clientX);
-  if (index >= 0) selectPull(index, true);
-});
-pullsTrack.addEventListener('keydown', (event) => {
-  if (!pullHistory.length) return;
-  const key = event.key;
-  if (key !== 'ArrowLeft' && key !== 'ArrowRight' && key !== 'Home' && key !== 'End') return;
-  event.preventDefault();
-  let index = selectedPull;
-  if (key === 'Home') index = 0;
-  else if (key === 'End') index = pullHistory.length - 1;
-  else if (key === 'ArrowRight') index = selectedPull < 0 ? 0 : Math.min(pullHistory.length - 1, selectedPull + 1);
-  else index = selectedPull < 0 ? pullHistory.length - 1 : Math.max(0, selectedPull - 1);
-  selectPull(index, false);
+document.getElementById('all-shots').addEventListener('click', () => {
+  const list = document.getElementById('history-card');
+  const open = list.hidden;
+  list.hidden = !open;
+  document.getElementById('all-shots').setAttribute('aria-expanded', String(open));
 });
 
 // The shell lives in the service worker, so the page opens instantly and
