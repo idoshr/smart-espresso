@@ -18,7 +18,24 @@
     return "offline";
   }
 
-  // Null while the page has never applied a payload. The footer must not
+  function todayVolume(ml) {
+    const n = Number(ml);
+    if (!Number.isFinite(n)) return "0 ml";
+    if (n >= 10000) return (n / 1000).toFixed(1) + " L";
+    return Math.round(n).toLocaleString("en-US") + " ml";
+  }
+
+  // Saved shots only. The shot still running is not in the tally, so the
+  // first one of the day leaves the line empty instead of "No shots yet".
+  function todayLine(today, shotActive) {
+    if (!today) return null;
+    const shots = Number(today.shots) || 0;
+    if (shots <= 0) return shotActive ? "" : "No shots yet today";
+    const noun = shots === 1 ? "shot" : "shots";
+    return shots + " " + noun + " · " + todayVolume(today.ml) + " today";
+  }
+
+  // Null while the page has never applied a payload. The banner must not
   // invent a "last seen" age from the moment the document loaded.
   function footerText(connected, lastSeenAt, now) {
     if (connected) return null;
@@ -298,7 +315,8 @@
     if (!connected && hasPayload) {
       return {
         replace: true,
-        label: offlineMessage(lastSeenAt, now),
+        label: "Offline",
+        detail: "Readings below are from before it went offline.",
         showShot: false,
         showTarget: false,
       };
@@ -307,6 +325,7 @@
     return {
       replace: false,
       label: live.label,
+      detail: "",
       showShot: live.showShot,
       showTarget: live.showTarget,
     };
@@ -351,6 +370,7 @@
   return {
     pillText: pillText,
     footerText: footerText,
+    todayLine: todayLine,
     sensorCardVisible: sensorCardVisible,
     formatReading: formatReading,
     readingFaulted: readingFaulted,
