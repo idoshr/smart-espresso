@@ -180,7 +180,7 @@ class TestGlance:
         )
         assert (
             call("logic.heroDetail({state:'off', since_seconds:4, shot:null}, null)")
-            == "for 4 s"
+            == ""
         )
         assert (
             call("logic.heroDetail({state:'steaming', since_seconds:26, shot:null}, 1)")
@@ -677,6 +677,13 @@ class TestHero:
             assert call("logic.heroDetail(%s, 1.2)" % (young % seconds)) == ""
         assert call("logic.heroDetail(%s, 1.2)" % (young % 60)) == "for 1 min"
         assert call("logic.heroDetail(%s, 1.2)" % (young % 120)) == "for 2 min"
+
+    def test_off_detail_waits_until_a_minute(self):
+        young = "{state:'off', since_seconds:%s, shot:null}"
+        for seconds in (0, 2, 59, 59.9):
+            assert call("logic.heroDetail(%s, null)" % (young % seconds)) == ""
+        assert call("logic.heroDetail(%s, null)" % (young % 60)) == "for 1 min"
+        assert call("logic.heroDetail(%s, null)" % (young % 120)) == "for 2 min"
 
 
 class TestHeroCurve:

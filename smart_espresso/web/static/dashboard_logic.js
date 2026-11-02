@@ -218,7 +218,10 @@
       if (!(Number(machine.since_seconds) >= 60)) return check;
       return "for " + formatSpokenDuration(machine.since_seconds) + " · " + check;
     }
-    if (machine.state === "ready" && !(Number(machine.since_seconds) >= 60)) {
+    if (
+      (machine.state === "ready" || machine.state === "off") &&
+      !(Number(machine.since_seconds) >= 60)
+    ) {
       return "";
     }
     return durationLine(machine.state, machine.since_seconds);
