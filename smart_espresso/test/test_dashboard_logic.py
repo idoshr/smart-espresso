@@ -498,16 +498,13 @@ class TestHero:
         young = "{state:'ready', since_seconds:%s, shot:null}"
         for seconds in (0, 0.4, 59, 59.9):
             assert call("logic.heroDetail(%s, 1.2)" % (young % seconds)) == ""
-        assert (
-            call("logic.heroDetail(%s, 1.2)" % (young % 60)) == "for 1 min"
-        )
-        assert (
-            call("logic.heroDetail(%s, 1.2)" % (young % 120)) == "for 2 min"
-        )
+        assert call("logic.heroDetail(%s, 1.2)" % (young % 60)) == "for 1 min"
+        assert call("logic.heroDetail(%s, 1.2)" % (young % 120)) == "for 2 min"
 
 
 class TestHeroCurve:
     """The hero curve: live tail, a reset on the next shot, last curve in Ready."""
+
     def setup_method(self):
         self.page = (
             Path(__file__).resolve().parents[1] / "web" / "static" / "index.html"
@@ -545,8 +542,7 @@ class TestHeroCurve:
         second = call(
             "logic.applyCurrentSamples(%s,"
             " {active:true, started_at:'shot-a',"
-            " samples:[{t:0.5, head_bar:4},{t:0.75, head_bar:9}]})"
-            % json.dumps(first)
+            " samples:[{t:0.5, head_bar:4},{t:0.75, head_bar:9}]})" % json.dumps(first)
         )
         assert [point["t"] for point in second["samples"]] == [0.25, 0.5, 0.75]
         assert [point["head_bar"] for point in second["samples"]] == [2, 4, 9]
@@ -588,8 +584,7 @@ class TestHeroCurve:
         live = [{"t": 10, "head_bar": 8}]
         brewing = call(
             "logic.heroCurveSlot({state:'brewing', shotActive:true,"
-            " liveSamples:%s, lastSamples:%s})"
-            % (json.dumps(live), json.dumps(last))
+            " liveSamples:%s, lastSamples:%s})" % (json.dumps(live), json.dumps(last))
         )
         assert brewing["hidden"] is False
         assert brewing["source"] == "live"
@@ -641,8 +636,7 @@ class TestHeroCurve:
         assert ready["label"] == "Last shot's pressure"
         nxt = call(
             "logic.heroCurveSlot({state:'brewing', shotActive:true,"
-            " liveSamples:[{t:0.5, head_bar:1}], lastSamples:%s})"
-            % json.dumps(saved)
+            " liveSamples:[{t:0.5, head_bar:1}], lastSamples:%s})" % json.dumps(saved)
         )
         assert nxt["label"] == "This shot's pressure"
         assert nxt["source"] == "live"
@@ -664,7 +658,9 @@ class TestHeroCurve:
         assert kept[-1]["head_bar"] == 9
         assert kept[-1]["flow_mls"] > 0
         assert all(point["head_bar"] > 0 or point["t"] == 0 for point in kept)
-        assert all(point["head_bar"] != 0 or point["flow_mls"] <= 0 for point in kept[1:])
+        assert all(
+            point["head_bar"] != 0 or point["flow_mls"] <= 0 for point in kept[1:]
+        )
         ready = call(
             "logic.heroCurveSlot({state:'ready', shotActive:false,"
             " liveSamples:[], lastSamples:%s})" % json.dumps(saved)

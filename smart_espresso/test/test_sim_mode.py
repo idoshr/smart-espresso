@@ -46,9 +46,7 @@ class TestSimMode(unittest.TestCase):
         self.assertLess(mid, 8.0)
         self.assertGreater(bar_at(6.5), 8.5)
         # A non-shot stretch is unchanged: ready stays at its scripted head.
-        ready = next(
-            segment for segment in machine.segments if segment.kind == "ready"
-        )
+        ready = next(segment for segment in machine.segments if segment.kind == "ready")
         volts = machine.voltage(SimulatedMachine.HEAD, ready.start + 0.5)
         ready_bar = (volts - 0.5) * 5.0
         self.assertAlmostEqual(ready_bar, ready.head_bar, places=2)
