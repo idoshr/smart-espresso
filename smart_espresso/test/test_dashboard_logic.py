@@ -150,7 +150,24 @@ class TestGlance:
         detail = call(
             "logic.heroDetail({state:'overpressure', since_seconds:4, shot:null}, 1.9)"
         )
-        assert detail == "for 4 s\nCheck the pressurestat"
+        assert call(
+            "logic.heroDetail({state:'overpressure', since_seconds:4, shot:null}, 1.9)"
+        ) == ("Check the pressurestat")
+        assert call(
+            "logic.heroDetail({state:'overpressure', since_seconds:59.9, shot:null}, 1.9)"
+        ) == ("Check the pressurestat")
+        assert (
+            call(
+                "logic.heroDetail({state:'overpressure', since_seconds:60, shot:null}, 1.9)"
+            )
+            == "for 1 min · Check the pressurestat"
+        )
+        assert (
+            call(
+                "logic.heroDetail({state:'overpressure', since_seconds:120, shot:null}, 1.9)"
+            )
+            == "for 2 min · Check the pressurestat"
+        )
         assert "Pressure high" not in detail
         assert "pressurestat. for" not in detail
 
@@ -159,21 +176,21 @@ class TestGlance:
             call(
                 "logic.heroDetail({state:'flushing', since_seconds:26, shot:null}, null)"
             )
-            == "for 26 s"
+            == ""
         )
         assert (
             call("logic.heroDetail({state:'off', since_seconds:4, shot:null}, null)")
-            == "for 4 s"
+            == ""
         )
         assert (
             call("logic.heroDetail({state:'steaming', since_seconds:26, shot:null}, 1)")
-            == "for 26 s"
+            == ""
         )
         assert (
             call(
                 "logic.heroDetail({state:'unknown', since_seconds:8, shot:null}, null)"
             )
-            == "for 8 s"
+            == ""
         )
         aiming = call(
             "logic.heroDetail({state:'brewing', since_seconds:12, shot:{seconds:12}}, null)"
@@ -228,13 +245,20 @@ class TestGlance:
         )
         assert ready["replace"] is True
         assert ready["showShot"] is False
+        assert ready["label"] == "Offline"
+        assert ready["detail"] == "Readings below are from before it went offline."
         assert "Ready to pull" not in ready["label"]
-        assert "Last seen 40 s ago" in ready["label"]
+        assert "Can't reach" not in ready["detail"]
+        assert "Same Wi-Fi" not in ready["detail"]
+        banner = call("logic.offlineBanner(false, 3, 1000, 41000)")
+        assert "Can't reach the machine. Last seen 40 s ago" in banner["title"]
+        assert "Same Wi-Fi" in banner["title"]
         brewing = call(
             "logic.shownState({state:'brewing', label:'Pulling a shot',"
             " shot:{seconds:20, ml:30}}, 9, false, true, 1000, 41000)"
         )
         assert brewing["showShot"] is False
+        assert brewing["label"] == "Offline"
         assert "Pulling a shot" not in brewing["label"]
         live = call(
             "logic.shownState({state:'ready', label:'Ready to pull', shot:null},"
@@ -340,7 +364,9 @@ class TestShippedShell:
         assert 'class="dot off"' in self.page
 
     def test_markup_does_not_ship_a_last_seen_footer(self):
-        assert 'id="footer">never connected' in self.page
+        # The offline banner already says Last seen. A footer would repeat it.
+        assert 'id="footer"' not in self.page
+        assert "dashboard up" not in self.page
         assert "let lastSeenAt = null" in self.page
         assert "let lastSeenAt = Date.now()" not in self.page
 
@@ -373,22 +399,182 @@ class TestShippedShell:
         assert handler.index("tankPostAllowed") < handler.index("fetch(")
         assert "resetFailureToast" in handler
 
-    def test_verdict_is_written_and_ticks_are_not_buttons(self):
-        assert 'class="pulls-legend"' in self.page
-        assert "> short<" in self.page
-        assert "> on target<" in self.page
-        assert "> long<" in self.page
-        assert "pointer-events: none" in self.page
-        assert "nearestTickIndex" in self.page
-        assert "verdict.label" in self.page
+    def test_recent_tiles_open_a_shot_and_the_log(self):
+        assert 'class="pulls-legend"' not in self.page
+        assert 'id="pulls-track"' not in self.page
+        assert 'id="recent-tiles"' in self.page
+        assert 'id="all-shots"' in self.page
+        assert 'id="history-card" hidden' in self.page
+        assert "Yesterday" in self.page
+        assert "toLocaleTimeString" in self.page
+        assert "createElement('button')" in self.page
         assert "setAttribute('role', 'button')" not in self.page
-        assert 'role="listbox"' in self.page
+        tile = _css_rule(self.page, ".recent-tile .ml")
+        assert "font-size: 17px" in tile
+        assert "font-weight: 700" in tile
+        assert "font-variant-numeric: tabular-nums" in tile
+        assert "font-variant-numeric: tabular-nums" in _css_rule(
+            self.page, ".recent-tile .t"
+        )
+        tiles = _css_rule(self.page, ".recent-tiles")
+        assert "repeat(4, minmax(0, 1fr))" in tiles
+        when = _css_rule(self.page, ".recent-tile .t")
+        assert "white-space: nowrap" not in when
+        assert "min-width: 0" in when
+        assert "white-space: nowrap" in _css_rule(self.page, ".recent-tile .t-time")
+        assert "t-day" in self.page
+        assert "shotWhenParts" in self.page
+        # Oct 31 8:42 AM and Yesterday 12:17 PM, seen on 2 Nov 2026.
+        # The meridiem stays on the time, so a narrow tile cannot leave AM/PM alone.
+        stamped = subprocess.run(
+            [
+                "node",
+                "-e",
+                "const fs=require('fs');"
+                "const html=fs.readFileSync(process.argv[1],'utf8');"
+                "const start=html.indexOf('function shotWhenParts');"
+                "const end=html.indexOf('function shotWhen(');"
+                "const shotWhenParts=new Function(html.slice(start,end)+';return shotWhenParts;')();"
+                "const Orig=Date;"
+                "function at(iso, nowMs){"
+                "function Fake(...args){"
+                "if(!(this instanceof Fake)) return new Orig(...(args.length?args:[nowMs])).toString();"
+                "return new Orig(...(args.length?args:[nowMs]));"
+                "}"
+                "Fake.prototype=Orig.prototype; Fake.now=()=>nowMs; Fake.parse=Orig.parse; Fake.UTC=Orig.UTC;"
+                "global.Date=Fake;"
+                "try{return shotWhenParts(iso);}finally{global.Date=Orig;}"
+                "}"
+                "const now=new Date(2026,10,2,15,0,0).getTime();"
+                "process.stdout.write(JSON.stringify({"
+                "oct:at('2026-10-31T08:42:00',now),"
+                "yest:at('2026-11-01T12:17:00',now)"
+                "}));",
+                str(
+                    Path(__file__).resolve().parents[1]
+                    / "web"
+                    / "static"
+                    / "index.html"
+                ),
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        parts = json.loads(stamped.stdout)
+        assert parts["oct"] == {"day": "Oct 31", "time": "8:42 AM"}
+        assert parts["yest"] == {"day": "Yesterday", "time": "12:17 PM"}
+
+    def test_desktop_shot_line_is_one_locale_line(self):
+        now = "2026-11-02T15:00:00"
+        today = call("logic.shotWhenLine('2026-11-02T18:05:00', '%s')" % now)
+        yesterday = call("logic.shotWhenLine('2026-11-01T18:05:00', '%s')" % now)
+        older = call("logic.shotWhenLine('2026-10-31T08:42:00', '%s')" % now)
+        morning = call("logic.shotWhenLine('2026-11-02T08:42:00', '%s')" % now)
+        # Device locale, same clock as the phone parts test: 12-hour en-US.
+        assert today == "6:05 PM"
+        assert yesterday == "Yesterday 6:05 PM"
+        assert older == "Oct 31, 8:42 AM"
+        assert morning == "8:42 AM"
+        assert "Today" not in today
+        assert "Yest." not in yesterday
+
+    def test_recent_tiles_keep_a_fixed_bar(self):
+        assert "min-width: 0" in _css_rule(self.page, ".recent-tile")
+        bar = _css_rule(self.page, ".recent-bar")
+        assert "height: 4px" in bar
+        assert call("logic.recentTile(26, 34, 25, 30)")["label"] == "On target"
+        assert call("logic.recentTile(26, 34, 25, 30)")["bar"] == 34 / 45
+        short = call("logic.recentTile(12, 22, 25, 30)")
+        assert short["label"] == "Short"
+        assert short["mark"] == "\u2212"
+        assert call("logic.recentTile(40, 50, 25, 30)")["label"] == "Long"
+        assert call("logic.recentTile(40, 90, 25, 30)")["bar"] == 1
+        assert call("logic.allShotsLink(1, 4)")["hidden"] is True
+        assert call("logic.allShotsLink(4, 4)")["hidden"] is True
+        five = call("logic.allShotsLink(5, 4)")
+        assert five["hidden"] is False
+        assert five["text"] == "All 5 shots \u203A"
+        tank = self.page.find('id="tank-card"')
+        room = self.page.find('id="other-card"')
+        recent = self.page.find('id="pulls-card"')
+        assert tank < room < recent
+        head = self.page[recent : self.page.find('id="recent-tiles"', recent)]
+        assert 'id="all-shots"' in head
+        assert "card-head .all-shots" in self.page
 
 
 def _css_rule(page, selector):
     match = re.search(re.escape(selector) + r"\s*\{([^}]*)\}", page)
     assert match, selector
     return match.group(1)
+
+
+class TestTankLead:
+    def test_zero_shots_says_the_tank_is_probably_empty(self):
+        assert (
+            call("logic.tankLead(0)")
+            == "Tank's probably empty. Refill before the next shot."
+        )
+        assert call("logic.tankLead(1)") == "About 1 shot left"
+        assert call("logic.tankLead(16)") == "About 16 shots left"
+        assert call("logic.tankLead(43)") == "About 43 shots left"
+        assert call("logic.humidityLabel(45.2)") == "45% humidity"
+        assert call("logic.humidityLabel(45.6)") == "46% humidity"
+        assert call("logic.tankMeterHidden(0)") is True
+        assert call("logic.tankMeterHidden(12)") is False
+
+
+class TestRefillButton:
+    def setup_method(self):
+        self.page = (
+            Path(__file__).resolve().parents[1] / "web" / "static" / "index.html"
+        ).read_text(encoding="utf-8")
+
+    def test_short_label_keeps_the_full_accessible_name(self):
+        assert 'aria-label="I refilled the tank"' in self.page
+        assert 'class="refill-long">I refilled the tank<' in self.page
+        assert 'class="refill-short">I refilled it<' in self.page
+        assert "@container refill" in self.page
+        assert "tankMeterHidden" in self.page
+        assert "Reconnect to save the refill" in self.page
+        assert "Reconnect to mark the tank filled" not in self.page
+
+    def test_normal_refill_is_short_text_and_empty_stays_a_pill(self):
+        normal = call("logic.refillControl(false)")
+        assert normal["pill"] is False
+        assert normal["text"] == "I refilled it"
+        assert normal["name"] == "I refilled the tank"
+        empty = call("logic.refillControl(true)")
+        assert empty["pill"] is True
+        assert empty["long"] == "I refilled the tank"
+        assert empty["short"] == "I refilled it"
+        assert empty["name"] == "I refilled the tank"
+        assert 'id="tank-used-row"' in self.page
+        assert "refill-inline" in self.page
+        assert "refill-pill" in self.page
+        assert "min-width: 0" in _css_rule(self.page, ".pair-lead")
+        assert "white-space: nowrap" not in _css_rule(self.page, ".pair-lead")
+        narrow_lead = re.search(r"@media \(max-width: 339px\)\s*\{([^}]*)\}", self.page)
+        assert narrow_lead is not None
+        assert "font-size: 16px" in narrow_lead.group(1)
+        assert "font-variant-numeric: tabular-nums" in _css_rule(self.page, ".pair-sub")
+        assert "repeat(2, minmax(0, 1fr))" in _css_rule(self.page, ".pair")
+        assert "white-space: normal" in _css_rule(self.page, ".pair-lead.empty")
+        assert "white-space: nowrap" in _css_rule(
+            self.page, "#tank-card .reset.refill-inline"
+        )
+        narrow = re.search(
+            r"@media \(max-width: 399px\)\s*\{(?:[^{}]|\{[^{}]*\})*"
+            r"#tank-card \.reset\.refill-inline(?:[^{}]|\{[^{}]*\})*\}",
+            self.page,
+        )
+        assert narrow is not None
+        assert "flex-wrap: wrap" in narrow.group(0)
+        assert "text-align: left" in narrow.group(0)
+        assert "pointer-events: none" in _css_rule(
+            self.page, '#tank-card .reset.refill-inline[aria-disabled="true"]'
+        )
 
 
 class TestWaterCard:
@@ -413,28 +599,387 @@ class TestWaterCard:
         assert "border-radius: 0" in bar
         assert "min-width: 8px" in bar
         assert "max-width: 10px" in bar
-        # 326 px of card, 9 px bars and 4 px gaps: 25 blocks, not 40 hairlines.
         assert len(call("logic.flowBars(Array(40).fill(1), 326)")) == 25
         wide = self.page[self.page.find("@media (min-width: 1000px)") :]
-        assert "height: 170px" in wide
+        assert (
+            "#flow-card .chart { flex: 1 1 auto; height: auto; min-height: 72px; }"
+            in wide
+        )
 
 
-class TestLastShotChip:
-    """The chip is an inline span on main, so its box rules do nothing."""
+class TestMeters:
+    """Head and boiler share one card of linear meters. The dials are gone."""
 
     def setup_method(self):
         self.page = (
             Path(__file__).resolve().parents[1] / "web" / "static" / "index.html"
         ).read_text(encoding="utf-8")
 
-    def test_chip_stays_inside_the_card_and_clears_the_track(self):
-        chip = _css_rule(self.page, ".last-pull")
-        assert "display: inline-block" in chip
-        assert "max-width: 100%" in chip
-        assert "text-overflow: ellipsis" in chip
-        assert "margin-top: 16px" in chip
-        assert "margin-top: 12px" in _css_rule(self.page, ".warm")
-        assert "margin-top: 12px" in _css_rule(self.page, ".shot")
+    def test_scales_and_the_head_band(self):
+        head = call("logic.meterSpec('Head')")
+        assert head["label"] == "Head pressure"
+        assert head["max"] == 12
+        assert head["band"] == [8, 10]
+        boiler = call("logic.meterSpec('Boiler')")
+        assert boiler == {"label": "Boiler pressure", "max": 2, "band": None}
+        assert call("logic.meterFraction(9, 12)") == 0.75
+        assert call("logic.meterFraction(1.2, 2)") == 0.6
+        assert call("logic.meterFraction(15, 12)") == 1
+        assert call("logic.meterFraction(-1, 12)") == 0
+        assert call("logic.meterHot(9, [8, 10])") is True
+        assert call("logic.meterHot(8, [8, 10])") is True
+        assert call("logic.meterHot(10, [8, 10])") is True
+        assert call("logic.meterHot(7.9, [8, 10])") is False
+        assert call("logic.meterHot(10.1, [8, 10])") is False
+        assert call("logic.meterHot(1.2, null)") is False
+
+    def test_markup_is_one_card_of_linear_meters(self):
+        meter = _css_rule(self.page, ".meter")
+        assert "height: 6px" in meter
+        number = _css_rule(self.page, ".meter-num")
+        assert "font-size: 28px" in number
+        assert "font-weight: 700" in number
+        hot = _css_rule(self.page, ".meter i.hot")
+        assert 'class="band"' not in self.page
+        assert ".meter u.band" not in self.page
+        assert "var(--acc" in hot
+        assert "function renderRings" not in self.page
+        assert 'class="ring"' not in self.page
+        assert "renderMeters" in self.page
+        assert "12 bar" in self.page
+        assert "2 bar" in self.page
+        wide = self.page[self.page.find("@media (min-width: 1000px)") :]
+        assert "font-size: 38px" in wide
+        assert "font-weight: 700" in _css_rule(self.page, ".meter-num b")
+
+
+class TestHero:
+    """The state card is the look C hero: chip, timer, verdict, window."""
+
+    def setup_method(self):
+        self.page = (
+            Path(__file__).resolve().parents[1] / "web" / "static" / "index.html"
+        ).read_text(encoding="utf-8")
+
+    def test_chip_timer_and_window_match_the_hero(self):
+        chip = _css_rule(self.page, ".state-chip")
+        assert "border: none" in chip
+        assert "background: transparent" in chip
+        label = _css_rule(self.page, ".state-label")
+        assert "font-size: 12.5px" in label
+        assert "font-weight: 700" in label
+        assert "border-radius: 99px" in label
+        assert "letter-spacing: 0" in label
+        assert "padding: 5px 12px" in label
+        assert "gap: 7px" in label
+        assert "var(--acc" in _css_rule(self.page, ".state.live .state-label")
+        dot = _css_rule(self.page, ".state.live .state-label::before")
+        assert 'content: ""' in dot
+        assert "width: 6px" in dot
+        assert "display: none" in _css_rule(self.page, ".state-chip .lamp")
+        assert "chip.classList.toggle('offline', offline.replace)" in self.page
+        assert "stateCard.classList.toggle('offline', offline.replace)" in self.page
+        offline = _css_rule(self.page, ".state-chip.offline .state-label")
+        assert "background: transparent" in offline
+        assert "border: 1px dashed var(--mute" in offline
+        assert "var(--mute" in offline
+        timer = _css_rule(self.page, ".timer b")
+        assert "font-size: 62px" in timer
+        assert "font-weight: 700" in timer
+        assert "letter-spacing: -.05em" in timer
+        unit = _css_rule(self.page, ".timer small")
+        assert "font-size: 22px" in unit
+        assert "font-weight: 600" in unit
+        verdict = _css_rule(self.page, ".hint b")
+        assert "font-size: 14px" in verdict
+        assert "font-weight: 700" in verdict
+        assert "var(--acc" in verdict
+        track = _css_rule(self.page, ".shot-track")
+        assert "height: 6px" in track
+        window = _css_rule(self.page, ".shot-track u")
+        assert "border: 1.5px solid var(--acc" in window
+        assert "border-radius: 5px" in window
+        assert 'id="shot-ml"' not in self.page
+        assert 'id="shot-curve"' not in self.page
+        assert "Pressure, this shot" not in self.page
+        assert "This shot's pressure" in self.page
+        assert 'id="shot-verdict"' in self.page
+        assert ">0 s<" in self.page
+        assert ">25–30 s<" in self.page
+        assert ">40 s<" in self.page
+        wide = self.page[self.page.find("@media (min-width: 1000px)") :]
+        assert "font-size: 140px" in wide
+        assert "font-size: 40px" in wide
+        assert "height: 8px" in wide
+
+    def test_aim_stays_and_the_verdict_is_its_own_line(self):
+        for seconds in (12, 26, 34):
+            detail = call(
+                "logic.heroDetail({state:'brewing', since_seconds:1,"
+                " shot:{seconds:%s, ml:30}}, null)" % seconds
+            )
+            assert detail == "Aiming for 25 to 30 s"
+        assert call("logic.liveVerdict(12, 25, 30)") == "Short"
+        assert call("logic.liveVerdict(26, 25, 30)") == "On target"
+        assert call("logic.liveVerdict(34, 25, 30)") == "Long"
+        pressure = call(
+            "logic.heroDetail({state:'overpressure', since_seconds:4, shot:null}, 1.9)"
+        )
+        assert pressure == "Check the pressurestat"
+        assert "Pressure high" not in pressure
+
+    def test_ready_detail_waits_until_a_minute(self):
+        # since_seconds is the age of this Ready visit, not the last poll.
+        young = "{state:'ready', since_seconds:%s, shot:null}"
+        for seconds in (0, 0.4, 59, 59.9):
+            assert call("logic.heroDetail(%s, 1.2)" % (young % seconds)) == ""
+        assert call("logic.heroDetail(%s, 1.2)" % (young % 60)) == "for 1 min"
+        assert call("logic.heroDetail(%s, 1.2)" % (young % 120)) == "for 2 min"
+
+    def test_off_detail_waits_until_a_minute(self):
+        young = "{state:'off', since_seconds:%s, shot:null}"
+        for seconds in (0, 2, 59, 59.9):
+            assert call("logic.heroDetail(%s, null)" % (young % seconds)) == ""
+        assert call("logic.heroDetail(%s, null)" % (young % 60)) == "for 1 min"
+        assert call("logic.heroDetail(%s, null)" % (young % 120)) == "for 2 min"
+
+    def test_a_short_duration_stays_hidden_in_every_state(self):
+        for state in ("ready", "off", "steaming", "flushing", "unknown"):
+            young = "{state:'%s', since_seconds:4, shot:null}" % state
+            assert call("logic.heroDetail(%s, null)" % young) == ""
+            minute = "{state:'%s', since_seconds:60, shot:null}" % state
+            assert call("logic.heroDetail(%s, null)" % minute) == "for 1 min"
+        heating = call(
+            "logic.heroDetail({state:'heating', since_seconds:4, shot:null}, 0.4)"
+        )
+        assert heating.startswith("0.4 of 0.8 bar")
+        assert "for 4 s" not in heating
+
+
+class TestHeroCurve:
+    """The hero curve: live tail, a reset on the next shot, last curve in Ready."""
+
+    def setup_method(self):
+        self.page = (
+            Path(__file__).resolve().parents[1] / "web" / "static" / "index.html"
+        ).read_text(encoding="utf-8")
+
+    def test_markup_sits_under_the_axis_and_starts_hidden(self):
+        axis = self.page.find('id="shot-window"')
+        curve = self.page.find('id="hero-curve"')
+        assert axis != -1 and curve > axis
+        assert 'id="hero-curve" hidden' in self.page
+        assert "This shot's pressure" in self.page
+        assert ">bar<" in self.page
+        label = _css_rule(self.page, "#hero-curve .lbl")
+        assert "font-size: 12.5px" in label
+        assert "font-weight: 600" in label
+        chart = _css_rule(self.page, "#hero-curve .chart")
+        assert "height: 62px" in chart
+        line = _css_rule(self.page, "#hero-curve .curve-line")
+        assert "stroke: var(--acc" in line
+        assert 'id="hero-band"' not in self.page
+        assert "#hero-curve .band" not in self.page
+        wide = self.page[self.page.find("@media (min-width: 1000px)") :]
+        assert (
+            "#hero-curve .chart { flex: 1 1 auto; height: auto; min-height: 180px;"
+            in wide
+        )
+
+    def test_append_uses_the_after_cursor_and_skips_points_already_held(self):
+        first = call(
+            "logic.applyCurrentSamples({startedAt:null, samples:[]},"
+            " {active:true, started_at:'shot-a',"
+            " samples:[{t:0.25, head_bar:2},{t:0.5, head_bar:4}]})"
+        )
+        assert first["startedAt"] == "shot-a"
+        assert [point["t"] for point in first["samples"]] == [0.25, 0.5]
+        assert call("logic.curveRequest(%s)" % json.dumps(first)) == {"after": 0.5}
+        # The server returns only t > after. The point at the cursor stays put.
+        second = call(
+            "logic.applyCurrentSamples(%s,"
+            " {active:true, started_at:'shot-a',"
+            " samples:[{t:0.5, head_bar:4},{t:0.75, head_bar:9}]})" % json.dumps(first)
+        )
+        assert [point["t"] for point in second["samples"]] == [0.25, 0.5, 0.75]
+        assert [point["head_bar"] for point in second["samples"]] == [2, 4, 9]
+
+    def test_a_new_started_at_replaces_the_curve(self):
+        held = {
+            "startedAt": "shot-a",
+            "samples": [{"t": 26, "head_bar": 9}],
+        }
+        assert call(
+            "logic.curveNeedsFull(%s, {active:true, started_at:'shot-b', samples:[]})"
+            % json.dumps(held)
+        )
+        reset = call(
+            "logic.applyCurrentSamples(%s,"
+            " {active:true, started_at:'shot-b', samples:[{t:0.25, head_bar:1}]})"
+            % json.dumps(held)
+        )
+        assert reset["startedAt"] == "shot-b"
+        assert [point["t"] for point in reset["samples"]] == [0.25]
+        assert (
+            call(
+                "logic.curveNeedsFull({startedAt:null, samples:[]},"
+                " {active:true, started_at:'shot-b', samples:[]})"
+            )
+            is False
+        )
+
+    def test_ready_keeps_the_last_curve_and_an_empty_slot_stays_hidden(self):
+        last = [{"t": 26, "head_bar": 9.0}]
+        ready = call(
+            "logic.heroCurveSlot({state:'ready', shotActive:false,"
+            " liveSamples:[], lastSamples:%s})" % json.dumps(last)
+        )
+        assert ready["hidden"] is False
+        assert ready["source"] == "last"
+        assert ready["label"] == "Last shot's pressure"
+        assert ready["samples"] == last
+        live = [{"t": 10, "head_bar": 8}]
+        brewing = call(
+            "logic.heroCurveSlot({state:'brewing', shotActive:true,"
+            " liveSamples:%s, lastSamples:%s})" % (json.dumps(live), json.dumps(last))
+        )
+        assert brewing["hidden"] is False
+        assert brewing["source"] == "live"
+        assert brewing["label"] == "This shot's pressure"
+        assert brewing["samples"] == live
+        for state in ("ready", "heating", "off", "steaming"):
+            empty = call(
+                "logic.heroCurveSlot({state:'%s', shotActive:false,"
+                " liveSamples:[], lastSamples:[]})" % state
+            )
+            assert empty["hidden"] is True
+            assert empty["samples"] == []
+        for state in ("heating", "off", "steaming", "flushing"):
+            quiet = call(
+                "logic.heroCurveSlot({state:'%s', shotActive:false,"
+                " liveSamples:[], lastSamples:%s})" % (state, json.dumps(last))
+            )
+            assert quiet["hidden"] is False
+            assert quiet["label"] == "Last shot's pressure"
+            assert quiet["samples"] == last
+        waiting = call(
+            "logic.heroCurveSlot({state:'brewing', shotActive:true,"
+            " liveSamples:[], lastSamples:[]})"
+        )
+        assert waiting["hidden"] is True
+
+    def test_the_line_is_head_pressure_on_a_40_second_scale(self):
+        figure = call(
+            "logic.heroCurveFigure(["
+            " {t:0, head_bar:0, boiler_bar:1.2},"
+            " {t:15, head_bar:9, boiler_bar:1.2},"
+            " {t:26, head_bar:9, boiler_bar:1.2}])"
+        )
+        assert figure["yLabel"] == "9.0"
+        assert figure["tMax"] == 40
+        assert figure["axis"] == ["0 s", "10", "20", "30", "40 s"]
+        assert figure["dot"]["x"] == 195
+        assert figure["dot"]["y"] == 25
+        assert "band" not in figure
+        assert "M0.00 100.00" in figure["line"]
+        assert "L195.00 25.00" in figure["line"]
+        # Boiler is not the drawn series: 1.2 bar would sit much lower.
+        assert "L150.00 90.00" not in figure["line"]
+        assert call("logic.heroCurveFigure([])") is None
+
+    def test_the_label_switches_with_the_shot(self):
+        saved = [{"t": 26, "head_bar": 9}]
+        running = call(
+            "logic.heroCurveSlot({state:'brewing', shotActive:true,"
+            " liveSamples:[{t:4, head_bar:6}], lastSamples:%s})" % json.dumps(saved)
+        )
+        assert running["label"] == "This shot's pressure"
+        ready = call(
+            "logic.heroCurveSlot({state:'ready', shotActive:false,"
+            " liveSamples:[], lastSamples:%s})" % json.dumps(saved)
+        )
+        assert ready["label"] == "Last shot's pressure"
+        nxt = call(
+            "logic.heroCurveSlot({state:'brewing', shotActive:true,"
+            " liveSamples:[{t:0.5, head_bar:1}], lastSamples:%s})" % json.dumps(saved)
+        )
+        assert nxt["label"] == "This shot's pressure"
+        assert nxt["source"] == "live"
+
+    def test_ready_curve_ends_while_water_was_still_flowing(self):
+        # The head falls to 0 while the meter is still ticking. That tail
+        # is not the pour. The frozen line stops at the last flow > 0
+        # sample that still has pressure, and the dot sits on it.
+        saved = [
+            {"t": 0, "head_bar": 0.4, "flow_mls": 0.5},
+            {"t": 6, "head_bar": 9, "flow_mls": 1.5},
+            {"t": 26, "head_bar": 9, "flow_mls": 1.2},
+            {"t": 26.13, "head_bar": 0, "flow_mls": 1.19},
+            {"t": 26.43, "head_bar": 0, "flow_mls": 1.19},
+            {"t": 26.63, "head_bar": 0, "flow_mls": 0},
+        ]
+        kept = call("logic.pourCurveSamples(%s)" % json.dumps(saved))
+        assert kept[-1]["t"] == 26
+        assert kept[-1]["head_bar"] == 9
+        assert kept[-1]["flow_mls"] > 0
+        assert all(point["head_bar"] > 0 or point["t"] == 0 for point in kept)
+        assert all(
+            point["head_bar"] != 0 or point["flow_mls"] <= 0 for point in kept[1:]
+        )
+        ready = call(
+            "logic.heroCurveSlot({state:'ready', shotActive:false,"
+            " liveSamples:[], lastSamples:%s})" % json.dumps(saved)
+        )
+        assert ready["label"] == "Last shot's pressure"
+        assert ready["samples"][-1] == kept[-1]
+        figure = call("logic.heroCurveFigure(%s)" % json.dumps(ready["samples"]))
+        assert figure["yLabel"] == "9.0"
+        assert figure["yLabelAt"] == 25
+        assert figure["dot"]["x"] == 195
+        assert figure["dot"]["y"] == 25
+        assert "L195.00 100.00" not in figure["line"]
+
+
+class TestLastShotChip:
+    """Look C drops the last-shot chip. Recent shots covers that glance."""
+
+    def setup_method(self):
+        self.page = (
+            Path(__file__).resolve().parents[1] / "web" / "static" / "index.html"
+        ).read_text(encoding="utf-8")
+
+    def test_last_shot_chip_is_absent(self):
+        assert 'id="last-pull"' not in self.page
+        assert "last-pull" not in self.page
+        assert "Last shot " not in self.page
+
+
+class TestTodayLine:
+    """Today's tally, including the first shot while it is still running."""
+
+    def test_idle_with_no_shots_names_the_empty_day(self):
+        assert call("logic.todayLine({shots:0, ml:0}, false)") == "No shots yet today"
+
+    def test_the_first_shot_of_the_day_leaves_the_line_empty(self):
+        assert call("logic.todayLine({shots:0, ml:0}, true)") == ""
+
+    def test_one_shot_and_two_shots(self):
+        assert (
+            call("logic.todayLine({shots:1, ml:39}, false)") == "1 shot · 39 ml today"
+        )
+        assert (
+            call("logic.todayLine({shots:2, ml:68}, true)") == "2 shots · 68 ml today"
+        )
+        assert (
+            call("logic.todayLine({shots:12, ml:1234}, false)")
+            == "12 shots · 1,234 ml today"
+        )
+
+    def test_the_empty_line_is_removed_from_the_header(self):
+        page = (
+            Path(__file__).resolve().parents[1] / "web" / "static" / "index.html"
+        ).read_text(encoding="utf-8")
+        assert "header .tagline:empty { display: none" in page
 
 
 class TestWording:
@@ -444,15 +989,13 @@ class TestWording:
         ).read_text(encoding="utf-8")
 
     def test_units_are_spaced_and_pressure_says_bar(self):
-        assert 'id="shot-seconds">0 s<' in self.page
+        assert 'id="shot-seconds">0</b><small>s</small>' in self.page
         assert 'id="bb-time">0 s<' in self.page
-        assert "${machine.shot.seconds.toFixed(0)} s" in self.page
-        assert "${Math.floor(seconds)} s" in self.page
+        assert "machine.shot.seconds.toFixed(0)" in self.page
         assert ">BAR<" not in self.page
-        assert "<span>bar</span>" in self.page
+        assert "<small>bar</small>" in self.page
 
     def test_live_pill_and_last_shot_chip_are_sentence_case(self):
-        assert "Last shot ${last.seconds.toFixed(0)} s" in self.page
         assert "last shot ${" not in self.page
         assert call("logic.pillText(true, 1000)") == "Live"
 
@@ -462,10 +1005,10 @@ class TestWording:
         assert "text-align: left" in state
         assert "text-align: left" in _css_rule(self.page, ".state-detail")
         assert "justify-content: flex-start" in _css_rule(self.page, ".state-band")
-        assert "text-align: center" in _css_rule(self.page, ".shot")
-        assert "font-variant-numeric: tabular-nums" in _css_rule(self.page, ".shot b")
+        assert "text-align: left" in _css_rule(self.page, ".shot")
+        assert "font-variant-numeric: tabular-nums" in _css_rule(self.page, ".timer b")
         assert "font-variant-numeric: tabular-nums" in _css_rule(
-            self.page, ".ring-read b"
+            self.page, ".meter-num"
         )
         assert "font-variant-numeric: tabular-nums" in _css_rule(self.page, ".figure b")
         # The connection pill shares the class live. Unscoped, it centers the card.
@@ -474,8 +1017,9 @@ class TestWording:
 
     def test_only_shot_history_shows_a_count(self):
         assert "history.length} shot" not in self.page
-        assert "`${count} saved`" in self.page
-        assert "'1 saved'" in self.page
+        assert "`${count} saved`" not in self.page
+        assert ">All 0 shots ›<" in self.page
+        assert call("logic.allShotsLink(6, 4)")["text"] == "All 6 shots ›"
 
     def test_live_pill_paints_its_dot(self):
         dot = _css_rule(self.page, ".state.live .state-label::before")
@@ -511,20 +1055,27 @@ class TestPhoneHeader:
             Path(__file__).resolve().parents[1] / "web" / "static" / "index.html"
         ).read_text(encoding="utf-8")
 
-    def test_today_line_moves_into_the_state_card_on_a_phone(self):
-        assert 'id="tagline-card"' in self.page
-        phone = re.search(r"@media \(max-width: 999px\)\s*\{([^}]*)\}", self.page)
-        assert phone is not None
-        assert "header .tagline" in phone.group(1)
-        assert "display: none" in phone.group(1)
-        wide_at = self.page.find("@media (min-width: 1000px)")
-        assert wide_at > 0
-        wide = self.page[wide_at : wide_at + 400]
-        assert "#tagline-card" in wide
-        assert "display: none" in wide
-        # One sentence, written to both slots. No second wording.
-        assert "getElementById('tagline-card').textContent = text" in self.page
-        assert "getElementById('tagline').textContent = text" in self.page
+    def test_today_line_stays_on_the_header_row(self):
+        assert 'id="tagline-card"' not in self.page
+        assert "header .tagline:empty { display: none" in self.page
+        title = _css_rule(self.page, "header h1")
+        assert "flex: 0 0 auto" in title
+        assert "text-overflow: ellipsis" not in title
+        today = _css_rule(self.page, "header .tagline")
+        assert "font-size: 12.5px" in today
+        assert "font-weight: 500" in today
+        assert "font-variant-numeric: tabular-nums" in today
+        assert "min-width: 0" in today
+        assert "text-overflow: ellipsis" in today
+        assert "var(--mute" in today
+        gap = _css_rule(self.page, "header .conn + .tagline")
+        assert "margin-left: 6px" in gap
+        narrow = re.search(r"@media \(max-width: 374px\)\s*\{([^}]*)\}", self.page)
+        assert narrow is not None
+        assert "header .tagline" in narrow.group(1)
+        assert "header .conn" in narrow.group(1)
+        assert "display: none" in narrow.group(1)
+        assert "todayLine(" in self.page
 
     def test_title_stays_whole_at_768_and_1280_with_connecting(self):
         # A labelled wake control plus "Connecting…" is about 438 px. The
@@ -550,13 +1101,14 @@ class TestPhoneHeader:
         assert "@media (max-width: 480px)" not in self.page
 
     def test_narrow_phones_do_not_scroll_sideways(self):
-        # 320 and 360 used to overflow: the title could not shrink, so the
-        # connecting pill stuck out. The title ellipsizes instead.
+        # The title stays whole. A long today line ellipsizes instead.
         title = _css_rule(self.page, "header h1")
-        assert "min-width: 0" in title
-        assert "overflow: hidden" in title
-        assert "text-overflow: ellipsis" in title
+        assert "flex: 0 0 auto" in title
         assert "white-space: nowrap" in title
+        today = _css_rule(self.page, "header .tagline")
+        assert "min-width: 0" in today
+        assert "overflow: hidden" in today
+        assert "text-overflow: ellipsis" in today
         assert 'class="header-tools"' in self.page
         face = _css_rule(self.page, ".header-tools .pill-face")
         assert "height: 36px" in face
@@ -595,3 +1147,49 @@ class TestPhoneHeader:
         assert "background: var(--ink)" in pressed
         assert "color: var(--card)" in pressed
         assert "border-color: var(--ink)" in pressed
+
+
+class TestDesktopGrid:
+    """From 1000 px the cards form three columns that can grow to 1440."""
+
+    def setup_method(self):
+        self.page = (
+            Path(__file__).resolve().parents[1] / "web" / "static" / "index.html"
+        ).read_text(encoding="utf-8")
+
+    def test_three_columns_from_1000(self):
+        at = self.page.find("grid-template-columns: repeat(3, minmax(280px, 1fr))")
+        assert at > 0
+        block = self.page[at - 1200 : at + 4000]
+        assert "@media (min-width: 1000px)" in block
+        assert "max-width: 1440px" in block
+        assert "gap: 8px" in block
+        assert "max-width: 1100px" not in self.page
+        assert "min-width: 1024px" not in self.page
+        assert "#desk-meters { grid-column: 2; }" in block
+        assert "#desk-side { grid-column: 3; }" in block
+        assert "#state {\n      grid-column: 1;" in block
+        assert (
+            "#tank-room { display: flex; flex-direction: column; gap: 8px; flex: 0 0 auto; }"
+            in block
+        )
+        assert "align-items: stretch" in block
+        assert "min-height: 100dvh" in block
+        assert "justify-content: space-between" in block
+        assert "#recent-tiles { display: none; }" not in block
+        assert "#pulls-card {" in block
+        assert "flex: 1 1 auto" in block
+        assert "grid-template-columns: 148px minmax(0, 1fr) 84px" in self.page
+        narrow = self.page.find("@media (min-width: 1000px) and (max-width: 1199px)")
+        assert narrow > 0
+        narrow_block = self.page[narrow : narrow + 700]
+        assert "grid-template-columns: 116px minmax(0, 1fr) 64px" in narrow_block
+        assert "font-size: 11px" in narrow_block
+        assert "width: 64px" in narrow_block
+        assert 'grid-template-areas: "ml bar verdict" "when bar verdict"' in self.page
+        assert ".recent-tile .t-line" in self.page
+        assert "shotWhenLine" in self.page
+        assert "grid-area: verdict" in self.page
+        assert "white-space: nowrap" in _css_rule(self.page, ".recent-tile .t-line")
+        assert "syncDeskRecent" in self.page
+        assert "#history-card { grid-column" not in block

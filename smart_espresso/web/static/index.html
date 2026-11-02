@@ -121,22 +121,24 @@
     margin: 0;
   }
 
-  /* The title yields before the status pills do. At 320 px a nowrap title
-     otherwise forces the page to scroll sideways. */
+  /* The title never truncates. The today line is what yields: it
+     ellipsizes, and below 375 it hides because it cannot fit. */
   header h1 {
-    flex: 1 1 auto;
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    flex: 0 0 auto;
     white-space: nowrap;
+    font-size: 20px;
+    font-weight: 800;
+    letter-spacing: -.02em;
   }
 
   .header-tools {
     display: flex;
     align-items: center;
-    flex: none;
+    flex: 1 1 auto;
+    min-width: 0;
     margin-left: auto;
     gap: 0;
+    overflow: hidden;
   }
 
   /* 44 px tap area. The visible circle or pill inside is 36 px tall,
@@ -216,35 +218,49 @@
     flex: none;
   }
 
-  .tagline {
-    font-family: var(--mono);
-    font-size: 12px;
-    letter-spacing: .1em;
-    color: var(--ink-faint);
-    margin-top: 4px;
+  /* Today sits on the right of the one-line header. An empty line
+     (the first shot of the day, still running) must not leave a gap. */
+  header .tagline {
+    flex: 1 1 auto;
+    min-width: 0;
+    margin: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-family: var(--body);
+    font-size: 12.5px;
+    font-weight: 500;
+    letter-spacing: 0;
+    color: var(--mute, var(--ink-faint));
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+  }
+  header .tagline:empty { display: none; }
+  header .conn + .tagline { margin-left: 6px; }
+  /* Below 375 the today line would clip the title. The status dot
+     hides with the tally; the wake control stays. */
+  @media (max-width: 374px) {
+    header .tagline,
+    header .conn { display: none !important; }
   }
 
-  /* The today line stays in the header only when the viewport is wide
-     enough. The column itself is 460 px, so this is a viewport query.
-     On a phone the same words move into the state card. */
-  @media (max-width: 999px) {
-    header .tagline { display: none !important; }
+  /* The connection word stays for the status role. The header shows the dot. */
+  #conn {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
   }
-
-  @media (min-width: 1000px) {
-    header { flex-wrap: wrap; }
-    header h1 { margin-right: auto; }
-    /* The column is 460 px, so the today line takes the next row
-       rather than squeezing in beside the connection pill. */
-    header .tagline { flex-basis: 100%; margin-top: 6px; }
-    #tagline-card { display: none !important; }
+  header .conn {
+    display: inline-flex;
+    align-items: center;
+    flex: none;
   }
+  header .dot { background: var(--acc, var(--matcha-ink)); }
+  header .dot.off { background: var(--mute, var(--ink-faint)); }
 
   #tagline-card { margin: 0 0 10px; }
   #tagline-card:empty { display: none; }
-  /* An empty today line still takes a row at 1280. Hide it until there
-     is something to say. */
-  header .tagline:empty { display: none; }
 
   /* Scoped to the header. The state card also uses the class live, and an
      unscoped rule was centering that card's pill and detail. */
@@ -277,6 +293,94 @@
   button.live:focus-visible { outline: 2px solid var(--ink-soft); outline-offset: 2px; }
 
   .stack { display: flex; flex-direction: column; gap: 12px; }
+  .desk-col { display: contents; }
+
+  /* Each column is its own stack, so a tall card in one column does not
+     open a hole under a short card in another. Recent shots is the
+     vertical list on desktop and the four tiles on a phone. */
+  @media (min-width: 1000px) {
+    /* The grid fills the viewport under the header and above the bottom
+       inset. The minimum keeps a short window scrolling instead of
+       squashing the curve. */
+    body {
+      max-width: 1440px;
+      height: 100vh;
+      height: 100dvh;
+      min-height: 100vh;
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      /* Same inset as the sides. No footer. */
+      padding-bottom: 28px;
+      overflow: auto;
+    }
+    .stack {
+      flex: 1 1 auto;
+      /* Shrinks under the offline banner so a full-height grid does not scroll. */
+      min-height: 0;
+      overflow: hidden;
+      display: grid;
+      grid-template-columns: repeat(3, minmax(280px, 1fr));
+      grid-template-rows: minmax(0, 1fr);
+      gap: 8px;
+      align-items: stretch;
+    }
+    .desk-col {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      min-width: 0;
+      min-height: 0;
+      height: 100%;
+    }
+    #desk-meters { grid-column: 2; }
+    #desk-side { grid-column: 3; }
+    #state {
+      grid-column: 1;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+      height: 100%;
+    }
+    #state .state-body {
+      flex: 1 1 auto;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
+    #hero-curve {
+      flex: 1 1 auto;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
+    #rings { flex: 0 0 auto; }
+    #flow-card {
+      flex: 1 1 auto;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
+    #tank-room { display: flex; flex-direction: column; gap: 8px; flex: 0 0 auto; }
+    #pulls-card {
+      flex: 1 1 auto;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+      overflow: hidden;
+    }
+    /* Four rows, spread to the card bottom. The link opens the rest.
+       The rows can shrink; a 4th row that still will not fit is hidden. */
+    #recent-tiles {
+      flex: 1 1 auto;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      gap: 4px;
+      min-height: 0;
+      overflow: hidden;
+    }
+  }
 
   .card {
     background: var(--card);
@@ -319,8 +423,19 @@
     background: var(--card);
   }
 
-  .state-band {
-    display: flex;
+  [data-state="off"] { --state-solid: var(--state-off); --state-ink: var(--state-off-ink); }
+  [data-state="heating"] { --state-solid: var(--state-heating); --state-ink: var(--state-heating-ink); }
+  [data-state="ready"] { --state-solid: var(--state-ready); --state-ink: var(--state-ready-ink); }
+  [data-state="brewing"] { --state-solid: var(--state-brewing); --state-ink: var(--state-brewing-ink); }
+  [data-state="steaming"] { --state-solid: var(--state-steaming); --state-ink: var(--state-steaming-ink); }
+  [data-state="overpressure"] { --state-solid: var(--state-overpressure); --state-ink: var(--state-overpressure-ink); }
+  [data-state="unknown"] { --state-solid: var(--state-unknown); --state-ink: var(--state-unknown-ink); }
+
+  /* The state card is the hero. The chip names the state; the timer,
+     the aim and the window live in the body. Colours are look C tokens
+     so a later palette rebase does not rewrite these rules. */
+  .state { padding: 14px 18px 10px; }
+  .state-band {    display: flex;
     align-self: stretch;
     width: 100%;
     align-items: center;
@@ -354,9 +469,9 @@
     background: var(--bg);
     color: var(--ink);
     font-family: var(--display);
-    font-size: 14px;
+    font-size: 12.5px;
     font-weight: 700;
-    letter-spacing: -.01em;
+    letter-spacing: 0;
     line-height: 1.2;
     border: 1px solid var(--mute);
     border-radius: 99px;
@@ -441,12 +556,51 @@
     text-align: left;
   }
 
+  .state.offline .state-band {
+    min-height: 0;
+    padding: 0;
+    background: transparent;
+    color: var(--mute, var(--ink-faint));
+  }
+  .state.offline .glyph,
+  .state.offline .lamp { display: none; }
+
+  /* Layout wrapper only. The pill is .state-label, so this box has
+     no border and no background of its own. */
+  .state-chip {
+    display: inline-flex;
+    align-items: center;
+    max-width: 100%;
+    border: none;
+    background: transparent;
+    padding: 0;
+  }
+
+  .state-chip .lamp { display: none; }
+  .state-label { text-wrap: balance; }
+  .state-chip.offline .state-label {
+    background: transparent;
+    color: var(--mute);
+    border: 1px dashed var(--mute);
+  }
+  .state-chip.offline .state-label::before,
+  .state.alert .state-label::before,
+  .state.off .state-label::before { display: none; }
+  .state-label.pulse::before { animation: lamp-pulse 1.6s ease-in-out infinite; }
+
+  .state-body { padding: 0; }
+
   .state-detail {
-    font-size: 15px;
-    color: var(--ink);
+    margin-top: 8px;
+    font-size: 12.5px;
+    font-weight: 500;
+    color: var(--mute, var(--ink-faint));
     line-height: 1.35;
-    text-align: left;
-    white-space: pre-line;
+    text-align: left;    white-space: pre-line;
+  }
+
+  .state.offline .state-detail {
+    color: var(--mute, var(--ink-faint));
   }
 
   .warm {
@@ -479,25 +633,6 @@
     white-space: nowrap;
   }
 
-  /* The reference pull, kept as a chip: dialing in means comparing.
-     One line, even if that means the tail yields to an ellipsis. */
-  .last-pull {
-    display: inline-block;
-    max-width: 100%;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    vertical-align: top;
-    font-family: var(--mono);
-    font-size: 12px;
-    letter-spacing: .06em;
-    color: var(--ink-soft);
-    border: 1px solid var(--edge);
-    border-radius: 999px;
-    padding: 4px 10px;
-    margin-top: 16px;
-  }
-
   .lamp {
     width: 8px;
     height: 8px;
@@ -506,47 +641,58 @@
     background: var(--ink);
   }
 
-  /* The shot timer is the figure the eye is here for: full stage,
-     centered, and the target window drawn under it across the card. */
-  .shot {
-    display: flex;
-    flex-direction: column;
-    align-self: stretch;
-    width: 100%;
-    align-items: center;
-    text-align: center;
-    margin-top: 12px;
-  }
+  /* Timer on the left, aim and the live verdict on the right.
+     The yield stays on the water card, not under the timer. */
+  .shot { margin-top: 12px; text-align: left; }
 
-  .shot b {
+  .trow {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    gap: 12px;  }
+
+  .timer b {
     font-family: var(--display);
-    font-size: 64px;
-    font-weight: 600;
-    letter-spacing: -.03em;
+    font-size: 62px;
+    font-weight: 700;
+    letter-spacing: -.05em;
     font-variant-numeric: tabular-nums;
     line-height: 1;
-    transition: color .3s ease;
   }
 
+  .timer small {
+    font-size: 22px;
+    font-weight: 600;
+    color: var(--mute, var(--ink-faint));
+    margin-left: 4px;
+    letter-spacing: 0;
+  }
   .shot b.good { color: var(--ink); }
   .shot b.fast { color: var(--ink); }
   .shot b.long { color: var(--ink); }
-
-  .shot small {
-    display: block;
-    font-family: var(--mono);
-    font-size: 12px;
-    letter-spacing: .04em;
-    color: var(--ink-soft);
-    margin-top: 8px;
+  .hint {
+    text-align: right;
+    font-size: 12.5px;
+    font-weight: 500;
+    color: var(--mute, var(--ink-faint));
+    padding-bottom: 8px;
   }
 
-  /* Target extraction window, drawn under the shot timer. */
+  .hint b {
+    display: block;
+    color: var(--acc, var(--crema-ink));
+    font-size: 14px;
+    font-weight: 700;
+    margin-top: 2px;
+  }
+
+  /* 6 px track. The window box sticks out 4 px each side, so it is 14 px
+     tall, outlined in the accent, with a 5 px radius. */
   .shot-track {
     position: relative;
     width: 100%;
-    height: 5px;
-    margin-top: 12px;
+    height: 6px;
+    margin-top: 10px;
     border-radius: 3px;
     background: var(--bg);
   }
@@ -561,49 +707,180 @@
 
   .shot-track u {
     position: absolute;
-    top: -3px; bottom: -3px;
-    border-left: 1.5px solid var(--ink);
-    border-right: 1.5px solid var(--ink);
+    top: -4px;
+    bottom: -4px;
+    border: 1.5px solid var(--acc, var(--crema-ink));
+    border-radius: 5px;
+    text-decoration: none;
   }
 
-  /* ---- pressure rings ---- */
-  .rings { display: flex; flex-wrap: wrap; gap: 12px; }
-  .rings > * { flex: 1 1 45%; min-width: 45%; padding: 14px 12px 12px; }
-
-  /* Very narrow phones: one dial per row beats two cramped ones. */
-  @media (max-width: 340px) {
-    .rings > * { flex-basis: 100%; min-width: 100%; }
-  }
-
-  .ring { width: 100%; height: auto; display: block; }
-
-  .ring-read {
-    text-align: center;
-    margin-top: -34px;
-    padding-bottom: 8px;
-  }
-
-  .ring-read b {
-    font-family: var(--display);
-    font-size: 26px;
-    font-weight: 600;
-    letter-spacing: -.02em;
-    font-variant-numeric: tabular-nums;
-    display: block;
-    line-height: 1;
-  }
-
-  .ring-read span {
-    font-family: var(--mono);
+  .tl {
+    display: flex;
+    justify-content: space-between;
+    position: relative;
+    margin-top: 6px;
     font-size: 11px;
-    letter-spacing: .1em;
-    color: var(--ink-faint);
+    font-weight: 500;
+    color: var(--mute, var(--ink-faint));
   }
 
-  .ring-foot {
-    font-size: 11.5px;
-    color: var(--ink-soft);
-    text-align: center;
+  .tl .wl {
+    position: absolute;
+    left: 68.75%;
+    transform: translateX(-50%);
+    color: var(--acc, var(--crema-ink));
+    font-weight: 700;
+  }
+
+  /* The live curve sits under the shot-bar axis. Hidden until a shot
+     has points, or until Ready has a saved curve to keep showing. */
+  #hero-curve { margin-top: 8px; }
+  #hero-curve .cvh {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+  }
+  #hero-curve .lbl {
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--mute, var(--ink-faint));
+  }
+  #hero-curve .chart {
+    position: relative;
+    height: 62px;
+    margin-top: 6px;
+  }
+  #hero-curve .chart svg {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+  }
+  #hero-curve .area {
+    fill: var(--acc, var(--crema-ink));
+    opacity: .16;
+  }
+  #hero-curve .curve-line {
+    stroke: var(--acc, var(--crema-ink));
+    stroke-width: 2;
+    fill: none;
+    vector-effect: non-scaling-stroke;
+    stroke-linejoin: round;
+    stroke-linecap: round;
+  }
+  #hero-curve .base {
+    stroke: var(--mute, var(--ink-faint));
+    stroke-width: 1;
+    vector-effect: non-scaling-stroke;
+  }
+  #hero-curve .dot {
+    position: absolute;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--acc, var(--crema-ink));
+    border: 2px solid var(--card);
+    box-sizing: content-box;
+    transform: translate(-50%, -50%);
+    z-index: 1;
+  }
+  #hero-curve .yl {
+    position: absolute;
+    left: 2px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--mute, var(--ink-faint));
+    transform: translateY(calc(-100% - 6px));
+  }
+
+  @media (min-width: 1000px) {
+    .state-label { font-size: 14px; padding: 7px 15px; }
+    .timer b { font-size: 140px; margin-top: 14px; }
+    .timer small { font-size: 40px; }
+    .hint { font-size: 15px; padding-bottom: 22px; }
+    .hint b { font-size: 18px; }
+    .shot-track { height: 8px; margin-top: 22px; }
+    .tl { font-size: 12px; }
+    #hero-curve .cvh { margin-top: 22px; }
+    #hero-curve .chart { flex: 1 1 auto; height: auto; min-height: 180px; margin-top: 12px; }
+    #hero-curve .yl { font-size: 12px; }
+  }
+
+  /* One card, two linear meters. Head is 0–12 bar and turns accent
+     inside 8–10. Boiler is 0–2 bar and stays ink. */
+  .meters {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 18px;
+  }
+
+  .meter-label {
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--mute, var(--ink-faint));
+  }
+
+  .meter-num {
+    margin-top: 4px;
+    font-family: var(--display);
+    font-size: 28px;
+    font-weight: 700;
+    letter-spacing: -.03em;
+    line-height: 1.1;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .meter-num b { font-weight: 700; }
+
+  .meter-num small {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--mute, var(--ink-faint));
+    margin-left: 3px;
+    letter-spacing: 0;
+  }
+
+  .meter {
+    position: relative;
+    height: 6px;
+    margin-top: 8px;
+    border-radius: 3px;
+    background: var(--bg);
+  }
+
+  .meter i {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    border-radius: 3px;
+    background: var(--ink);
+  }
+
+  .meter i.hot { background: var(--acc, var(--crema-ink)); }
+
+  .meter-scale {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 5px;
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--mute, var(--ink-faint));
+  }
+
+  @media (min-width: 1000px) {
+    .meters { grid-template-columns: 1fr; gap: 18px; }
+    .meter-num { font-size: 38px; }
+  }
+  /* Short desktop windows only. 800px and up keep the full meters. */
+  @media (min-width: 1000px) and (max-height: 720px) {
+    #rings .card { padding: 12px 14px; }
+    .meters { gap: 12px; }
+    .meter-label { line-height: 1.15; }
+    .meter-num { margin-top: 2px; font-size: 34px; line-height: 1.05; }
+    .meter { margin-top: 6px; }
+    .meter-scale { margin-top: 4px; }
   }
 
   /* ---- figures ---- */
@@ -685,6 +962,110 @@
   button.reset.armed { background: var(--ink); color: var(--card); }
   button.reset:focus-visible { outline: 2px solid var(--ink-soft); outline-offset: 2px; }
 
+  /* Tank and room share a row. The tank leads with shots left. */
+  .pair {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+  .pair > * { min-width: 0; }
+  .pair-label {
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--mute, var(--ink-faint));
+  }
+  .pair-lead {
+    margin-top: 4px;
+    font-size: 19px;
+    font-weight: 700;
+    letter-spacing: -.02em;
+    line-height: 1.2;
+    font-variant-numeric: tabular-nums;
+    min-width: 0;
+  }
+  .pair-lead small {
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0;
+    color: var(--mute, var(--ink-faint));
+  }
+  .pair-lead.empty {
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: 0;
+    white-space: normal;
+  }
+  #tank-card .tank-foot {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .used-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+    margin-top: 3px;
+  }
+  .used-row .pair-sub { margin-top: 0; font-variant-numeric: tabular-nums; }
+  #tank-card .reset.refill-pill {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    container-type: inline-size;
+    container-name: refill;
+  }
+  #tank-card .reset.refill-inline {
+    width: auto;
+    display: inline;
+    min-height: 0;
+    padding: 0;
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--acc, var(--crema-ink));
+    white-space: nowrap;
+    text-align: left;
+    container-type: normal;
+  }
+  #tank-card .refill-short { display: none; }
+  /* The long label is 109 px at 13.5 px/600. Below that, use the short one. */
+  @container refill (max-width: 112px) {
+    #tank-card .refill-long { display: none; }
+    #tank-card .refill-short { display: inline; }
+  }
+  #tank-card .level {
+    height: 6px;
+    margin-top: 8px;
+    border-radius: 3px;
+    background: var(--bg);
+  }
+  .pair-sub {
+    margin-top: 3px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--mute, var(--ink-faint));
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  @media (max-width: 399px) {
+    .used-row { flex-wrap: wrap; }
+    #tank-card .reset.refill-inline {
+      flex-basis: 100%;
+      justify-content: flex-start;
+      text-align: left;
+    }
+  }
+  @media (max-width: 339px) {
+    .pair-lead { font-size: 16px; }
+  }
+  @media (min-width: 1000px) {
+    .pair-lead { font-size: 28px; }
+    .pair-lead.empty { font-size: 15px; }
+  }
+
   /* ---- pour chart ---- */
   .chart {
     display: flex;
@@ -714,7 +1095,7 @@
   }
   #flow-card .peak b { color: var(--ink); font-weight: 700; }
   @media (min-width: 1000px) {
-    #flow-card .chart { height: 170px; }
+    #flow-card .chart { flex: 1 1 auto; height: auto; min-height: 72px; }
   }
 
   .chart.empty { height: 22px; }
@@ -787,72 +1168,140 @@
     border-left: 10px solid var(--ink);
   }
 
-  /* ---- recent pulls ---- */
-  .pulls-track {
-    position: relative;
-    /* The strip is one control. Ticks themselves are not targets, so the
-       track carries the 44 px hit area and a tap snaps to the nearest. */
-    height: 44px;
-    margin: 8px 0 2px;
+  /* Four ml tiles. The bar is ml/45. On target uses the accent. */
+  .recent-tiles {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 12px;
+    margin-top: 8px;
+  }
+
+  .recent-tile {
+    display: block;
+    width: 100%;
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: left;
     cursor: pointer;
   }
 
-  .pulls-track::before {
-    content: "";
-    position: absolute;
-    left: 0; right: 0;
-    top: 50%;
-    height: 3px;
-    transform: translateY(-50%);
-    border-radius: 3px;
-    background: var(--edge);
+  .recent-tile .ml {
+    font-size: 17px;
+    font-weight: 700;
+    letter-spacing: -.02em;
+    line-height: 1.1;
+    font-variant-numeric: tabular-nums;
   }
 
-  .pulls-track u {
-    position: absolute;
-    top: 14px; bottom: 14px;
-    border-left: 1px solid var(--ink-faint);
-    border-right: 1px solid var(--ink-faint);
-    background: transparent;
+  .recent-tile .ml small {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--mute, var(--ink-faint));
   }
 
-  .pulls-track:focus-visible {
-    outline: 2px solid var(--ink-soft);
-    outline-offset: 3px;
-    border-radius: 8px;
+  .recent-bar {
+    height: 4px;
+    margin: 5px 0 6px;
+    border-radius: 2px;
+    background: var(--bg);
   }
 
-  /* Marks are drawn, not pressed. pointer-events stay off so a thumb
-     always hits the track, which then picks the nearest pull. */
-  .pulls-track i.mark {
-    position: absolute;
+  .recent-bar i {
     display: block;
-    top: 50%;
-    margin-top: -8px;
-    pointer-events: none;
+    height: 100%;
+    border-radius: 2px;
+    background: var(--mute, var(--ink-faint));
   }
 
-  .pulls-track i.now { transform: scale(1.25); }
+  .recent-bar i.ok { background: var(--acc, var(--crema-ink)); }
 
-  .pulls-track i.sel {
-    border-radius: 50%;
-    outline: 2px solid var(--ink);
-    outline-offset: 2px;
+  .recent-tile .v {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--mute, var(--ink-faint));
   }
 
-  .pulls-legend {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px 14px;
-    margin: 8px 0 0;
-    font-size: 12px;
+  .recent-tile .v.ok { color: var(--acc, var(--crema-ink)); }
+
+  .recent-tile .t {
+    display: block;
+    margin-top: 2px;
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--mute, var(--ink-faint));
+    min-width: 0;
+    font-variant-numeric: tabular-nums;
+  }
+  .recent-tile .t-day { display: block; }
+  .recent-tile .t-time { display: block; white-space: nowrap; }
+  .recent-tile .t-line { display: none; white-space: nowrap; }
+  @media (min-width: 1000px) {
+    /* Fixed figure column sized for "Yesterday 12:17 PM", then the bar,
+       then a fixed verdict. Every bar starts and ends on the same x.
+       1200 and wider keep this column. Narrower desktops shrink it below. */
+    .recent-tile {
+      display: grid;
+      grid-template-columns: 148px minmax(0, 1fr) 84px;
+      grid-template-areas: "ml bar verdict" "when bar verdict";
+      column-gap: 10px;
+      row-gap: 0;
+      align-items: center;
+    }
+    .recent-tile .ml { grid-area: ml; font-size: 20px; line-height: 1; }
+    .recent-tile .t { grid-area: when; margin-top: 0; line-height: 1; }
+    .recent-tile .t-day,
+    .recent-tile .t-time { display: none; }
+    .recent-tile .t-line {
+      display: block;
+      white-space: nowrap;
+      overflow: visible;
+    }
+    .recent-tile .recent-bar { grid-area: bar; margin: 0; height: 6px; align-self: center; }
+    .recent-tile .v {
+      grid-area: verdict;
+      justify-self: end;
+      width: 84px;
+      text-align: right;
+      white-space: nowrap;
+      font-size: 13px;
+    }
+  }
+  /* Below 1200 the fixed columns were leaving a stub of a bar. Narrow
+     them so the bar keeps the width those columns give back. The time
+     stays 11px, and "Yesterday 12:17 PM" still fits the 116px column. */
+  @media (min-width: 1000px) and (max-width: 1199px) {
+    .recent-tile {
+      grid-template-columns: 116px minmax(0, 1fr) 64px;
+    }
+    .recent-tile .t-line { font-size: 11px; }
+    .recent-tile .v { width: 64px; }
+  }
+  /* A short window plus the offline banner leaves a short Recent card.
+     Tighter rows keep four shots inside it; fitRecentRows hides the
+     fourth only when it still sticks out. */
+  @media (min-width: 1000px) and (max-height: 720px) {
+    #pulls-card { padding: 10px 14px 8px; }
+    #pulls-card .card-head { margin-bottom: 6px; }
+    .recent-tile .ml { font-size: 17px; line-height: 1; }
+    #recent-tiles { gap: 2px; }
+  }
+
+  .card-head .all-shots {
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
     color: var(--ink);
-  }
-
-  .pulls-legend span {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
+    font: inherit;
+    font-size: 12.5px;
+    font-weight: 600;
+    white-space: nowrap;
+    cursor: pointer;
   }
 
   /* ---- saved shots ---- */
@@ -907,6 +1356,18 @@
     color: var(--ink-soft);
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
+  }
+  /* A narrow desktop column was clipping "Yesterday 8:27 AM". The time
+     stays whole; the stats give up the space. */
+  @media (min-width: 1000px) {
+    .shot-when { flex: none; overflow: visible; text-overflow: clip; }
+    .shot-stats {
+      min-width: 0;
+      overflow: visible;
+      text-overflow: clip;
+      white-space: normal;
+      text-align: right;
+    }
   }
 
   .history-detail { padding: 2px 4px 4px; }
@@ -1029,15 +1490,6 @@
     text-align: right;
   }
 
-  footer {
-    font-family: var(--mono);
-    font-size: 12px;
-    letter-spacing: .08em;
-    color: var(--ink-faint);
-    text-align: center;
-    margin-top: 18px;
-  }
-
   /* Offline keeps the last reading at full contrast. A tag does the
      "this is old" job that dimming used to do, without dropping the
      type below 4.5:1. */
@@ -1120,6 +1572,13 @@
     cursor: default;
     border-color: var(--edge);
   }
+  #tank-card .reset.refill-inline[aria-disabled="true"] {
+    color: var(--mute, var(--ink-faint));
+    pointer-events: none;
+  }
+  #tank-card .reset.refill-inline[aria-disabled="true"]:hover {
+    color: var(--mute, var(--ink-faint));
+  }
 
   .toast {
     position: fixed;
@@ -1148,7 +1607,6 @@
 
   body.glance header h1,
   body.glance header .tagline,
-  body.glance #tagline-card,
   body.glance #rings,
   body.glance #pulls-card,
   body.glance #history-card,
@@ -1156,14 +1614,10 @@
   body.glance #tank-card,
   body.glance #other-card,
   body.glance #skeletons,
-  body.glance .last-pull,
   body.glance footer,
-  body.glance .warm {
+  body.glance .warm,
+  body.glance #hero-curve {
     display: none !important;
-  }
-
-  body.glance .state-label {
-    font-size: clamp(40px, 9vh, 88px);
   }
 
   body.glance .shot b {
@@ -1199,6 +1653,11 @@
 <header>
   <h1>Smart Espresso</h1>
   <div class="header-tools">
+    <!-- Connecting, not live: the shell is often cached and painted before
+         /api/status has ever answered. A green dot here is a lie. -->
+    <div class="conn" role="status"><span class="dot off" id="dot"></span><span
+        id="conn">Connecting…</span></div>
+    <div class="tagline" id="tagline"></div>
     <button class="live" id="wake" type="button" title="Keep screen on"
             aria-label="Keep screen on" aria-pressed="false" hidden><span
         class="pill-face"><svg class="wake-icon" viewBox="0 0 24 24"
@@ -1207,41 +1666,57 @@
         stroke-linejoin="round"><rect x="8.2" y="3.4" width="7.6" height="13.2"
         rx="1.6"/><path d="M10.6 14.2h2.8"/><path d="M5.4 7.4 3.8 5.8M4.8 12H2.6M5.4 16.4 4 18M18.6 7.4 20.2 5.8M19.2 12h2.2M18.6 16.4 20 18"/></g></svg><span
         id="wake-text">Keep screen on</span></span></button>
-    <!-- Connecting, not live: the shell is often cached and painted before
-         /api/status has ever answered. A green "live" here is a lie. -->
-    <div class="live" role="status"><span class="pill-face"><span class="dot off"
-        id="dot"></span><span id="conn">Connecting…</span></span></div>
   </div>
-  <div class="tagline" id="tagline"></div>
 </header>
 
 <div class="stack">
   <div class="card state" id="state" data-state="unknown">
     <div class="state-band" id="state-band">
-      <span class="lamp" id="lamp"></span>
-      <span class="glyph" id="state-glyph" aria-hidden="true"></span>
-      <div class="state-copy">
-        <div class="state-label" id="state-label" aria-live="polite"><span
+      <span class="state-chip">
+        <i class="lamp" id="lamp"></i>
+        <span class="state-label" id="state-label" aria-live="polite"><span
             class="alert-mark" id="alert-mark" aria-hidden="true" hidden>!</span><span
-            id="state-label-text">Connecting…</span></div>
-        <span class="stale-tag" id="stale-tag" hidden>Last seen</span>
-      </div>
+            id="state-label-text">Connecting…</span></span>
+      </span>
+      <span class="stale-tag" id="stale-tag" hidden>Last seen</span>
     </div>
     <div class="state-body">
-      <div class="tagline" id="tagline-card"></div>
       <div class="state-detail" id="state-detail">waiting for the machine</div>
       <div class="warm" id="warm" hidden>
         <div class="warm-track" aria-hidden="true"><i id="warm-fill"></i></div>
         <span class="warm-eta" id="warm-eta"></span>
       </div>
       <div class="shot" id="shot" hidden>
-        <b id="shot-seconds">0 s</b>
-        <span class="stale-tag" id="shot-stale" hidden>Last seen</span>
-        <small id="shot-ml">0 ml</small>
-        <div class="shot-track"><u id="shot-window"></u><i id="shot-progress"></i></div>
+        <div class="trow">
+          <div class="timer"><b id="shot-seconds">0</b><small>s</small>
+            <span class="stale-tag" id="shot-stale" hidden>Last seen</span>
+          </div>
+          <div class="hint" id="shot-hint">
+            <span id="shot-aim">Aiming for 25 to 30 s</span>
+            <b id="shot-verdict">On target</b>
+          </div>
+        </div>
+        <div class="shot-track"><i id="shot-progress"></i><u id="shot-window"></u></div>
+        <div class="tl"><span>0 s</span><span class="wl">25–30 s</span><span>40 s</span></div>
       </div>
-      <span class="last-pull" id="last-pull" hidden></span>
-    </div>
+      <div class="hero-curve" id="hero-curve" hidden>
+        <div class="cvh">
+          <span class="lbl">This shot's pressure</span>
+          <span class="lbl">bar</span>
+        </div>
+        <div class="chart" id="hero-chart">
+          <svg id="hero-curve-svg" viewBox="0 0 300 100" preserveAspectRatio="none"
+               role="img" aria-label="This shot's pressure, bar">
+            <path class="area" id="hero-area" d=""></path>
+            <path class="curve-line" id="hero-line" d=""></path>
+            <line class="base" x1="0" y1="100" x2="300" y2="100"></line>
+          </svg>
+          <span class="yl" id="hero-yl"></span>
+          <span class="dot" id="hero-dot" hidden></span>
+        </div>
+        <div class="tl" id="hero-curve-axis">
+          <span>0 s</span><span>10</span><span>20</span><span>30</span><span>40 s</span>
+        </div>      </div>    </div>
   </div>
 
   <!-- end state -->
@@ -1259,32 +1734,8 @@
   </div>
   <!-- end skeletons -->
 
+  <div class="desk-col" id="desk-meters">
   <div class="rings" id="rings"></div>
-
-  <div class="card" id="pulls-card" hidden>
-    <div class="card-head">
-      <span class="title">Recent shots</span>
-      <span class="note" id="pulls-note" role="status"></span>
-    </div>
-    <div class="pulls-track" id="pulls-track" role="listbox" tabindex="0"
-         aria-label="Recent shots" aria-orientation="horizontal">
-      <u id="pulls-window"></u>
-    </div>
-    <div class="axis"><span>0 s</span><span id="pulls-axis-end">40 s</span></div>
-    <p class="pulls-legend">
-      <span><i class="mark fast" aria-hidden="true"></i> short</span>
-      <span><i class="mark good" aria-hidden="true"></i> on target</span>
-      <span><i class="mark long" aria-hidden="true"></i> long</span>
-    </p>
-  </div>
-
-  <div class="card" id="history-card" hidden>
-    <div class="card-head">
-      <span class="title">Shot history</span>
-      <span class="note" id="history-note"></span>
-    </div>
-    <div class="history-list" id="history-list"></div>
-  </div>
 
   <div class="card" id="flow-card" hidden>
     <div class="card-head">
@@ -1295,32 +1746,43 @@
     <div class="chart" id="flow-chart" aria-hidden="true"></div>
     <div class="axis"><span id="flow-axis-start">-2:00</span><span id="flow-axis-mid">−1:00</span><span>now</span></div>
   </div>
+  </div>
 
-  <div class="card" id="tank-card" hidden>
-    <div class="card-head">
-      <span class="title">Water tank</span>
-      <span class="note" id="tank-note"></span>
+  <div class="desk-col" id="desk-side">
+  <div class="pair" id="tank-room">
+    <div class="card" id="tank-card" hidden>
+      <div class="pair-label">Water tank</div>
+      <div class="pair-lead" id="tank-lead">Tank's probably empty. Refill before the next shot.</div>
+      <div class="level"><i id="tank-fill" style="width:0%"></i></div>
+      <div class="used-row" id="tank-used-row">
+        <span class="pair-sub" id="tank-used-line">0 ml used</span>
+      </div>
+      <div class="tank-foot" id="tank-foot">
+        <span class="refill-hint" id="tank-warn" hidden>Time to refill</span>
+        <span class="refill-hint" id="tank-offline-hint" hidden>Reconnect to save the refill</span>
+        <button class="reset refill-pill" id="tank-reset" type="button" aria-label="I refilled the tank" aria-disabled="true"><span class="refill-long">I refilled the tank</span><span class="refill-short">I refilled it</span></button>
+      </div>
     </div>
-    <div class="figure"><b id="tank-remaining">--</b><span id="tank-capacity">ml left</span></div>
-    <div class="level"><i id="tank-fill" style="width:0%"></i></div>
-    <div class="meta">
-      <span id="tank-used-line">0 ml used</span>
-      <span id="tank-left">About 0 shots left</span>
-    </div>
-    <div class="tank-foot">
-      <span class="refill-hint" id="tank-warn" hidden>Time to refill</span>
-      <span class="refill-hint" id="tank-offline-hint" hidden>Reconnect to mark the tank filled</span>
-      <button class="reset" id="tank-reset" type="button" aria-disabled="true">I refilled the tank</button>
+    <div class="card" id="other-card" hidden>
+      <div class="pair-label">Room</div>
+      <div class="pair-lead" id="room-temp">—</div>
+      <div class="pair-sub" id="room-humidity">No sensor reading</div>
     </div>
   </div>
 
-  <div class="card" id="other-card" hidden>
-    <div class="card-head"><span class="title">Room</span></div>
-    <div class="rows" id="other-rows"></div>
+  <div class="card" id="pulls-card" hidden>
+    <div class="card-head">
+      <span class="title">Recent shots</span>
+      <button type="button" class="all-shots" id="all-shots" aria-expanded="false" hidden>All 0 shots ›</button>
+    </div>
+    <div class="recent-tiles" id="recent-tiles" aria-label="Recent shots"></div>
+    <div id="history-card" hidden>
+      <div class="history-list" id="history-list"></div>
+    </div>
+    <div class="history-detail" id="shot-sheet" hidden></div>
+  </div>
   </div>
 </div>
-
-<footer id="footer">never connected</footer>
 
 <div class="toast" id="toast" role="status" hidden></div>
 
@@ -1328,22 +1790,9 @@
 <script>
 // What a barista actually watches for: 9 bar at the group, a boiler sitting
 // around 1 bar, and a double landing in the 25-30 second window.
-const GUIDES = {
-  head:   { band: [8, 10], accent: 'var(--ink)', soft: 'var(--bg)',
-            caption: '9 bar is the sweet spot' },
-  boiler: { band: [0.8, 1.4], accent: 'var(--ink)', soft: 'var(--bg)',
-            caption: 'steam holds near 1 bar' },
-};
-
 const SHOT_WINDOW = [25, 30];   // seconds: a well-paced double
 const SHOT_SCALE = 40;          // seconds shown by the shot progress track
 const DOSE_G = 18;              // the double basket's dose; ratio is a guide, not a law
-
-// Dials are scaled to the working range, not the sensor's ceiling: each
-// dial spans ~1.75x its target band's top, so the sweet spot lands near
-// mid-scale instead of buried in the first quarter (a 5 bar boiler sensor
-// whose whole life happens below 1.6 bar reads as flat-left otherwise).
-const RING_RANGE_FACTOR = 1.75;
 
 // A small line icon per state, so heating and brewing are told apart by
 // shape as well as colour. Stroke inherits the state colour.
@@ -1367,9 +1816,6 @@ const GLYPHS = {
     '<path d="M9.7 9.8a2.3 2.3 0 1 1 3.1 2.1c-.7.3-.8.9-.8 1.6M12 16.6v.3"/>',
 };
 
-// Open ring: 240 degrees, gap at the bottom.
-const SWEEP = 240, START = -120, CX = 60, CY = 58, R = 44;
-
 // Sensor names and messages come from the machine's own configuration today,
 // but escaping keeps a name pulled from elsewhere (a Home Assistant entity,
 // say) from turning into markup on the dashboard.
@@ -1377,38 +1823,6 @@ const escapeHtml = value => String(value).replace(
   /[&<>"']/g,
   c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]),
 );
-
-function guideFor(name) {
-  const key = name.toLowerCase();
-  return GUIDES[Object.keys(GUIDES).find(k => key.includes(k))] || {};
-}
-
-// The bar range a dial actually shows: the target band's top times the
-// range factor, capped by the sensor's own ceiling (never beyond it).
-function dialMaxFor(sensor) {
-  const guide = guideFor(sensor.name);
-  if (guide.band) {
-    const span = guide.band[1] * RING_RANGE_FACTOR;
-    return Math.min(sensor.max_bar || span, span);
-  }
-  return sensor.max_bar || 1;
-}
-
-function polar(radius, degrees) {
-  const rad = (degrees - 90) * Math.PI / 180;
-  return [CX + radius * Math.cos(rad), CY + radius * Math.sin(rad)];
-}
-
-function angleFor(ratio) {
-  return START + SWEEP * Math.max(0, Math.min(1, ratio));
-}
-
-function arcPath(radius, fromDeg, toDeg) {
-  const [x1, y1] = polar(radius, fromDeg);
-  const [x2, y2] = polar(radius, toDeg);
-  const large = Math.abs(toDeg - fromDeg) > 180 ? 1 : 0;
-  return `M ${x1.toFixed(2)} ${y1.toFixed(2)} A ${radius} ${radius} 0 ${large} 1 ${x2.toFixed(2)} ${y2.toFixed(2)}`;
-}
 
 // Brew ratio against the basket's dose: 36 ml from 18 g reads as 1:2.
 // TODO(#26): show this once a real dose is stored. Hidden until then.
@@ -1474,14 +1888,9 @@ function renderState(machine, pressure) {
   document.getElementById('brewbar').dataset.state = stateName;
   document.getElementById('bb-label').textContent = shownLabel;
 
-  const lamp = document.getElementById('lamp');
-  lamp.classList.toggle('pulse', machine.severity === 'alert');
-
-  const glyph = document.getElementById('state-glyph');
-  glyph.innerHTML =
-    `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-          stroke-linecap="round" stroke-linejoin="round">${GLYPHS[machine.state] || GLYPHS.unknown}</svg>`;
-  glyph.style.color = '';
+  document.getElementById('state-label').classList.toggle(
+    'pulse', machine.severity === 'alert'
+  );
 
   // Only rewritten when it actually changes: the label carries aria-live,
   // and a per-second "3s in this state" would talk an ear off.
@@ -1510,22 +1919,22 @@ function renderState(machine, pressure) {
     // Fresh payload: take the machine's number. displayedShotText refuses
     // to advance a held reading while offline, which is what keeps the
     // timer from counting up if a late render lands after the lamp flips.
-    const incomingShot = `${machine.shot.seconds.toFixed(0)} s`;
-    const shownShot = DashboardLogic.displayedShotText(true, heldShotText, incomingShot);
+    const incomingShot = machine.shot.seconds.toFixed(0);    const shownShot = DashboardLogic.displayedShotText(true, heldShotText, incomingShot);
     heldShotText = shownShot;
     shotSeconds.textContent = shownShot;
-    shotSeconds.className = verdictOf(machine.shot.seconds).key;
+    const verdict = DashboardLogic.liveVerdict(
+      machine.shot.seconds, SHOT_WINDOW[0], SHOT_WINDOW[1]
+    );
+    document.getElementById('shot-verdict').textContent = verdict;
     document.getElementById('bb-time').className =
       `bb-time ${verdictOf(machine.shot.seconds).key}`;
-    document.getElementById('shot-ml').textContent =
-      `${machine.shot.ml.toFixed(0)} ml`;
     document.getElementById('shot-progress').style.width =
       `${Math.min(100, machine.shot.seconds / SHOT_SCALE * 100)}%`;
     const windowEl = document.getElementById('shot-window');
     if (presentation.showTarget) Object.assign(windowEl.style, windowStyle());
     else windowEl.style.width = '0';
 
-    document.getElementById('bb-time').textContent = shownShot;
+    document.getElementById('bb-time').textContent = `${shownShot} s`;
     document.getElementById('bb-ml').textContent =
       `${machine.shot.ml.toFixed(0)} ml`;
   } else {
@@ -1537,23 +1946,19 @@ function renderState(machine, pressure) {
     document.getElementById('bb-time').className = 'bb-time';
   }
 
-  // The last shot stays up as a reference chip, even mid-shot.
-  // Ratio stays hidden until #26 stores a dose. See ratioText.
-  const chip = document.getElementById('last-pull');
-  const last = machine.last_shot;
-  chip.hidden = !last;
-  if (last) {
-    const lastVerdict = verdictOf(last.seconds);
-    chip.textContent =
-      `Last shot ${last.seconds.toFixed(0)} s · ${last.ml.toFixed(0)} ml · ${lastVerdict.label}`;
-  }
-
   const boilerBar = DashboardLogic.boilerReading(pressure);
   const detailMachine = flushDisplay
     ? Object.assign({}, machine, { shot: null, state: 'flushing' })
     : machine;
-  document.getElementById('state-detail').textContent =
-    DashboardLogic.heroDetail(detailMachine, boilerBar);
+  const detail = DashboardLogic.heroDetail(detailMachine, boilerBar);
+  const detailEl = document.getElementById('state-detail');
+  if (presentation.showShot) {
+    detailEl.hidden = true;
+    document.getElementById('shot-aim').textContent = detail;
+  } else {
+    detailEl.textContent = detail;
+    detailEl.hidden = detail === "";
+  }
   paintWarm(machine, boilerBar);
 
   syncBrewbar();
@@ -1619,185 +2024,135 @@ if ('IntersectionObserver' in window) {
   }, { passive: true });
 }
 
-// ---- pressure rings ------------------------------------------------------
-// Built once per sensor and updated in place: re-creating the SVG every
-// poll would drop the element mid-transition, so the arc would tick in
-// one-second steps instead of gliding. The arc fills via a normalised
-// pathLength (dash = whole arc, offset = the empty part), which animates
-// in every browser, not just the Chromium `d` property.
+// ---- pressure meters -----------------------------------------------------
+// One card. Head is a fixed 0–12 bar track (accent inside 8–10). Boiler
+// is a fixed 0–2 bar track in ink. The dials are gone.
 
-const ringEls = new Map();
-let ringsKey = '';
-
-function buildRings(pressure) {
-  ringsKey = pressure.map(s => `${s.name}@${s.max_bar}`).join('|');
-  ringEls.clear();
-  document.getElementById('rings').innerHTML = pressure.map(sensor => {
-    const max = sensor.max_bar || 1;
-    const dial = dialMaxFor(sensor);
-    const guide = guideFor(sensor.name);
-    const accent = guide.accent || 'var(--water)';
-    const soft = guide.soft || 'var(--water-soft)';
-    const label = escapeHtml(sensor.name);
-
-    // The target band rides on the same track as the reading. Past its
-    // top (only when the dial is cropped below the sensor ceiling) a clay
-    // mark is drawn, then shown only once the reading nears that band —
-    // hidden at rest, so 0 bar does not look like a warning.
-    let band = '';
-    if (guide.band) {
-      const [from, to] = guide.band;
-      band =
-        `<path d="${arcPath(R - 7, angleFor(from / dial), angleFor(to / dial))}" fill="none"
-              stroke="var(--ink-soft)" stroke-width="3" stroke-linecap="round"/>` +
-        (dial > to
-          ? `<path class="ring-over" d="${arcPath(R - 7, angleFor(to / dial), angleFor(1))}" fill="none"
-                stroke="var(--alert)" stroke-width="3" stroke-linecap="round"
-                visibility="hidden"/>`
-          : '');
-    }
-
-    return `
-    <div class="card">
-      <div class="card-head" style="justify-content:center;margin-bottom:2px">
-        <span class="title">${label}</span>
-      </div>
-      <svg class="ring" viewBox="0 0 120 100" role="img" aria-label="${label} 0 bar">
-        <path d="${arcPath(R - 7, angleFor(0), angleFor(1))}" fill="none" stroke="${soft}"
-              stroke-width="9" stroke-linecap="round"/>
-        <path class="ring-value" d="${arcPath(R - 7, angleFor(0), angleFor(1))}" fill="none"
-              stroke="${accent}" stroke-width="9" stroke-linecap="round"
-              pathLength="1" stroke-dasharray="1" stroke-dashoffset="1"
-              visibility="hidden"
-              style="transition:stroke-dashoffset .3s ease"/>
-        ${band}
-      </svg>
-      <div class="ring-read"><b>0.0</b><span>bar</span></div>
-      <div class="ring-foot">${guide.caption || `up to ${max} bar`}</div>
-    </div>`;
-  }).join('');
-
-  const cards = document.getElementById('rings').children;
-  pressure.forEach((sensor, i) => {
-    const guide = guideFor(sensor.name);
-    ringEls.set(i, {
-      value: cards[i].querySelector('.ring-value'),
-      read: cards[i].querySelector('.ring-read b'),
-      svg: cards[i].querySelector('svg'),
-      dial: dialMaxFor(sensor),
-      accent: guide.accent || 'var(--water-ink)',
-      over: cards[i].querySelector('.ring-over'),
-      // The band's top (or null): the render path reads the overshoot
-      // threshold from here instead of re-scanning GUIDES per sample.
-      bandFrom: guide.band ? guide.band[0] : null,
-      bandTop: guide.band ? guide.band[1] : null,
-    });
+function renderMeters(pressure) {
+  const host = document.getElementById('rings');
+  const sensors = (pressure || []).slice().sort((a, b) => {
+    const rank = (name) => {
+      const key = String(name || '').toLowerCase();
+      if (key.includes('head')) return 0;
+      if (key.includes('boiler') || key.includes('steam')) return 1;
+      return 2;
+    };
+    return rank(a.name) - rank(b.name);
   });
-}
-
-function renderRings(pressure) {
-  const key = pressure.map(s => `${s.name}@${s.max_bar}`).join('|');
-  if (key !== ringsKey) buildRings(pressure);
-
-  pressure.forEach((sensor, i) => {
-    const el = ringEls.get(i);
-    if (!el) return;
-    if (DashboardLogic.readingFaulted(sensor, 'bar')) {
-      el.value.style.visibility = 'hidden';
-      el.read.textContent = '—';
-      if (el.over) el.over.style.visibility = 'hidden';
-      el.svg.setAttribute('aria-label', `${sensor.name} no reading`);
-      return;
-    }
-    const ratio = Math.max(0, Math.min(1, sensor.bar / el.dial));
-    el.value.setAttribute('stroke-dashoffset', (1 - ratio).toFixed(4));
-    el.value.style.visibility = ratio > 0 ? 'visible' : 'hidden';
-    // Past the band's top the fill itself turns clay: the geometry says
-    // "high", the colour says "high is wrong".
-    const over = el.bandTop != null && sensor.bar > el.bandTop;
-    el.value.setAttribute('stroke', over ? 'var(--alert)' : el.accent);
-    // At rest the clay "past the band" arc reads as a warning. Keep it
-    // hidden until the needle is actually near the band.
-    if (el.over) {
-      const show = DashboardLogic.showOverBand(sensor.bar, el.bandFrom);
-      el.over.style.visibility = show ? 'visible' : 'hidden';
-    }
-    el.read.textContent = DashboardLogic.formatReading(sensor.bar, 1);
-    el.svg.setAttribute('aria-label',
-      `${sensor.name} ${DashboardLogic.formatReading(sensor.bar, 1)} bar`);
-  });
-}
-
-// ---- recent pulls --------------------------------------------------------
-
-let pullsSig = '';
-let pullHistory = [];
-let selectedPull = -1;
-
-function renderPulls(history) {
-  const cardEl = document.getElementById('pulls-card');
-  cardEl.hidden = !history.length;
-  if (!history.length) {
-    pullHistory = [];
-    selectedPull = -1;
-    // Forget the signature too: a pull that reappears with the same
-    // numbers (server restart, one new pull) must still rebuild.
-    pullsSig = '';
+  if (!sensors.length) {
+    host.innerHTML = '';
     return;
   }
-
-  // Recorded pulls never change, so the strip is only redrawn when the
-  // sequence itself changes (a new pull, or one aging out of the memory).
-  // The yield rides along in the signature: two pulls of the same length
-  // with different volumes must still redraw the ticks.
-  const sig = history.map(s => `${s.seconds}:${s.ml}`).join(',');
-  if (sig !== pullsSig) {
-    pullsSig = sig;
-    pullHistory = history;
-    selectedPull = -1;   // a rebuilt strip has nothing selected
-    document.getElementById('pulls-track').removeAttribute('aria-activedescendant');
-
-    Object.assign(document.getElementById('pulls-window').style, windowStyle());
-
-    const track = document.getElementById('pulls-track');
-    track.querySelectorAll('i').forEach(tick => tick.remove());
-    history.forEach((shot, i) => {
-      const verdict = verdictOf(shot.seconds);
-      const tick = document.createElement('i');
-      tick.className = `mark ${verdict.key}${i === history.length - 1 ? ' now' : ''}`;
-      const along = Math.max(0, Math.min(1, shot.seconds / SHOT_SCALE));
-      tick.style.left = `${along * 100}%`;
-      tick.style.marginLeft = '-8px';
-      // The mark is not a target (overlapping ticks used to steal the tap).
-      // It stays an option so the track can point at it from the keyboard.
-      tick.id = `pull-${i}`;
-      tick.setAttribute('role', 'option');
-      tick.setAttribute('aria-selected', 'false');
-      tick.setAttribute('aria-label',
-        `shot ${i + 1}: ${shot.seconds.toFixed(0)} seconds, ${shot.ml.toFixed(0)} ml, ${verdict.label}`);
-      track.appendChild(tick);
-    });
-  }
-
-  // The note is only the open tick. The count stays on Shot history.
-  const note = document.getElementById('pulls-note');
-  const sel = pullHistory[selectedPull];
-  note.textContent = sel
-    ? `${sel.seconds.toFixed(0)} s · ${sel.ml.toFixed(0)} ml · ${verdictOf(sel.seconds).label}`
-    : '';
+  host.innerHTML = `<div class="card meters">${sensors.map((sensor) => {
+    const spec = DashboardLogic.meterSpec(sensor.name);
+    const fault = DashboardLogic.readingFaulted(sensor, 'bar');
+    const reading = fault ? '—' : DashboardLogic.formatReading(sensor.bar, 1);
+    const fraction = fault ? 0 : DashboardLogic.meterFraction(sensor.bar, spec.max);
+    const hot = !fault && DashboardLogic.meterHot(sensor.bar, spec.band);
+    const label = escapeHtml(spec.label);
+    return `<div>
+      <div class="meter-label">${label}</div>
+      <div class="meter-num"><b>${reading}</b><small>bar</small></div>
+      <div class="meter" role="img" aria-label="${label} ${reading} bar"><i class="${hot ? 'hot' : ''}" style="width:${(fraction * 100).toFixed(1)}%"></i></div>
+      <div class="meter-scale"><span>0</span><span>${spec.max} bar</span></div>
+    </div>`;
+  }).join('')}</div>`;
 }
 
-function selectPull(index, toggle) {
-  selectedPull = toggle && selectedPull === index ? -1 : index;
-  const track = document.getElementById('pulls-track');
-  track.querySelectorAll('i').forEach((tick, i) => {
-    const on = i === selectedPull;
-    tick.classList.toggle('sel', on);
-    tick.setAttribute('aria-selected', String(on));
+// ---- recent shots --------------------------------------------------------
+
+let pullsSig = '';
+
+function renderRecent(block) {
+  const card = document.getElementById('pulls-card');
+  const recent = (block && block.recent) || [];
+  const count = (block && block.count) || recent.length;
+  card.hidden = count === 0 && recent.length === 0;
+  const link = document.getElementById('all-shots');
+  const linkInfo = DashboardLogic.allShotsLink(count, 4);
+  link.hidden = linkInfo.hidden;
+  link.textContent = linkInfo.text;
+
+  const tiles = recent.slice(0, 4);
+  const sig = tiles.map(shot => `${shot.id}:${shot.seconds}:${shot.ml}:${shot.started_at}`).join(',');
+  if (sig !== pullsSig) {
+    pullsSig = sig;
+    paintRecentTiles(tiles);
+  }
+
+  const historySigNext = recent.map(shot => `${shot.id}:${shot.seconds}:${shot.ml}`).join(',');
+  if (!recent.length) {
+    historySig = '';
+    historyShots = [];
+    selectedShotId = null;
+    document.getElementById('shot-sheet').hidden = true;
+    document.getElementById('history-list').innerHTML = '';
+    return;
+  }
+  if (historySigNext === historySig) return;
+  historySig = historySigNext;
+  historyShots = recent;
+  if (!recent.some(shot => shot.id === selectedShotId)) {
+    selectedShotId = null;
+    document.getElementById('shot-sheet').hidden = true;
+  }
+  paintHistoryList();
+  if (selectedShotId != null) showShot(selectedShotId, false);
+}
+
+function paintRecentTiles(tiles) {
+  const host = document.getElementById('recent-tiles');
+  host.innerHTML = '';
+  tiles.forEach(shot => {
+    const tile = DashboardLogic.recentTile(
+      Number(shot.seconds), Number(shot.ml), SHOT_WINDOW[0], SHOT_WINDOW[1]
+    );
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'recent-tile';
+    button.addEventListener('click', () => toggleShot(shot.id));
+
+    const ml = document.createElement('div');
+    ml.className = 'ml';
+    ml.append(document.createTextNode(Number(shot.ml).toFixed(0)));
+    const unit = document.createElement('small');
+    unit.textContent = ' ml';
+    ml.append(unit);
+
+    const bar = document.createElement('div');
+    bar.className = 'recent-bar';
+    const fill = document.createElement('i');
+    if (tile.key === 'good') fill.className = 'ok';
+    fill.style.width = `${Math.round(tile.bar * 100)}%`;
+    bar.append(fill);
+
+    const verdict = document.createElement('div');
+    verdict.className = tile.key === 'good' ? 'v ok' : 'v';
+    if (tile.mark) verdict.append(document.createTextNode(tile.mark + ' '));
+    verdict.append(document.createTextNode(tile.label));
+
+    const when = document.createElement('span');
+    when.className = 't';
+    const parts = shotWhenParts(shot.started_at);
+    if (parts.day) {
+      const day = document.createElement('span');
+      day.className = 't-day';
+      day.textContent = parts.day;
+      when.append(day);
+    }
+    const time = document.createElement('span');
+    time.className = 't-time';
+    time.textContent = parts.time;
+    when.append(time);
+    const line = document.createElement('span');
+    line.className = 't-line';
+    line.textContent = DashboardLogic.shotWhenLine(shot.started_at);
+    when.append(line);
+
+    button.append(ml, bar, verdict, when);
+    host.appendChild(button);
   });
-  if (selectedPull >= 0) track.setAttribute('aria-activedescendant', `pull-${selectedPull}`);
-  else track.removeAttribute('aria-activedescendant');
-  renderPulls(pullHistory);   // same signature: only the note is rewritten
+  requestAnimationFrame(fitRecentRows);
 }
 
 // ---- shot history --------------------------------------------------------
@@ -1816,41 +2171,26 @@ let selectedShotId = null;
 const shotCache = new Map();
 let shotLoadToken = 0;
 
-function shotWhen(iso) {
+function shotWhenParts(iso) {
   const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return String(iso || '');
+  if (Number.isNaN(date.getTime())) return { day: '', time: String(iso || '') };
   const time = date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
   const today = new Date();
-  if (date.toDateString() === today.toDateString()) return time;
+  if (date.toDateString() === today.toDateString()) return { day: '', time: time };
   const yesterday = new Date(today);
   yesterday.setDate(today.getDate() - 1);
-  if (date.toDateString() === yesterday.toDateString()) return `yesterday ${time}`;
+  if (date.toDateString() === yesterday.toDateString()) return { day: 'Yesterday', time: time };
   const day = date.toLocaleDateString([], { month: 'short', day: 'numeric' });
-  return `${day} ${time}`;
+  return { day: day, time: time };
+}
+
+function shotWhen(iso) {
+  const parts = shotWhenParts(iso);
+  return parts.day ? `${parts.day} ${parts.time}` : parts.time;
 }
 
 function renderHistory(block) {
-  const card = document.getElementById('history-card');
-  const recent = (block && block.recent) || [];
-  if (!recent.length) {
-    card.hidden = true;
-    historySig = '';
-    historyShots = [];
-    selectedShotId = null;
-    return;
-  }
-  card.hidden = false;
-  const count = block.count || recent.length;
-  document.getElementById('history-note').textContent =
-    count === 1 ? '1 saved' : `${count} saved`;
-
-  const sig = recent.map(shot => `${shot.id}:${shot.seconds}:${shot.ml}`).join(',');
-  if (sig === historySig) return;
-  historySig = sig;
-  historyShots = recent;
-  if (!recent.some(shot => shot.id === selectedShotId)) selectedShotId = null;
-  paintHistoryList();
-  if (selectedShotId != null) showShot(selectedShotId, false);
+  renderRecent(block);
 }
 
 function paintHistoryList() {
@@ -1864,7 +2204,9 @@ function paintHistoryList() {
     button.setAttribute('aria-pressed', String(selected));
     button.setAttribute('aria-expanded', String(selected));
 
-    const verdict = verdictOf(Number(shot.seconds));
+    const verdict = DashboardLogic.recentTile(
+      Number(shot.seconds), Number(shot.ml), SHOT_WINDOW[0], SHOT_WINDOW[1]
+    );
     const mark = document.createElement('span');
     mark.className = `mark ${verdict.key}`;
     mark.setAttribute('aria-hidden', 'true');
@@ -1882,12 +2224,6 @@ function paintHistoryList() {
     button.addEventListener('click', () => toggleShot(shot.id));
     list.appendChild(button);
 
-    if (selected) {
-      const detail = document.createElement('div');
-      detail.className = 'history-detail';
-      detail.id = 'history-detail';
-      list.appendChild(detail);
-    }
   });
 }
 
@@ -1898,8 +2234,10 @@ function toggleShot(id) {
 }
 
 async function showShot(id, scroll) {
-  const detail = document.getElementById('history-detail');
+  const detail = document.getElementById('shot-sheet');
   if (!detail) return;
+  detail.hidden = false;
+  detail.className = 'history-detail';
   const token = ++shotLoadToken;
   const cached = shotCache.get(id);
   if (cached) {
@@ -2009,7 +2347,7 @@ function paintShot(detail, shot) {
     shotWhen(shot.started_at),
     `${seconds.toFixed(1)} s`,
     `${ml.toFixed(1)} ml`,
-    verdictOf(seconds).label,
+    DashboardLogic.recentTile(seconds, ml, SHOT_WINDOW[0], SHOT_WINDOW[1]).label,
   ];
   if (typeof shot.peak_head_bar === 'number') bits.push(`${shot.peak_head_bar.toFixed(1)} bar`);
   if (typeof shot.peak_flow_mls === 'number') bits.push(`${shot.peak_flow_mls.toFixed(1)} ml/s`);
@@ -2040,27 +2378,59 @@ function paintShot(detail, shot) {
 
 // ---- tank ----------------------------------------------------------------
 
+function renderRoom(sensors) {
+  const card = document.getElementById('other-card');
+  const room = (sensors || []).find(sensor =>
+    sensor && (sensor.temperature_c !== undefined || sensor.humidity_pct !== undefined
+      || sensor.name === 'Environment' || sensor.name === 'Room')
+  );
+  card.hidden = !room;
+  if (!room) return;
+  const temp = document.getElementById('room-temp');
+  const humidity = document.getElementById('room-humidity');
+  temp.replaceChildren();
+  if (typeof room.temperature_c === 'number') {
+    temp.append(document.createTextNode(room.temperature_c.toFixed(1)));
+    const unit = document.createElement('small');
+    unit.textContent = ' °C';
+    temp.append(unit);
+  } else {
+    temp.textContent = '—';
+  }
+  if (typeof room.humidity_pct === 'number') {
+    humidity.textContent = DashboardLogic.humidityLabel(room.humidity_pct);
+  } else {
+    humidity.textContent = 'No sensor reading';
+  }
+}
+
 function renderTank(tank) {
-  document.getElementById('tank-remaining').textContent =
-    Math.round(tank.remaining_ml).toLocaleString('en-US');
-  document.getElementById('tank-capacity').textContent =
-    `ml of ${Math.round(tank.capacity_ml).toLocaleString('en-US')} left`;
   document.getElementById('tank-used-line').textContent =
     `${Math.round(tank.used_ml).toLocaleString('en-US')} ml used`;
   const shotsLeft = tank.shots_left;
-  document.getElementById('tank-left').textContent = shotsLeft === 1
-    ? 'About 1 shot left'
-    : `About ${shotsLeft} shots left`;
-  document.getElementById('tank-note').textContent =
-    tank.refills ? `${tank.refills} refill${tank.refills === 1 ? '' : 's'}` : '';
+  const lead = document.getElementById('tank-lead');
+  lead.replaceChildren();
+  lead.classList.toggle('empty', shotsLeft === 0);
+  if (shotsLeft === 0) {
+    lead.textContent = DashboardLogic.tankLead(0);
+  } else {
+    const count = document.createElement('span');
+    count.textContent = shotsLeft === 1 ? 'About 1' : `About ${shotsLeft}`;
+    const rest = document.createElement('small');
+    rest.textContent = shotsLeft === 1 ? ' shot left' : ' shots left';
+    lead.append(count, rest);
+  }
 
   const fill = document.getElementById('tank-fill');
+  const meter = fill.parentElement;
+  meter.hidden = DashboardLogic.tankMeterHidden(shotsLeft);
   fill.style.width = `${tank.percent}%`;
   fill.classList.toggle('low', tank.low);
 
   const warn = document.getElementById('tank-warn');
-  warn.hidden = !tank.low;
-  warn.textContent = tank.empty ? 'Tank is empty' : 'Time to refill';
+  warn.hidden = tank.empty || !tank.low;
+  warn.textContent = 'Time to refill';
+  applyRefill(shotsLeft === 0);
 }
 
 // ---- pour chart ----------------------------------------------------------
@@ -2113,13 +2483,6 @@ function renderFlow(sensor) {
 
 // ---- frame ---------------------------------------------------------------
 
-function formatDuration(seconds) {
-  const h = Math.floor(seconds / 3600), m = Math.floor(seconds / 60) % 60;
-  if (h) return `${h} h ${m} m`;
-  if (m) return `${m} m`;
-  return `${Math.floor(seconds)} s`;
-}
-
 // Volumes read in the unit that keeps the digits short: a lifetime of
 // water is litres, this morning's tank is millilitres with thin commas.
 function volText(ml) {
@@ -2127,23 +2490,20 @@ function volText(ml) {
   return `${Math.round(ml).toLocaleString('en-US')} ml`;
 }
 
-// The tagline slot earns its keep: today's pulls, so a glance answers
-// "how many shots has the machine seen today".
-function renderToday(today) {
-  if (!today) return;   // an older server payload: keep the static line
-  const text = today.shots > 0
-    ? `${today.shots} shot${today.shots === 1 ? '' : 's'} · ${volText(today.ml)} today`
-    : 'No shots yet today';
+// Saved shots today. The first one, while it is still running, leaves
+// the line empty. header .tagline:empty hides that gap.
+function renderToday(machine) {
+  if (!machine || !machine.today) return;
+  const text = DashboardLogic.todayLine(machine.today, !!machine.shot);
+  if (text == null) return;
   document.getElementById('tagline').textContent = text;
-  document.getElementById('tagline-card').textContent = text;
 }
 
 function render(data) {
   renderState(data.machine, data.pressure);
-  renderRings(data.pressure);
-  renderPulls(data.machine.history || []);
-  renderHistory(data.shots);
-  renderToday(data.machine && data.machine.today);
+  renderMeters(data.pressure);
+  renderRecent(data.shots);
+  renderToday(data.machine);
 
   const flowCard = document.getElementById('flow-card');
   const flowPresent = data.flow.length > 0;
@@ -2154,25 +2514,10 @@ function render(data) {
   tankCard.hidden = !DashboardLogic.sensorCardVisible(true, !!data.tank);
   if (data.tank) renderTank(data.tank);
 
-  const otherCard = document.getElementById('other-card');
-  otherCard.hidden = !data.other.length;
-  if (data.other.length) {
-    document.getElementById('other-rows').innerHTML = data.other
-      .map(s => {
-        const name = s.name === 'Environment' ? 'Room' : s.name;
-        return `<div class="row"><span>${escapeHtml(name)}</span><span class="v">${escapeHtml(s.message)}</span></div>`;
-      })
-      .join('');
-  }
+  renderRoom(data.other || []);
 
   hasPayload = true;
   document.getElementById('skeletons').hidden = true;
-
-  // render() only runs with a payload just applied, so the uptime line is
-  // a real reading. Gating it on `connected` left the first success showing
-  // "never connected" until the following poll.
-  document.getElementById('footer').textContent =
-    `dashboard up ${formatDuration(data.uptime)}`;
 }
 
 let toastTimer = null;
@@ -2192,18 +2537,14 @@ function syncTankControl() {
   if (!allowed && resetButton.classList.contains('armed')) disarmReset();
 }
 
-// Pill, footer, banner, skeletons and the stale tags. Called the moment
-// the connection changes and once a second while offline, so the banner
-// does not wait for the next footer tick to appear.
+// Pill, banner, skeletons and the stale tags. Called the moment the
+// connection changes and once a second while offline, so the banner
+// does not wait for the next tick. The banner already names Last seen,
+// so there is no footer repeating it.
 function paintOfflineChrome() {
   const text = DashboardLogic.pillText(connected, lastSeenAt);
   document.getElementById('dot').classList.toggle('off', text !== 'Live');
   document.getElementById('conn').textContent = text;
-  if (!connected) {
-    document.getElementById('footer').textContent = DashboardLogic.footerText(
-      connected, lastSeenAt, Date.now()
-    );
-  }
 
   const banner = DashboardLogic.offlineBanner(
     connected, missed, lastSeenAt, Date.now()
@@ -2225,11 +2566,15 @@ function paintOfflineChrome() {
   const offline = DashboardLogic.shownState(
     lastMachine, null, connected, hasPayload, lastSeenAt, Date.now()
   );
+  const chip = document.querySelector('.state-chip');
+  const stateCard = document.getElementById('state');
+  if (chip) chip.classList.toggle('offline', offline.replace);
+  if (stateCard) stateCard.classList.toggle('offline', offline.replace);
   if (offline.replace) {
-    const offlineCard = document.getElementById('state');
-    const offlineLabel = applyPill(offlineCard, offline.label);
-    setStateLabel(offlineLabel);
-    document.getElementById('state-detail').textContent = '';
+    setStateLabel(applyPill(document.getElementById('state'), offline.label));
+    const detailEl = document.getElementById('state-detail');
+    detailEl.textContent = offline.detail;
+    detailEl.hidden = false;
     document.getElementById('shot').hidden = true;
     document.getElementById('warm').hidden = true;
     document.getElementById('brewbar').classList.remove('show');
@@ -2240,6 +2585,7 @@ function paintOfflineChrome() {
   document.getElementById('bb-stale').hidden = !(stale && shotLive);
   document.getElementById('skeletons').hidden = !DashboardLogic.showSkeletons(hasPayload);
   syncTankControl();
+  fitRecentRows();
 }
 
 function setConnected(ok) {
@@ -2289,9 +2635,34 @@ resetButton.addEventListener('click', async () => {
   }
 });
 
+let tankIsEmpty = true;
+
+function applyRefill(empty) {
+  tankIsEmpty = !!empty;
+  if (resetButton.classList.contains('armed')) return;
+  const spec = DashboardLogic.refillControl(tankIsEmpty);
+  resetButton.classList.toggle('refill-pill', spec.pill);
+  resetButton.classList.toggle('refill-inline', !spec.pill);
+  resetButton.setAttribute('aria-label', spec.name);
+  if (spec.pill) {
+    document.getElementById('tank-foot').appendChild(resetButton);
+    resetButton.replaceChildren();
+    const long = document.createElement('span');
+    long.className = 'refill-long';
+    long.textContent = spec.long;
+    const short = document.createElement('span');
+    short.className = 'refill-short';
+    short.textContent = spec.short;
+    resetButton.append(long, short);
+  } else {
+    document.getElementById('tank-used-row').appendChild(resetButton);
+    resetButton.textContent = spec.text;
+  }
+}
+
 function disarmReset() {
   resetButton.classList.remove('armed');
-  resetButton.textContent = 'I refilled the tank';
+  applyRefill(tankIsEmpty);
 }
 
 // ---- polling, with a backoff so a down machine is not hammered ----------
@@ -2309,6 +2680,85 @@ let heldShotText = null;
 let lastSeenAt = null;
 let pollTimer = null;
 let pollInFlight = false;
+// The shot that is running, appended from /api/shots/current?after=.
+let liveCurve = { startedAt: null, samples: [] };
+// The newest saved shot, loaded from /api/shots/<id> for Ready.
+let lastCurve = { id: null, samples: [] };
+
+function paintHeroCurve(machine, shotActive) {
+  const slot = DashboardLogic.heroCurveSlot({
+    state: machine && machine.state,
+    shotActive: !!shotActive,
+    liveSamples: liveCurve.samples,
+    lastSamples: lastCurve.samples,
+  });
+  const root = document.getElementById('hero-curve');
+  const figure = slot.hidden ? null : DashboardLogic.heroCurveFigure(slot.samples);
+  if (!figure) {
+    root.hidden = true;
+    return;
+  }
+  root.hidden = false;
+  const title = root.querySelector('.lbl');
+  if (title && slot.label) title.textContent = slot.label;
+  const svg = document.getElementById('hero-curve-svg');
+  if (svg && slot.label) svg.setAttribute('aria-label', slot.label + ', bar');
+  document.getElementById('hero-area').setAttribute('d', figure.area);
+  document.getElementById('hero-line').setAttribute('d', figure.line);
+  const dot = document.getElementById('hero-dot');
+  dot.hidden = false;
+  dot.style.left = `${figure.dot.x / figure.width * 100}%`;
+  dot.style.top = `${figure.dot.y / figure.height * 100}%`;
+  const label = document.getElementById('hero-yl');
+  label.textContent = figure.yLabel;
+  label.style.top = `${figure.yLabelAt / figure.height * 100}%`;
+  const axis = document.getElementById('hero-curve-axis').querySelectorAll('span');
+  figure.axis.forEach((text, index) => {
+    if (axis[index]) axis[index].textContent = text;
+  });
+}
+
+async function refreshHeroCurve(data) {
+  const machine = (data && data.machine) || {};
+  const shotActive = DashboardLogic.livePresentation(
+    machine, headBar(data && data.pressure)
+  ).showShot;
+  try {
+    if (shotActive) {
+      const request = DashboardLogic.curveRequest(liveCurve);
+      const url = request.after == null
+        ? '/api/shots/current'
+        : `/api/shots/current?after=${encodeURIComponent(request.after)}`;
+      const payload = await (await fetch(url, { cache: 'no-store' })).json();
+      if (DashboardLogic.curveNeedsFull(liveCurve, payload)) {
+        const full = await (await fetch('/api/shots/current', { cache: 'no-store' })).json();
+        liveCurve = DashboardLogic.applyCurrentSamples(
+          { startedAt: null, samples: [] }, full
+        );
+      } else {
+        liveCurve = DashboardLogic.applyCurrentSamples(liveCurve, payload);
+      }
+    } else {
+      const recent = (data.shots && data.shots.recent) || [];
+      const newest = recent[0];
+      if (newest && newest.id != null && newest.id !== lastCurve.id) {
+        const res = await fetch(`/api/shots/${encodeURIComponent(newest.id)}`, {
+          cache: 'no-store',
+        });
+        if (res.ok) {
+          const shot = await res.json();
+          lastCurve = {
+            id: shot.id,
+            samples: Array.isArray(shot.samples) ? shot.samples : [],
+          };
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('hero curve:', err);
+  }
+  paintHeroCurve(machine, shotActive);
+}
 
 async function poll() {
   clearTimeout(pollTimer);
@@ -2325,6 +2775,7 @@ async function poll() {
     // failures may count as misses or flip the connection lamp.
     try {
       render(data);
+      await refreshHeroCurve(data);
       missed = 0;
       backoff = 0;
       lastSeenAt = Date.now();
@@ -2440,35 +2891,36 @@ wakeBtn.addEventListener('click', () => {
 
 if ('wakeLock' in navigator) wakeBtn.hidden = false;
 
-// Axis labels are derived from the scale, never hardcoded, so they follow
-// it when the extraction window moves.
-document.getElementById('pulls-axis-end').textContent = `${SHOT_SCALE} s`;
+document.getElementById('all-shots').addEventListener('click', () => {
+  const list = document.getElementById('history-card');
+  const open = list.hidden;
+  list.hidden = !open;
+  document.getElementById('all-shots').setAttribute('aria-expanded', String(open));
+});
 
-// One target for the whole strip. A tap (or the arrow keys) resolves to
-// the nearest pull, including when the marks sit closer than a thumb.
-const pullsTrack = document.getElementById('pulls-track');
-pullsTrack.addEventListener('click', (event) => {
-  if (!pullHistory.length) return;
-  const rect = pullsTrack.getBoundingClientRect();
-  const centers = pullHistory.map(shot => {
-    const along = Math.max(0, Math.min(1, shot.seconds / SHOT_SCALE));
-    return rect.left + along * rect.width;
-  });
-  const index = DashboardLogic.nearestTickIndex(centers, event.clientX);
-  if (index >= 0) selectPull(index, true);
-});
-pullsTrack.addEventListener('keydown', (event) => {
-  if (!pullHistory.length) return;
-  const key = event.key;
-  if (key !== 'ArrowLeft' && key !== 'ArrowRight' && key !== 'Home' && key !== 'End') return;
-  event.preventDefault();
-  let index = selectedPull;
-  if (key === 'Home') index = 0;
-  else if (key === 'End') index = pullHistory.length - 1;
-  else if (key === 'ArrowRight') index = selectedPull < 0 ? 0 : Math.min(pullHistory.length - 1, selectedPull + 1);
-  else index = selectedPull < 0 ? pullHistory.length - 1 : Math.max(0, selectedPull - 1);
-  selectPull(index, false);
-});
+function fitRecentRows() {
+  if (!window.matchMedia('(min-width: 1000px)').matches) return;
+  const rows = [...document.querySelectorAll('#recent-tiles .recent-tile')];
+  rows.forEach(row => { row.hidden = false; });
+  const card = document.getElementById('pulls-card');
+  if (!card || rows.length < 4) return;
+  const limit = card.getBoundingClientRect().bottom + 1;
+  // Four rows is the normal list. Hide the fourth only when it still
+  // crosses the card, so a short offline window does not scroll.
+  if (rows[3].getBoundingClientRect().bottom > limit) rows[3].hidden = true;
+}
+
+function syncDeskRecent() {
+  // Four rows on a phone and on desktop. The link opens the longer log.
+  const list = document.getElementById('history-card');
+  const link = document.getElementById('all-shots');
+  if (!list || !link) return;
+  list.hidden = link.getAttribute('aria-expanded') !== 'true';
+  fitRecentRows();
+}
+window.fitRecentRows = fitRecentRows;
+window.addEventListener('resize', syncDeskRecent);
+syncDeskRecent();
 
 // The shell lives in the service worker, so the page opens instantly and
 // survives the machine's server blinking.
