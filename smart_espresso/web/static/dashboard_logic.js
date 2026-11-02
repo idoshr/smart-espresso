@@ -13,8 +13,8 @@
   // The pill may say "live" only after a status payload has been applied.
   // Before that, "offline" would pretend a reading once existed.
   function pillText(connected, lastSeenAt) {
-    if (connected) return "live";
-    if (lastSeenAt == null) return "connecting…";
+    if (connected) return "Live";
+    if (lastSeenAt == null) return "Connecting…";
     return "offline";
   }
 
@@ -163,10 +163,30 @@
     return whole + " s";
   }
 
-  // One secondary line. The chip already says the state, so this line
-  // only adds the duration, the boiler, or the aim.
+  // The pill already names the state. This line only says how long.
   function durationLine(state, sinceSeconds) {
     return "for " + formatSpokenDuration(sinceSeconds);
+  }
+
+  // The machine label is one sentence. The pill only needs the short name,
+  // and the check belongs on the line under the duration.
+  function pillLabel(label) {
+    if (!label) return "";
+    if (label.indexOf("Pressure high") === 0) return "Pressure high";
+    return label;
+  }
+
+  function pillKind(label) {
+    const text = pillLabel(label);
+    if (text === "Pulling a shot" || text === "Steaming milk" || text === "Water running") {
+      return "live";
+    }
+    if (text === "Pressure high") return "alert";
+    if (text === "Ready to pull") return "ready";
+    if (text === "No sensor reading") return "unknown";
+    if (text === "Warming up") return "heating";
+    if (text === "Off") return "off";
+    return "quiet";
   }
 
   // The chip already names the state, so this line does not repeat it.
@@ -339,6 +359,8 @@
     formatEta: formatEta,
     heroDetail: heroDetail,
     liveVerdict: liveVerdict,
+    pillLabel: pillLabel,
+    pillKind: pillKind,
     glanceOn: glanceOn,
     noteShotWindow: noteShotWindow,
     clearShotWindow: clearShotWindow,
