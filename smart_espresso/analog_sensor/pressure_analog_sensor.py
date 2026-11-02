@@ -1,5 +1,6 @@
 import math
 import os
+from collections.abc import Mapping
 from typing import Optional
 
 from smart_espresso.analog_sensor.analog_sensor import ADCInterface, AnalogSensor
@@ -11,12 +12,14 @@ class PressureAnalogSensor(AnalogSensor):
     """
     Pressure sensor implementation supporting multiple ADC types.
 
-    Works with pressure sensors that output 0.5-4.5V signals (4V usable range).
-    Compatible with any ADC that implements ADCInterface (MCP3008ADC, ADS1115ADC, etc.).
+    Works with pressure sensors that output a linear voltage (0.5–4.5 V by
+    default, a 4 V span). Compatible with any ADC that implements
+    ADCInterface (MCP3008ADC, ADS1115ADC, etc.).
 
-    Sensor voltage mapping:
-    - 0.5V = 0 pressure
-    - 4.5V = max_pressure_mpa
+    Sensor voltage mapping, unless ``min_voltage`` / ``max_voltage`` say
+    otherwise:
+    - 0.5 V = 0 pressure
+    - 4.5 V = max_pressure_mpa
     - Linear mapping in between
     """
 
@@ -28,7 +31,7 @@ class PressureAnalogSensor(AnalogSensor):
     # Below this the wire is open, not a pressure. It is a fault, and it
     # must not move the zero.
     DISCONNECT_VOLTAGE = 0.2
-    # ±3% of the 4 V span (0.5–4.5 V). The span itself stays fixed (#52).
+    # ±3% of the configured span. The default span is 4 V (0.5–4.5 V).
     ZERO_LIMIT_FRACTION = 0.03
     # How long pressure must be a known zero before the median may move
     # the offset. Head: vented and no flow. Boiler: machine off.
@@ -45,6 +48,8 @@ class PressureAnalogSensor(AnalogSensor):
         zero_window_seconds: float = ZERO_WINDOW_SECONDS,
         state_path: str | None = None,
         now=None,
+        min_voltage: float | None = None,
+        max_voltage: float | None = None,
     ):
         """
         Initialize pressure sensor.
@@ -62,8 +67,16 @@ class PressureAnalogSensor(AnalogSensor):
                         it in memory (tests). A leading ``~`` is expanded.
             now: Monotonic clock for the zero window. Defaults to
                  ``time.monotonic``.
+            min_voltage: Sensor output at zero pressure. None keeps 0.5 V.
+            max_voltage: Sensor output at ``max_pressure_mpa``. None keeps
+                         4.5 V. An explicit range must sit inside the ADC
+                         supply, with min below max.
         """
         super().__init__(adc, name)
+        self.min_voltage, self.max_voltage = resolve_pressure_span(
+            min_voltage, max_voltage, adc
+        )
+        self.voltage_range = self.max_voltage - self.min_voltage
         if zero_window_seconds <= 0:
             raise ValueError(
                 f"zero_window_seconds must be positive (got {zero_window_seconds})"
@@ -144,7 +157,7 @@ class PressureAnalogSensor(AnalogSensor):
         The median is the slow part: a dip shorter than half the window
         cannot steer it, and it is free to move up or down.
         """
-        target = _median(self._zero_samples) - self.SENSOR_MIN_VOLTAGE
+        target = _median(self._zero_samples) - self.min_voltage
         target = self._clamp_offset(target)
         if abs(target - self.offset_voltage) < 1e-6:
             return
@@ -156,7 +169,7 @@ class PressureAnalogSensor(AnalogSensor):
         self._save_offset()
 
     def _clamp_offset(self, offset: float) -> float:
-        limit = self.SENSOR_VOLTAGE_RANGE * self.ZERO_LIMIT_FRACTION
+        limit = self.voltage_range * self.ZERO_LIMIT_FRACTION
         return max(-limit, min(limit, offset))
 
     def _load_offset(self) -> None:
@@ -189,29 +202,27 @@ class PressureAnalogSensor(AnalogSensor):
         """
         Convert ADC reading to pressure in MPa.
 
-        The sensor outputs 0.5V at 0 pressure and 4.5V at max pressure.
-        ADC returns normalized value (0.0-1.0) and voltage.
+        ``min_voltage`` reads as 0 pressure and ``max_voltage`` as
+        ``max_pressure_mpa``, linearly. A reading below ``min_voltage``
+        is clamped to 0. A reading above ``max_voltage`` is not capped:
+        it keeps climbing, which is what the conversion has always done.
 
         Formula:
         1. Get actual voltage from ADC
-        2. Subtract minimum sensor voltage (0.5V) and offset calibration
-        3. Divide by sensor voltage range (4.0V)
-        4. Multiply by sensor's max pressure rating
+        2. Subtract the zero voltage and the offset calibration
+        3. Divide by the configured voltage span
+        4. Multiply by the sensor's max pressure rating
         """
         voltage = self.adc.voltage
 
-        # Calculate pressure from voltage
-        # voltage_adjusted = actual voltage - sensor's zero voltage - calibration offset
-        voltage_adjusted = voltage - self.SENSOR_MIN_VOLTAGE - self.offset_voltage
+        # voltage_adjusted = actual voltage - zero voltage - calibration offset
+        voltage_adjusted = voltage - self.min_voltage - self.offset_voltage
 
-        # Clamp to prevent negative values
+        # Below the zero voltage is not a negative pressure.
         if voltage_adjusted < 0:
             voltage_adjusted = 0
 
-        # Convert to MPa: (adjusted_voltage / 4V_range) * max_pressure
-        pressure_mpa = (
-            voltage_adjusted / self.SENSOR_VOLTAGE_RANGE
-        ) * self.max_pressure_mpa
+        pressure_mpa = (voltage_adjusted / self.voltage_range) * self.max_pressure_mpa
 
         return pressure_mpa
 
@@ -270,3 +281,106 @@ def _median(values: list[float]) -> float:
     if len(ordered) % 2:
         return ordered[mid]
     return (ordered[mid - 1] + ordered[mid]) / 2.0
+
+
+def adc_supply_voltage(adc: object) -> float:
+    """Volts the ADC can represent, or 5.0 V when it does not say.
+
+    Wrappers such as ``MedianFilterADC`` are followed through ``.adc``.
+    ``max_voltage`` is the full-scale an ADS1115 publishes. 5.0 V is the
+    supply the default 0.5–4.5 V sensors were written for.
+    """
+    current: object | None = adc
+    seen: set[int] = set()
+    while current is not None and id(current) not in seen:
+        seen.add(id(current))
+        supply = getattr(current, "max_voltage", None)
+        parsed = float("nan")
+        if supply is not None:
+            try:
+                parsed = float(supply)
+            except (TypeError, ValueError):
+                parsed = float("nan")
+        if math.isfinite(parsed) and parsed > 0:
+            return parsed
+        current = getattr(current, "adc", None)
+    return 5.0
+
+
+def resolve_pressure_span(
+    min_voltage: float | None,
+    max_voltage: float | None,
+    adc: object,
+) -> tuple[float, float]:
+    """Voltages that map to zero and to full-scale pressure.
+
+    ``None`` keeps 0.5 V and 4.5 V, and that default is always accepted so
+    an unconfigured machine is unchanged. An explicit range must be finite,
+    min below max, and both ends inside the ADC supply (0 V through
+    ``adc_supply_voltage``).
+    """
+    using_default = min_voltage is None and max_voltage is None
+    min_v = (
+        PressureAnalogSensor.SENSOR_MIN_VOLTAGE
+        if min_voltage is None
+        else float(min_voltage)
+    )
+    max_v = (
+        PressureAnalogSensor.SENSOR_MAX_VOLTAGE
+        if max_voltage is None
+        else float(max_voltage)
+    )
+    if not math.isfinite(min_v) or not math.isfinite(max_v):
+        raise ValueError(
+            "pressure voltage range must be finite " f"(got {min_v} V and {max_v} V)"
+        )
+    if min_v >= max_v:
+        raise ValueError(
+            "pressure min voltage must be below max voltage "
+            f"(got {min_v} V and {max_v} V)"
+        )
+    if using_default:
+        return min_v, max_v
+    supply = adc_supply_voltage(adc)
+    if min_v < 0 or max_v > supply:
+        raise ValueError(
+            f"pressure voltage range {min_v}–{max_v} V is outside the ADC "
+            f"supply 0–{supply} V"
+        )
+    return min_v, max_v
+
+
+def _env_voltage(env: Mapping[str, object], key: str) -> float | None:
+    if key not in env:
+        return None
+    raw = env[key]
+    if raw is None or str(raw).strip() == "":
+        return None
+    try:
+        value = float(str(raw).strip())
+    except ValueError as error:
+        raise ValueError(f"{key} must be a number (got {raw!r})") from error
+    if not math.isfinite(value):
+        raise ValueError(f"{key} must be finite (got {raw!r})")
+    return value
+
+
+def pressure_voltages_from_env(
+    prefix: str, environ: Mapping[str, object] | None = None
+) -> tuple[float | None, float | None]:
+    """``(min, max)`` from ``{PREFIX}_V_MIN`` / ``{PREFIX}_V_MAX``.
+
+    A missing side stays ``None`` (the 0.5 V / 4.5 V default). ``PRESSURE_V_MIN``
+    and ``PRESSURE_V_MAX`` fill a side the prefix left unset. The prefix wins
+    when both are set. A non-numeric value raises ``ValueError``.
+    """
+    env = os.environ if environ is None else environ
+    name = prefix.upper()
+    specific_min = _env_voltage(env, f"{name}_V_MIN")
+    specific_max = _env_voltage(env, f"{name}_V_MAX")
+    shared_min = _env_voltage(env, "PRESSURE_V_MIN")
+    shared_max = _env_voltage(env, "PRESSURE_V_MAX")
+    return (
+        specific_min if specific_min is not None else shared_min,
+        specific_max if specific_max is not None else shared_max,
+    )
