@@ -2214,16 +2214,9 @@ function renderToday(machine) {
 
 function render(data) {
   renderState(data.machine, data.pressure);
-<<<<<<< HEAD
   renderMeters(data.pressure);
   renderRecent(data.shots);
-  renderToday(data.machine && data.machine.today);
-=======
-  renderRings(data.pressure);
-  renderPulls(data.machine.history || []);
-  renderHistory(data.shots);
   renderToday(data.machine);
->>>>>>> origin/cursor/header-c-8855
 
   const flowCard = document.getElementById('flow-card');
   const flowPresent = data.flow.length > 0;
