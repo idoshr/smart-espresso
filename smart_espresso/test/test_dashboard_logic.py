@@ -498,16 +498,13 @@ class TestHero:
         young = "{state:'ready', since_seconds:%s, shot:null}"
         for seconds in (0, 0.4, 59, 59.9):
             assert call("logic.heroDetail(%s, 1.2)" % (young % seconds)) == ""
-        assert (
-            call("logic.heroDetail(%s, 1.2)" % (young % 60)) == "for 1 min"
-        )
-        assert (
-            call("logic.heroDetail(%s, 1.2)" % (young % 120)) == "for 2 min"
-        )
+        assert call("logic.heroDetail(%s, 1.2)" % (young % 60)) == "for 1 min"
+        assert call("logic.heroDetail(%s, 1.2)" % (young % 120)) == "for 2 min"
 
 
 class TestLastShotChip:
     """Look C drops the last-shot chip. Recent shots covers that glance."""
+
     def setup_method(self):
         self.page = (
             Path(__file__).resolve().parents[1] / "web" / "static" / "index.html"
