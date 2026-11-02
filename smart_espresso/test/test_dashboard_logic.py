@@ -417,6 +417,8 @@ class TestRefillButton:
         assert 'class="refill-short">I refilled it<' in self.page
         assert "@container refill" in self.page
         assert "tankMeterHidden" in self.page
+        assert "Reconnect to save the refill" in self.page
+        assert "Reconnect to mark the tank filled" not in self.page
 
     def test_normal_refill_is_short_text_and_empty_stays_a_pill(self):
         normal = call("logic.refillControl(false)")
@@ -431,6 +433,34 @@ class TestRefillButton:
         assert 'id="tank-used-row"' in self.page
         assert "refill-inline" in self.page
         assert "refill-pill" in self.page
+
+
+class TestWaterCard:
+    """The water card puts the peak in the header and shortens the chart."""
+
+    def setup_method(self):
+        self.page = (
+            Path(__file__).resolve().parents[1] / "web" / "static" / "index.html"
+        ).read_text(encoding="utf-8")
+
+    def test_peak_header_sentence_case_and_short_chart(self):
+        assert ">Now <" not in self.page
+        assert ">All time <" not in self.page
+        assert 'id="flow-rate"' not in self.page
+        assert "3 s peak" in self.page
+        assert "s peak" in self.page
+        assert "−1:00" in self.page
+        chart = _css_rule(self.page, "#flow-card .chart")
+        assert "height: 26px" in chart
+        assert "gap: 4px" in chart
+        bar = _css_rule(self.page, "#flow-card .bar")
+        assert "border-radius: 0" in bar
+        assert "min-width: 8px" in bar
+        assert "max-width: 10px" in bar
+        # 326 px of card, 9 px bars and 4 px gaps: 25 blocks, not 40 hairlines.
+        assert len(call("logic.flowBars(Array(40).fill(1), 326)")) == 25
+        wide = self.page[self.page.find("@media (min-width: 1000px)") :]
+        assert "height: 170px" in wide
 
 
 class TestLastShotChip:

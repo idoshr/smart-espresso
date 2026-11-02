@@ -284,6 +284,28 @@
     return "About " + count + " shots left";
   }
 
+  // About 9 px bars with 4 px gaps. Extra samples are grouped so the
+  // row stays that wide instead of turning into hairlines.
+  function flowBars(values, width) {
+    const series = values || [];
+    const n = series.length;
+    if (!n) return [];
+    const gap = 4;
+    const bar = 9;
+    const room = typeof width === "number" && width > 0 ? width : bar;
+    const fit = Math.max(1, Math.floor((room + gap) / (bar + gap)));
+    const count = Math.min(n, fit);
+    const out = [];
+    for (let i = 0; i < count; i++) {
+      const start = Math.floor((i * n) / count);
+      const end = Math.floor(((i + 1) * n) / count);
+      let sum = 0;
+      for (let j = start; j < end; j++) sum += Number(series[j]) || 0;
+      out.push(sum);
+    }
+    return out;
+  }
+
   function shotVerdict(seconds, windowLow, windowHigh) {
     const low = typeof windowLow === "number" ? windowLow : 25;
     const high = typeof windowHigh === "number" ? windowHigh : 30;
@@ -390,6 +412,7 @@
     humidityLabel: humidityLabel,
     tankMeterHidden: tankMeterHidden,
     refillControl: refillControl,
+    flowBars: flowBars,
     staleTagText: staleTagText,
     offlineMessage: offlineMessage,
     isFlush: isFlush,
