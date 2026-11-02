@@ -2,7 +2,7 @@ import json
 import os
 import tempfile
 import unittest
-from datetime import datetime
+from datetime import datetime, timedelta
 from unittest import mock
 
 from smart_espresso.machine_state import MachineStateClassifier
@@ -521,6 +521,31 @@ class TestShotHistoryApi(unittest.TestCase):
         )
         body = server.app.test_client().get("/api/shots").get_json()
         self.assertEqual(body, {"count": 0, "shots": []})
+
+
+class TestDemoShotLog(unittest.TestCase):
+    def test_five_shots_include_one_from_yesterday(self):
+        from smart_espresso.sim.seed_shots import write_demo_log
+
+        now = datetime(2026, 11, 1, 12, 0, tzinfo=datetime.now().astimezone().tzinfo)
+        with tempfile.TemporaryDirectory() as directory:
+            path = os.path.join(directory, "shots.json")
+            write_demo_log(path, now=now)
+            history = ShotHistory(state_path=path, now=lambda: now.timestamp())
+            payload = history.list_payload()
+        self.assertEqual(payload["count"], 5)
+        days = [
+            datetime.fromisoformat(shot["started_at"]).astimezone().date()
+            for shot in payload["shots"]
+        ]
+        self.assertIn((now - timedelta(days=1)).date(), days)
+        # The four tiles are the newest four, so yesterday is still on screen.
+        self.assertEqual(
+            datetime.fromisoformat(payload["shots"][3]["started_at"])
+            .astimezone()
+            .date(),
+            (now - timedelta(days=1)).date(),
+        )
 
 
 if __name__ == "__main__":
