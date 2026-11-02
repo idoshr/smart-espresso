@@ -228,13 +228,30 @@ class TestGlance:
         )
         assert ready["replace"] is True
         assert ready["showShot"] is False
+        assert ready["label"] == "Offline"
+        assert ready["detail"] == "Readings below are from before it went offline."
         assert "Ready to pull" not in ready["label"]
-        assert "Last seen 40 s ago" in ready["label"]
+        assert "Can't reach" not in ready["detail"]
+        assert "Same Wi-Fi" not in ready["detail"]
+        quiet = _css_rule(
+            Path(__file__)
+            .resolve()
+            .parents[1]
+            .joinpath("web/static/index.html")
+            .read_text(encoding="utf-8"),
+            ".state.offline .state-label",
+        )
+        assert "border: 1px dashed var(--mute" in quiet
+        assert "background: transparent" in quiet
+        banner = call("logic.offlineBanner(false, 3, 1000, 41000)")
+        assert "Can't reach the machine. Last seen 40 s ago" in banner["title"]
+        assert "Same Wi-Fi" in banner["title"]
         brewing = call(
             "logic.shownState({state:'brewing', label:'Pulling a shot',"
             " shot:{seconds:20, ml:30}}, 9, false, true, 1000, 41000)"
         )
         assert brewing["showShot"] is False
+        assert brewing["label"] == "Offline"
         assert "Pulling a shot" not in brewing["label"]
         live = call(
             "logic.shownState({state:'ready', label:'Ready to pull', shot:null},"
@@ -340,7 +357,9 @@ class TestShippedShell:
         assert 'class="dot off"' in self.page
 
     def test_markup_does_not_ship_a_last_seen_footer(self):
-        assert 'id="footer">never connected' in self.page
+        # The offline banner already says Last seen. A footer would repeat it.
+        assert 'id="footer"' not in self.page
+        assert "dashboard up" not in self.page
         assert "let lastSeenAt = null" in self.page
         assert "let lastSeenAt = Date.now()" not in self.page
 
@@ -627,6 +646,34 @@ class TestLastShotChip:
         assert "margin-top: 12px" in _css_rule(self.page, ".shot")
 
 
+class TestTodayLine:
+    """Today's tally, including the first shot while it is still running."""
+
+    def test_idle_with_no_shots_names_the_empty_day(self):
+        assert call("logic.todayLine({shots:0, ml:0}, false)") == "No shots yet today"
+
+    def test_the_first_shot_of_the_day_leaves_the_line_empty(self):
+        assert call("logic.todayLine({shots:0, ml:0}, true)") == ""
+
+    def test_one_shot_and_two_shots(self):
+        assert (
+            call("logic.todayLine({shots:1, ml:39}, false)") == "1 shot · 39 ml today"
+        )
+        assert (
+            call("logic.todayLine({shots:2, ml:68}, true)") == "2 shots · 68 ml today"
+        )
+        assert (
+            call("logic.todayLine({shots:12, ml:1234}, false)")
+            == "12 shots · 1,234 ml today"
+        )
+
+    def test_the_empty_line_is_removed_from_the_header(self):
+        page = (
+            Path(__file__).resolve().parents[1] / "web" / "static" / "index.html"
+        ).read_text(encoding="utf-8")
+        assert "header .tagline:empty { display: none" in page
+
+
 class TestWording:
     def setup_method(self):
         self.page = (
@@ -637,7 +684,6 @@ class TestWording:
         assert 'id="shot-seconds">0 s<' in self.page
         assert 'id="bb-time">0 s<' in self.page
         assert "${machine.shot.seconds.toFixed(0)} s" in self.page
-        assert "${Math.floor(seconds)} s" in self.page
         assert ">BAR<" not in self.page
         assert "<small>bar</small>" in self.page
 
@@ -702,20 +748,27 @@ class TestPhoneHeader:
             Path(__file__).resolve().parents[1] / "web" / "static" / "index.html"
         ).read_text(encoding="utf-8")
 
-    def test_today_line_moves_into_the_state_card_on_a_phone(self):
-        assert 'id="tagline-card"' in self.page
-        phone = re.search(r"@media \(max-width: 999px\)\s*\{([^}]*)\}", self.page)
-        assert phone is not None
-        assert "header .tagline" in phone.group(1)
-        assert "display: none" in phone.group(1)
-        wide_at = self.page.find("@media (min-width: 1000px)")
-        assert wide_at > 0
-        wide = self.page[wide_at : wide_at + 400]
-        assert "#tagline-card" in wide
-        assert "display: none" in wide
-        # One sentence, written to both slots. No second wording.
-        assert "getElementById('tagline-card').textContent = text" in self.page
-        assert "getElementById('tagline').textContent = text" in self.page
+    def test_today_line_stays_on_the_header_row(self):
+        assert 'id="tagline-card"' not in self.page
+        assert "header .tagline:empty { display: none" in self.page
+        title = _css_rule(self.page, "header h1")
+        assert "flex: 0 0 auto" in title
+        assert "text-overflow: ellipsis" not in title
+        today = _css_rule(self.page, "header .tagline")
+        assert "font-size: 12.5px" in today
+        assert "font-weight: 500" in today
+        assert "font-variant-numeric: tabular-nums" in today
+        assert "min-width: 0" in today
+        assert "text-overflow: ellipsis" in today
+        assert "var(--mute" in today
+        gap = _css_rule(self.page, "header .conn + .tagline")
+        assert "margin-left: 6px" in gap
+        narrow = re.search(r"@media \(max-width: 374px\)\s*\{([^}]*)\}", self.page)
+        assert narrow is not None
+        assert "header .tagline" in narrow.group(1)
+        assert "header .conn" in narrow.group(1)
+        assert "display: none" in narrow.group(1)
+        assert "todayLine(" in self.page
 
     def test_title_stays_whole_at_768_and_1280_with_connecting(self):
         # A labelled wake control plus "Connecting…" is about 438 px. The
@@ -741,13 +794,14 @@ class TestPhoneHeader:
         assert "@media (max-width: 480px)" not in self.page
 
     def test_narrow_phones_do_not_scroll_sideways(self):
-        # 320 and 360 used to overflow: the title could not shrink, so the
-        # connecting pill stuck out. The title ellipsizes instead.
+        # The title stays whole. A long today line ellipsizes instead.
         title = _css_rule(self.page, "header h1")
-        assert "min-width: 0" in title
-        assert "overflow: hidden" in title
-        assert "text-overflow: ellipsis" in title
+        assert "flex: 0 0 auto" in title
         assert "white-space: nowrap" in title
+        today = _css_rule(self.page, "header .tagline")
+        assert "min-width: 0" in today
+        assert "overflow: hidden" in today
+        assert "text-overflow: ellipsis" in today
         assert 'class="header-tools"' in self.page
         face = _css_rule(self.page, ".header-tools .pill-face")
         assert "height: 36px" in face
