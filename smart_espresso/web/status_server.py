@@ -1,5 +1,6 @@
 """Small Flask web dashboard exposing live machine status over the local network."""
 import math
+import mimetypes
 import os
 import threading
 from time import monotonic
@@ -15,6 +16,7 @@ from smart_espresso.water_tank import WaterTank
 
 PATH = os.path.dirname(os.path.abspath(__file__))
 STATIC_DIR = f"{PATH}/static"
+mimetypes.add_type("font/woff2", ".woff2")
 
 
 class StatusServer:
@@ -125,6 +127,13 @@ class StatusServer:
                 f"static_{filename.replace('.', '_')}",
                 static_rule(filename),
             )
+
+        # The face is self-hosted. A catch-all would hide the 405 on POST
+        # routes, so the font gets its own rule like the rest of the shell.
+        def manrope():
+            return send_from_directory(STATIC_DIR, "fonts/manrope.woff2")
+
+        self.app.add_url_rule("/fonts/manrope.woff2", "static_manrope", manrope)
 
         @self.app.route("/api/status")
         def status():
