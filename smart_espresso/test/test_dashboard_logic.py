@@ -1180,6 +1180,12 @@ class TestDesktopGrid:
         assert "#pulls-card {" in block
         assert "flex: 1 1 auto" in block
         assert "grid-template-columns: 148px minmax(0, 1fr) 84px" in self.page
+        narrow = self.page.find("@media (min-width: 1000px) and (max-width: 1199px)")
+        assert narrow > 0
+        narrow_block = self.page[narrow : narrow + 700]
+        assert "grid-template-columns: 116px minmax(0, 1fr) 64px" in narrow_block
+        assert "font-size: 11px" in narrow_block
+        assert "width: 64px" in narrow_block
         assert 'grid-template-areas: "ml bar verdict" "when bar verdict"' in self.page
         assert ".recent-tile .t-line" in self.page
         assert "shotWhenLine" in self.page

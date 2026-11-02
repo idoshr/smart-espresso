@@ -1242,7 +1242,8 @@
   .recent-tile .t-line { display: none; white-space: nowrap; }
   @media (min-width: 1000px) {
     /* Fixed figure column sized for "Yesterday 12:17 PM", then the bar,
-       then a fixed verdict. Every bar starts and ends on the same x. */
+       then a fixed verdict. Every bar starts and ends on the same x.
+       1200 and wider keep this column. Narrower desktops shrink it below. */
     .recent-tile {
       display: grid;
       grid-template-columns: 148px minmax(0, 1fr) 84px;
@@ -1269,6 +1270,16 @@
       white-space: nowrap;
       font-size: 13px;
     }
+  }
+  /* Below 1200 the fixed columns were leaving a stub of a bar. Narrow
+     them so the bar keeps the width those columns give back. The time
+     stays 11px, and "Yesterday 12:17 PM" still fits the 116px column. */
+  @media (min-width: 1000px) and (max-width: 1199px) {
+    .recent-tile {
+      grid-template-columns: 116px minmax(0, 1fr) 64px;
+    }
+    .recent-tile .t-line { font-size: 11px; }
+    .recent-tile .v { width: 64px; }
   }
   /* A short window plus the offline banner leaves a short Recent card.
      Tighter rows keep four shots inside it; fitRecentRows hides the
