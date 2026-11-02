@@ -668,5 +668,6 @@ class TestDesktopGrid:
         assert "min-width: 1024px" not in self.page
         assert "#state { grid-column: 1; grid-row: 1; }" in block
         assert "#flow-card { grid-column: 1; grid-row: 2; }" in block
+        assert "#history-card { grid-column: 1; grid-row: 3; }" in block
         assert "#tank-room { grid-column: 2; grid-row: 2; }" in block
         assert "#pulls-card { grid-column: 3" in block
