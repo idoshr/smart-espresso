@@ -567,3 +567,22 @@ class TestPhoneHeader:
         assert "background: var(--ink)" in pressed
         assert "color: var(--card)" in pressed
         assert "border-color: var(--ink)" in pressed
+
+
+class TestDesktopGrid:
+    """At 1024 px and up the cards form three columns."""
+
+    def setup_method(self):
+        self.page = (
+            Path(__file__).resolve().parents[1] / "web" / "static" / "index.html"
+        ).read_text(encoding="utf-8")
+
+    def test_three_columns_from_1024(self):
+        at = self.page.find("@media (min-width: 1024px)")
+        assert at > 0
+        block = self.page[at : at + 900]
+        assert "max-width: 1100px" in block
+        assert "grid-template-columns: repeat(3, minmax(0, 1fr))" in block
+        assert "#state { grid-column: 1" in block
+        assert "#rings" in block
+        assert "#pulls-card { grid-column: 3" in block
