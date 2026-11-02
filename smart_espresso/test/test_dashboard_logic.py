@@ -496,9 +496,13 @@ class TestRefillButton:
         assert 'id="tank-used-row"' in self.page
         assert "refill-inline" in self.page
         assert "refill-pill" in self.page
-        assert "font-variant-numeric: tabular-nums" in _css_rule(
-            self.page, ".pair-lead"
+        assert "min-width: 0" in _css_rule(self.page, ".pair-lead")
+        assert "white-space: nowrap" not in _css_rule(self.page, ".pair-lead")
+        narrow_lead = re.search(
+            r"@media \(max-width: 339px\)\s*\{([^}]*)\}", self.page
         )
+        assert narrow_lead is not None
+        assert "font-size: 16px" in narrow_lead.group(1)
         assert "font-variant-numeric: tabular-nums" in _css_rule(self.page, ".pair-sub")
         assert "repeat(2, minmax(0, 1fr))" in _css_rule(self.page, ".pair")
         assert "white-space: normal" in _css_rule(self.page, ".pair-lead.empty")
