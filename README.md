@@ -188,9 +188,10 @@ linearly from a known-pressure reading. Leave them unset to keep 0.5 V
 and 4.5 V. The real pair comes from a multimeter calibration, not from
 the datasheet alone: a 3.3 V ratiometric transducer cannot reach 4.5 V.
 Min must be below max, and both must sit inside the ADC supply (0 V up
-to the ADC full-scale, or 5 V when the ADC does not publish one). A bad value is refused the same way a bad flow
-threshold is: that sensor is disabled at startup and a warning is logged,
-and the other channels still run. `PRESSURE_V_MIN` and `PRESSURE_V_MAX`
+to the ADC full-scale, or 5 V when the ADC does not publish one). A bad
+value is refused the same way a bad flow threshold is: that sensor is
+disabled at startup and a warning is logged, and the other channels still
+run. `PRESSURE_V_MIN` and `PRESSURE_V_MAX`
 fill in whichever side a sensor did not set for itself.
 
 The flow sensor's pulse polarity is detected automatically: sensors that
