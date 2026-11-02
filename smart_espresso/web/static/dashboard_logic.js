@@ -219,14 +219,9 @@
       return "for " + formatSpokenDuration(machine.since_seconds) + " · " + check;
     }
     // since_seconds is how long the published state has been held, counted
-    // from the transition into it. A Ready or Off line before a minute is
-    // just "for 0 s", so the line stays hidden until the minute is real.
-    if (
-      (machine.state === "ready" || machine.state === "off") &&
-      !(Number(machine.since_seconds) >= 60)
-    ) {
-      return "";
-    }
+    // from the transition into it. A duration before a minute is just
+    // "for 0 s", so every state keeps that line hidden until it is real.
+    if (!(Number(machine.since_seconds) >= 60)) return "";
     return durationLine(machine.state, machine.since_seconds);
   }
 
@@ -511,13 +506,12 @@
     return points.slice(0, end + 1);
   }
 
-  // Live samples while a shot runs. The saved curve in Ready. Nothing
-  // else, including a shot that has not produced a point yet.
+  // Live samples while a shot runs. Every other state shows the last
+  // saved curve, the same way Ready does. An empty slot stays hidden.
   function heroCurveSlot(view) {
     const live = view && Array.isArray(view.liveSamples) ? view.liveSamples : [];
     const last = view && Array.isArray(view.lastSamples) ? view.lastSamples : [];
     const shotActive = !!(view && view.shotActive);
-    const state = view && view.state;
     if (shotActive) {
       if (!live.length) return { hidden: true, source: null, samples: [], label: "" };
       return {
@@ -527,16 +521,14 @@
         label: "This shot's pressure",
       };
     }
-    if (state === "ready") {
-      const saved = pourCurveSamples(last.length ? last : live);
-      if (saved.length) {
-        return {
-          hidden: false,
-          source: last.length ? "last" : "live",
-          samples: saved,
-          label: "Last shot's pressure",
-        };
-      }
+    const saved = pourCurveSamples(last.length ? last : live);
+    if (saved.length) {
+      return {
+        hidden: false,
+        source: last.length ? "last" : "live",
+        samples: saved,
+        label: "Last shot's pressure",
+      };
     }
     return { hidden: true, source: null, samples: [], label: "" };
   }

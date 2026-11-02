@@ -176,7 +176,7 @@ class TestGlance:
             call(
                 "logic.heroDetail({state:'flushing', since_seconds:26, shot:null}, null)"
             )
-            == "for 26 s"
+            == ""
         )
         assert (
             call("logic.heroDetail({state:'off', since_seconds:4, shot:null}, null)")
@@ -184,13 +184,13 @@ class TestGlance:
         )
         assert (
             call("logic.heroDetail({state:'steaming', since_seconds:26, shot:null}, 1)")
-            == "for 26 s"
+            == ""
         )
         assert (
             call(
                 "logic.heroDetail({state:'unknown', since_seconds:8, shot:null}, null)"
             )
-            == "for 8 s"
+            == ""
         )
         aiming = call(
             "logic.heroDetail({state:'brewing', since_seconds:12, shot:{seconds:12}}, null)"
@@ -585,7 +585,7 @@ class TestWaterCard:
         assert "max-width: 10px" in bar
         assert len(call("logic.flowBars(Array(40).fill(1), 326)")) == 25
         wide = self.page[self.page.find("@media (min-width: 1000px)") :]
-        assert "height: 170px" in wide
+        assert "height: 56px" in wide
 
 
 class TestMeters:
@@ -724,6 +724,18 @@ class TestHero:
         assert call("logic.heroDetail(%s, null)" % (young % 60)) == "for 1 min"
         assert call("logic.heroDetail(%s, null)" % (young % 120)) == "for 2 min"
 
+    def test_a_short_duration_stays_hidden_in_every_state(self):
+        for state in ("ready", "off", "steaming", "flushing", "unknown"):
+            young = "{state:'%s', since_seconds:4, shot:null}" % state
+            assert call("logic.heroDetail(%s, null)" % young) == ""
+            minute = "{state:'%s', since_seconds:60, shot:null}" % state
+            assert call("logic.heroDetail(%s, null)" % minute) == "for 1 min"
+        heating = call(
+            "logic.heroDetail({state:'heating', since_seconds:4, shot:null}, 0.4)"
+        )
+        assert heating.startswith("0.4 of 0.8 bar")
+        assert "for 4 s" not in heating
+
 
 class TestHeroCurve:
     """The hero curve: live tail, a reset on the next shot, last curve in Ready."""
@@ -750,7 +762,7 @@ class TestHeroCurve:
         assert 'id="hero-band"' not in self.page
         assert "#hero-curve .band" not in self.page
         wide = self.page[self.page.find("@media (min-width: 1000px)") :]
-        assert "height: 220px" in wide
+        assert "height: 112px" in wide
 
     def test_append_uses_the_after_cursor_and_skips_points_already_held(self):
         first = call(
@@ -813,13 +825,21 @@ class TestHeroCurve:
         assert brewing["source"] == "live"
         assert brewing["label"] == "This shot's pressure"
         assert brewing["samples"] == live
-        for state in ("ready", "heating", "off"):
+        for state in ("ready", "heating", "off", "steaming"):
             empty = call(
                 "logic.heroCurveSlot({state:'%s', shotActive:false,"
                 " liveSamples:[], lastSamples:[]})" % state
             )
             assert empty["hidden"] is True
             assert empty["samples"] == []
+        for state in ("heating", "off", "steaming", "flushing"):
+            quiet = call(
+                "logic.heroCurveSlot({state:'%s', shotActive:false,"
+                " liveSamples:[], lastSamples:%s})" % (state, json.dumps(last))
+            )
+            assert quiet["hidden"] is False
+            assert quiet["label"] == "Last shot's pressure"
+            assert quiet["samples"] == last
         waiting = call(
             "logic.heroCurveSlot({state:'brewing', shotActive:true,"
             " liveSamples:[], lastSamples:[]})"
@@ -1130,11 +1150,10 @@ class TestDesktopGrid:
         assert (
             "#tank-room { display: flex; flex-direction: column; gap: 8px; }" in block
         )
-        assert "#recent-tiles { display: none; }" in block
-        assert (
-            ".shot-when { flex: none; overflow: visible; text-overflow: clip; }"
-            in self.page
-        )
-        assert "min-width: 1000px" in self.page.split("function syncDeskRecent", 1)[1]
+        assert "align-items: start" in block
+        assert "#recent-tiles { display: none; }" not in block
+        assert "#pulls-card { flex: 1" not in block
+        assert 'grid-template-areas: "ml bar verdict" "when bar verdict"' in self.page
+        assert ".recent-tile .v { grid-area: verdict; white-space: nowrap;" in self.page
         assert "syncDeskRecent" in self.page
         assert "#history-card { grid-column" not in block

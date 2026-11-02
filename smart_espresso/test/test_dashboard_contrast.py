@@ -158,4 +158,14 @@ class TestDashboardContrast:
         assert "fonts.googleapis.com" not in self.worker
         assert "fonts.gstatic.com" not in self.worker
         assert "/fonts/manrope.woff2" in self.worker
-        assert "espresso-shell-v84" in self.worker
+        assert "espresso-shell-v86" in self.worker
+        font = PAGE.parent / "fonts" / "manrope.woff2"
+        assert font.is_file()
+        assert font.read_bytes()[:4] == b"wOF2"
+
+    def test_labels_are_at_least_11px(self):
+        sizes = [
+            float(size) for size in re.findall(r"font-size:\s*([0-9.]+)px", self.css)
+        ]
+        assert sizes
+        assert min(sizes) >= 11
