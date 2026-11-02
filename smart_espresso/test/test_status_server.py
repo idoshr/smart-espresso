@@ -272,11 +272,16 @@ class TestStatusServer(unittest.TestCase):
 
         self.assertIn(b'id="history-card"', page.data)
         self.assertIn(b"/api/shots/", page.data)
-        self.assertIn(b'id="conn">connecting', page.data)
+        self.assertIn('id="conn">Connecting…'.encode(), page.data)
 
         logic = client.get("/dashboard_logic.js")
         self.assertEqual(logic.status_code, 200)
         self.assertIn(b"pillText", logic.data)
+
+        font = client.get("/fonts/manrope.woff2")
+        self.assertEqual(font.status_code, 200)
+        self.assertIn("woff2", font.content_type)
+        self.assertTrue(font.data.startswith(b"wOF2"))
 
     def test_completed_pull_is_listed_with_curves(self):
         # The classifier keeps its own clock. Share the test clock so the
