@@ -398,6 +398,46 @@ class TestShippedShell:
         assert "white-space: nowrap" in _css_rule(self.page, ".recent-tile .t-time")
         assert "t-day" in self.page
         assert "shotWhenParts" in self.page
+        # Oct 31 8:42 AM and Yesterday 12:17 PM, seen on 2 Nov 2026.
+        # The meridiem stays on the time, so a narrow tile cannot leave AM/PM alone.
+        stamped = subprocess.run(
+            [
+                "node",
+                "-e",
+                "const fs=require('fs');"
+                "const html=fs.readFileSync(process.argv[1],'utf8');"
+                "const start=html.indexOf('function shotWhenParts');"
+                "const end=html.indexOf('function shotWhen(');"
+                "const shotWhenParts=new Function(html.slice(start,end)+';return shotWhenParts;')();"
+                "const Orig=Date;"
+                "function at(iso, nowMs){"
+                "function Fake(...args){"
+                "if(!(this instanceof Fake)) return new Orig(...(args.length?args:[nowMs])).toString();"
+                "return new Orig(...(args.length?args:[nowMs]));"
+                "}"
+                "Fake.prototype=Orig.prototype; Fake.now=()=>nowMs; Fake.parse=Orig.parse; Fake.UTC=Orig.UTC;"
+                "global.Date=Fake;"
+                "try{return shotWhenParts(iso);}finally{global.Date=Orig;}"
+                "}"
+                "const now=new Date(2026,10,2,15,0,0).getTime();"
+                "process.stdout.write(JSON.stringify({"
+                "oct:at('2026-10-31T08:42:00',now),"
+                "yest:at('2026-11-01T12:17:00',now)"
+                "}));",
+                str(
+                    Path(__file__).resolve().parents[1]
+                    / "web"
+                    / "static"
+                    / "index.html"
+                ),
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        parts = json.loads(stamped.stdout)
+        assert parts["oct"] == {"day": "Oct 31", "time": "8:42 AM"}
+        assert parts["yest"] == {"day": "Yesterday", "time": "12:17 PM"}
         assert "min-width: 0" in _css_rule(self.page, ".recent-tile")
         bar = _css_rule(self.page, ".recent-bar")
         assert "height: 4px" in bar
