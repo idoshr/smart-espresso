@@ -293,25 +293,30 @@
   button.live:focus-visible { outline: 2px solid var(--ink-soft); outline-offset: 2px; }
 
   .stack { display: flex; flex-direction: column; gap: 12px; }
+  .desk-col { display: contents; }
 
-  /* Look C desktop. Column 1 is the tall hero. Column 2 is the meters
-     with the water card under them. Column 3 stacks the tank, the room
-     and recent shots. The gap matches the 8 px token. */
+  /* Each column is its own stack, so a tall card in one column does not
+     open a hole under a short card in another. Recent shots is the
+     vertical list on desktop and the four tiles on a phone. */
   @media (min-width: 1000px) {
     body { max-width: 1440px; }
     .stack {
       display: grid;
       grid-template-columns: repeat(3, minmax(280px, 1fr));
       gap: 8px;
-      align-items: start;
+      align-items: stretch;
     }
-    #state { grid-column: 1; grid-row: 1 / span 3; align-self: stretch; }
-    #rings { grid-column: 2; grid-row: 1; }
-    #flow-card { grid-column: 2; grid-row: 2; }
-    #tank-room { display: contents; }
-    #tank-card { grid-column: 3; grid-row: 1; }
-    #other-card { grid-column: 3; grid-row: 2; }
-    #pulls-card { grid-column: 3; grid-row: 3; }
+    .desk-col { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+    #desk-meters { grid-column: 2; }
+    #desk-side { grid-column: 3; }
+    #state { grid-column: 1; display: flex; flex-direction: column; min-height: 0; }
+    #state .state-body { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+    #hero-curve { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+    #flow-card { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+    #tank-room { display: flex; flex-direction: column; gap: 8px; }
+    #pulls-card { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+    #recent-tiles { display: none; }
+    #history-card { flex: 1; overflow: auto; }
   }
 
   .card {
@@ -735,7 +740,7 @@
     .shot-track { height: 8px; margin-top: 22px; }
     .tl { font-size: 12px; }
     #hero-curve .cvh { margin-top: 22px; }
-    #hero-curve .chart { height: 220px; margin-top: 12px; }
+    #hero-curve .chart { flex: 1; height: auto; min-height: 220px; margin-top: 12px; }
     #hero-curve .yl { font-size: 12px; }
   }
 
@@ -1018,7 +1023,7 @@
   }
   #flow-card .peak b { color: var(--ink); font-weight: 700; }
   @media (min-width: 1000px) {
-    #flow-card .chart { height: 170px; }
+    #flow-card .chart { flex: 1; height: auto; min-height: 170px; }
   }
 
   .chart.empty { height: 22px; }
@@ -1228,6 +1233,18 @@
     color: var(--ink-soft);
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
+  }
+  /* A narrow desktop column was clipping "Yesterday 8:27 AM". The time
+     stays whole; the stats give up the space. */
+  @media (min-width: 1000px) {
+    .shot-when { flex: none; overflow: visible; text-overflow: clip; }
+    .shot-stats {
+      min-width: 0;
+      overflow: visible;
+      text-overflow: clip;
+      white-space: normal;
+      text-align: right;
+    }
   }
 
   .history-detail { padding: 2px 4px 4px; }
@@ -1594,6 +1611,7 @@
   </div>
   <!-- end skeletons -->
 
+  <div class="desk-col" id="desk-meters">
   <div class="rings" id="rings"></div>
 
   <div class="card" id="flow-card" hidden>
@@ -1605,7 +1623,9 @@
     <div class="chart" id="flow-chart" aria-hidden="true"></div>
     <div class="axis"><span id="flow-axis-start">-2:00</span><span id="flow-axis-mid">−1:00</span><span>now</span></div>
   </div>
+  </div>
 
+  <div class="desk-col" id="desk-side">
   <div class="pair" id="tank-room">
     <div class="card" id="tank-card" hidden>
       <div class="pair-label">Water tank</div>
@@ -1637,6 +1657,7 @@
       <div class="history-list" id="history-list"></div>
     </div>
     <div class="history-detail" id="shot-sheet" hidden></div>
+  </div>
   </div>
 </div>
 
@@ -2742,11 +2763,27 @@ wakeBtn.addEventListener('click', () => {
 if ('wakeLock' in navigator) wakeBtn.hidden = false;
 
 document.getElementById('all-shots').addEventListener('click', () => {
+  // Desktop already shows the vertical list. The link only opens it on a phone.
+  if (window.matchMedia('(min-width: 1000px)').matches) {
+    syncDeskRecent();
+    return;
+  }
   const list = document.getElementById('history-card');
   const open = list.hidden;
   list.hidden = !open;
   document.getElementById('all-shots').setAttribute('aria-expanded', String(open));
 });
+
+function syncDeskRecent() {
+  const wide = window.matchMedia('(min-width: 1000px)').matches;
+  const list = document.getElementById('history-card');
+  const link = document.getElementById('all-shots');
+  if (!list || !link) return;
+  if (wide) list.hidden = false;
+  else list.hidden = link.getAttribute('aria-expanded') !== 'true';
+}
+window.addEventListener('resize', syncDeskRecent);
+syncDeskRecent();
 
 // The shell lives in the service worker, so the page opens instantly and
 // survives the machine's server blinking.
