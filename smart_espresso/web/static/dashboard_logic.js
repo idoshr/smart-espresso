@@ -306,6 +306,33 @@
     return "About " + count + " shots left";
   }
 
+  // Four recent tiles. The bar is the yield against a 45 ml double.
+  // Short carries a minus so the word is not the only signal.
+  function recentTile(seconds, ml, windowLow, windowHigh) {
+    const verdict = shotVerdict(seconds, windowLow, windowHigh);
+    let label = "On target";
+    if (verdict.key === "fast") label = "Short";
+    else if (verdict.key === "long") label = "Long";
+    const volume = typeof ml === "number" && isFinite(ml) ? ml : 0;
+    return {
+      key: verdict.key,
+      label: label,
+      bar: Math.max(0, Math.min(1, volume / 45)),
+      mark: verdict.key === "fast" ? "\u2212" : "",
+    };
+  }
+
+  // The link is only for the shots that do not fit in the four tiles.
+  function allShotsLink(count, shown) {
+    const total = Number(count) || 0;
+    const tiles = typeof shown === "number" ? shown : 4;
+    const noun = total === 1 ? "shot" : "shots";
+    return {
+      hidden: total <= tiles,
+      text: "All " + total + " " + noun + " \u203A",
+    };
+  }
+
   // About 9 px bars with 4 px gaps. Extra samples are grouped so the
   // row stays that wide instead of turning into hairlines.
   function flowBars(values, width) {
@@ -437,6 +464,8 @@
     humidityLabel: humidityLabel,
     tankMeterHidden: tankMeterHidden,
     refillControl: refillControl,
+    recentTile: recentTile,
+    allShotsLink: allShotsLink,
     flowBars: flowBars,
     staleTagText: staleTagText,
     offlineMessage: offlineMessage,
