@@ -712,7 +712,12 @@
     font-weight: 500;
     color: var(--mute, var(--ink-faint));
   }
-  #flow-card .peak b { color: var(--ink); font-weight: 700; }
+  #flow-card .figure b { font-size: 28px; font-weight: 700; }
+  #flow-card .peak b {
+    color: var(--ink);
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
   @media (min-width: 1000px) {
     #flow-card .chart { height: 170px; }
   }
