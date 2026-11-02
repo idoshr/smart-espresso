@@ -1,4 +1,6 @@
 """Small Flask web dashboard exposing live machine status over the local network."""
+import math
+import mimetypes
 import os
 import threading
 from time import monotonic
@@ -14,6 +16,7 @@ from smart_espresso.water_tank import WaterTank
 
 PATH = os.path.dirname(os.path.abspath(__file__))
 STATIC_DIR = f"{PATH}/static"
+mimetypes.add_type("font/woff2", ".woff2")
 
 
 class StatusServer:
@@ -125,6 +128,13 @@ class StatusServer:
                 static_rule(filename),
             )
 
+        # The face is self-hosted. A catch-all would hide the 405 on POST
+        # routes, so the font gets its own rule like the rest of the shell.
+        def manrope():
+            return send_from_directory(STATIC_DIR, "fonts/manrope.woff2")
+
+        self.app.add_url_rule("/fonts/manrope.woff2", "static_manrope", manrope)
+
         @self.app.route("/api/status")
         def status():
             return jsonify(self.status_payload())
@@ -142,6 +152,23 @@ class StatusServer:
             if limit is False:
                 return jsonify({"error": "invalid limit"}), 400
             return jsonify(self.shot_history.list_payload(limit=limit))
+
+        @self.app.route("/api/shots/current")
+        def shot_current():
+            """
+            Samples of the shot that is still running.
+
+            Optional ``after`` is an elapsed time in seconds. The list
+            keeps only points newer than that, so the page can append
+            the tail. A quiet machine answers ``active: false`` and an
+            empty list. Saved shots stay on ``/api/shots/<id>``.
+            ``/api/status`` does not carry these samples.
+            """
+            try:
+                after = _parse_after(request.args.get("after"))
+            except ValueError:
+                return jsonify({"error": "invalid after"}), 400
+            return jsonify(self.shot_history.current_payload(after=after))
 
         @self.app.route("/api/shots/<int:shot_id>")
         def shot_detail(shot_id):
@@ -473,3 +500,19 @@ def _parse_limit(raw: Optional[str]):
     if limit < 0:
         return False
     return limit
+
+
+def _parse_after(raw: Optional[str]) -> Optional[float]:
+    """A finite float, or None when the query omits it.
+
+    Raises ValueError when the query is present but not a finite number.
+    """
+    if raw is None:
+        return None
+    try:
+        value = float(raw)
+    except ValueError as error:
+        raise ValueError("invalid after") from error
+    if not math.isfinite(value):
+        raise ValueError("invalid after")
+    return value
