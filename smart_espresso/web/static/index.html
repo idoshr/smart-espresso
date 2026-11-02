@@ -236,8 +236,8 @@
   }
   header .tagline:empty { display: none; }
   header .conn + .tagline { margin-left: 6px; }
-  /* Below 375 the today line would clip the title. The dot and the
-     wake control stay; the tally comes back at 375. */
+  /* Below 375 the today line would clip the title. The status dot
+     hides with the tally; the wake control stays. */
   @media (max-width: 374px) {
     header .tagline,
     header .conn { display: none !important; }
