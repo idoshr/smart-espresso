@@ -391,6 +391,58 @@ def _css_rule(page, selector):
     return match.group(1)
 
 
+class TestTankLead:
+    def test_zero_shots_says_the_tank_is_probably_empty(self):
+        assert (
+            call("logic.tankLead(0)")
+            == "Tank's probably empty. Refill before the next shot."
+        )
+        assert call("logic.tankLead(1)") == "About 1 shot left"
+        assert call("logic.tankLead(43)") == "About 43 shots left"
+        assert call("logic.humidityLabel(45.2)") == "45% humidity"
+        assert call("logic.humidityLabel(45.6)") == "46% humidity"
+        assert call("logic.tankMeterHidden(0)") is True
+        assert call("logic.tankMeterHidden(12)") is False
+
+
+class TestRefillButton:
+    def setup_method(self):
+        self.page = (
+            Path(__file__).resolve().parents[1] / "web" / "static" / "index.html"
+        ).read_text(encoding="utf-8")
+
+    def test_short_label_keeps_the_full_accessible_name(self):
+        assert 'aria-label="I refilled the tank"' in self.page
+        assert 'class="refill-long">I refilled the tank<' in self.page
+        assert 'class="refill-short">I refilled it<' in self.page
+        assert "@container refill" in self.page
+        assert "tankMeterHidden" in self.page
+        assert "Reconnect to save the refill" in self.page
+        assert "Reconnect to mark the tank filled" not in self.page
+
+    def test_normal_refill_is_short_text_and_empty_stays_a_pill(self):
+        normal = call("logic.refillControl(false)")
+        assert normal["pill"] is False
+        assert normal["text"] == "I refilled it"
+        assert normal["name"] == "I refilled the tank"
+        empty = call("logic.refillControl(true)")
+        assert empty["pill"] is True
+        assert empty["long"] == "I refilled the tank"
+        assert empty["short"] == "I refilled it"
+        assert empty["name"] == "I refilled the tank"
+        assert 'id="tank-used-row"' in self.page
+        assert "refill-inline" in self.page
+        assert "refill-pill" in self.page
+        assert "font-variant-numeric: tabular-nums" in _css_rule(self.page, ".pair-lead")
+        assert "font-variant-numeric: tabular-nums" in _css_rule(self.page, ".pair-sub")
+        narrow = re.search(r"@media \(max-width: 374px\)\s*\{([^}]*)\}", self.page)
+        assert narrow is not None
+        assert "flex-wrap: wrap" in narrow.group(1)
+        assert 'pointer-events: none' in _css_rule(
+            self.page, '#tank-card .reset.refill-inline[aria-disabled="true"]'
+        )
+
+
 class TestWaterCard:
     """The water card puts the peak in the header and shortens the chart."""
 
@@ -598,19 +650,23 @@ class TestPhoneHeader:
 
 
 class TestDesktopGrid:
-    """At 1024 px and up the cards form three columns."""
+    """From 1000 px the cards form three columns that can grow to 1440."""
 
     def setup_method(self):
         self.page = (
             Path(__file__).resolve().parents[1] / "web" / "static" / "index.html"
         ).read_text(encoding="utf-8")
 
-    def test_three_columns_from_1024(self):
-        at = self.page.find("@media (min-width: 1024px)")
+    def test_three_columns_from_1000(self):
+        at = self.page.find("grid-template-columns: repeat(3, minmax(280px, 1fr))")
         assert at > 0
-        block = self.page[at : at + 900]
-        assert "max-width: 1100px" in block
-        assert "grid-template-columns: repeat(3, minmax(0, 1fr))" in block
-        assert "#state { grid-column: 1" in block
-        assert "#rings" in block
+        block = self.page[at - 250 : at + 700]
+        assert "@media (min-width: 1000px)" in block
+        assert "max-width: 1440px" in block
+        assert "grid-auto-flow: dense" in block
+        assert "max-width: 1100px" not in self.page
+        assert "min-width: 1024px" not in self.page
+        assert "#state { grid-column: 1; grid-row: 1; }" in block
+        assert "#flow-card { grid-column: 1; grid-row: 2; }" in block
+        assert "#tank-room { grid-column: 2; grid-row: 2; }" in block
         assert "#pulls-card { grid-column: 3" in block

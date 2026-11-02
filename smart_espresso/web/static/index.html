@@ -278,26 +278,28 @@
 
   .stack { display: flex; flex-direction: column; gap: 12px; }
 
-  /* Look C desktop: three columns once the page is wider than a phone. */
-  @media (min-width: 1024px) {
-    body { max-width: 1100px; }
+  /* Look C desktop: three fluid columns from the same 1000 px break
+     as the rest of the page. Column 1 is the hero, then the water card,
+     so nothing sits empty under the state card. */
+  @media (min-width: 1000px) {
+    body { max-width: 1440px; }
     .stack {
       display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
+      grid-template-columns: repeat(3, minmax(280px, 1fr));
       gap: 12px;
       align-items: start;
+      grid-auto-flow: dense;
     }
-    #state { grid-column: 1; grid-row: 1 / span 3; }
+    #state { grid-column: 1; grid-row: 1; }
+    #flow-card { grid-column: 1; grid-row: 2; }
     #rings {
       grid-column: 2;
       grid-row: 1;
       display: grid;
       grid-template-columns: 1fr 1fr;
     }
-    #flow-card { grid-column: 2; grid-row: 2; }
+    #tank-room { grid-column: 2; grid-row: 2; }
     #pulls-card { grid-column: 3; grid-row: 1 / span 2; }
-    #tank-card { grid-column: 1; }
-    #other-card { grid-column: 3; }
   }
 
   .card {
@@ -706,6 +708,103 @@
 
   button.reset.armed { background: var(--ink); color: var(--card); }
   button.reset:focus-visible { outline: 2px solid var(--ink-soft); outline-offset: 2px; }
+
+  /* Tank and room share a row. The tank leads with shots left. */
+  .pair {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .pair-label {
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--mute, var(--ink-faint));
+  }
+  .pair-lead {
+    margin-top: 4px;
+    font-size: 19px;
+    font-weight: 700;
+    letter-spacing: -.02em;
+    line-height: 1.2;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  .pair-lead small {
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0;
+    color: var(--mute, var(--ink-faint));
+  }
+  .pair-lead.empty {
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: 0;
+  }
+  #tank-card .tank-foot {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .used-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+    margin-top: 3px;
+  }
+  .used-row .pair-sub { margin-top: 0; font-variant-numeric: tabular-nums; }
+  #tank-card .reset.refill-pill {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    white-space: nowrap;
+    container-type: inline-size;
+    container-name: refill;
+  }
+  #tank-card .reset.refill-inline {
+    width: auto;
+    display: inline;
+    min-height: 0;
+    padding: 0;
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--acc, var(--crema-ink));
+    container-type: normal;
+  }
+  #tank-card .refill-short { display: none; }
+  /* The long label is 109 px at 13.5 px/600. Below that, use the short one. */
+  @container refill (max-width: 112px) {
+    #tank-card .refill-long { display: none; }
+    #tank-card .refill-short { display: inline; }
+  }
+  #tank-card .level {
+    height: 6px;
+    margin-top: 8px;
+    border-radius: 3px;
+    background: var(--bg);
+  }
+  .pair-sub {
+    margin-top: 3px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--mute, var(--ink-faint));
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  @media (max-width: 374px) {
+    .used-row { flex-wrap: wrap; }
+    #tank-card .reset.refill-inline {
+      flex-basis: 100%;
+      white-space: nowrap;
+    }
+  }
+  @media (min-width: 1000px) {
+    .pair-lead { font-size: 28px; }
+    .pair-lead.empty { font-size: 15px; }
+  }
 
   /* ---- pour chart ---- */
   .chart {
@@ -1142,6 +1241,13 @@
     cursor: default;
     border-color: var(--edge);
   }
+  #tank-card .reset.refill-inline[aria-disabled="true"] {
+    color: var(--mute, var(--ink-faint));
+    pointer-events: none;
+  }
+  #tank-card .reset.refill-inline[aria-disabled="true"]:hover {
+    color: var(--mute, var(--ink-faint));
+  }
 
   .toast {
     position: fixed;
@@ -1318,27 +1424,25 @@
     <div class="axis"><span id="flow-axis-start">-2:00</span><span id="flow-axis-mid">−1:00</span><span>now</span></div>
   </div>
 
-  <div class="card" id="tank-card" hidden>
-    <div class="card-head">
-      <span class="title">Water tank</span>
-      <span class="note" id="tank-note"></span>
+  <div class="pair" id="tank-room">
+    <div class="card" id="tank-card" hidden>
+      <div class="pair-label">Water tank</div>
+      <div class="pair-lead" id="tank-lead">Tank's probably empty. Refill before the next shot.</div>
+      <div class="level"><i id="tank-fill" style="width:0%"></i></div>
+      <div class="used-row" id="tank-used-row">
+        <span class="pair-sub" id="tank-used-line">0 ml used</span>
+      </div>
+      <div class="tank-foot" id="tank-foot">
+        <span class="refill-hint" id="tank-warn" hidden>Time to refill</span>
+        <span class="refill-hint" id="tank-offline-hint" hidden>Reconnect to save the refill</span>
+        <button class="reset refill-pill" id="tank-reset" type="button" aria-label="I refilled the tank" aria-disabled="true"><span class="refill-long">I refilled the tank</span><span class="refill-short">I refilled it</span></button>
+      </div>
     </div>
-    <div class="figure"><b id="tank-remaining">--</b><span id="tank-capacity">ml left</span></div>
-    <div class="level"><i id="tank-fill" style="width:0%"></i></div>
-    <div class="meta">
-      <span id="tank-used-line">0 ml used</span>
-      <span id="tank-left">About 0 shots left</span>
+    <div class="card" id="other-card" hidden>
+      <div class="pair-label">Room</div>
+      <div class="pair-lead" id="room-temp">—</div>
+      <div class="pair-sub" id="room-humidity">No sensor reading</div>
     </div>
-    <div class="tank-foot">
-      <span class="refill-hint" id="tank-warn" hidden>Time to refill</span>
-      <span class="refill-hint" id="tank-offline-hint" hidden>Reconnect to mark the tank filled</span>
-      <button class="reset" id="tank-reset" type="button" aria-disabled="true">I refilled the tank</button>
-    </div>
-  </div>
-
-  <div class="card" id="other-card" hidden>
-    <div class="card-head"><span class="title">Room</span></div>
-    <div class="rows" id="other-rows"></div>
   </div>
 </div>
 
@@ -2062,27 +2166,59 @@ function paintShot(detail, shot) {
 
 // ---- tank ----------------------------------------------------------------
 
+function renderRoom(sensors) {
+  const card = document.getElementById('other-card');
+  const room = (sensors || []).find(sensor =>
+    sensor && (sensor.temperature_c !== undefined || sensor.humidity_pct !== undefined
+      || sensor.name === 'Environment' || sensor.name === 'Room')
+  );
+  card.hidden = !room;
+  if (!room) return;
+  const temp = document.getElementById('room-temp');
+  const humidity = document.getElementById('room-humidity');
+  temp.replaceChildren();
+  if (typeof room.temperature_c === 'number') {
+    temp.append(document.createTextNode(room.temperature_c.toFixed(1)));
+    const unit = document.createElement('small');
+    unit.textContent = ' °C';
+    temp.append(unit);
+  } else {
+    temp.textContent = '—';
+  }
+  if (typeof room.humidity_pct === 'number') {
+    humidity.textContent = DashboardLogic.humidityLabel(room.humidity_pct);
+  } else {
+    humidity.textContent = 'No sensor reading';
+  }
+}
+
 function renderTank(tank) {
-  document.getElementById('tank-remaining').textContent =
-    Math.round(tank.remaining_ml).toLocaleString('en-US');
-  document.getElementById('tank-capacity').textContent =
-    `ml of ${Math.round(tank.capacity_ml).toLocaleString('en-US')} left`;
   document.getElementById('tank-used-line').textContent =
     `${Math.round(tank.used_ml).toLocaleString('en-US')} ml used`;
   const shotsLeft = tank.shots_left;
-  document.getElementById('tank-left').textContent = shotsLeft === 1
-    ? 'About 1 shot left'
-    : `About ${shotsLeft} shots left`;
-  document.getElementById('tank-note').textContent =
-    tank.refills ? `${tank.refills} refill${tank.refills === 1 ? '' : 's'}` : '';
+  const lead = document.getElementById('tank-lead');
+  lead.replaceChildren();
+  lead.classList.toggle('empty', shotsLeft === 0);
+  if (shotsLeft === 0) {
+    lead.textContent = DashboardLogic.tankLead(0);
+  } else {
+    const count = document.createElement('span');
+    count.textContent = shotsLeft === 1 ? 'About 1' : `About ${shotsLeft}`;
+    const rest = document.createElement('small');
+    rest.textContent = shotsLeft === 1 ? ' shot left' : ' shots left';
+    lead.append(count, rest);
+  }
 
   const fill = document.getElementById('tank-fill');
+  const meter = fill.parentElement;
+  meter.hidden = DashboardLogic.tankMeterHidden(shotsLeft);
   fill.style.width = `${tank.percent}%`;
   fill.classList.toggle('low', tank.low);
 
   const warn = document.getElementById('tank-warn');
-  warn.hidden = !tank.low;
-  warn.textContent = tank.empty ? 'Tank is empty' : 'Time to refill';
+  warn.hidden = tank.empty || !tank.low;
+  warn.textContent = 'Time to refill';
+  applyRefill(shotsLeft === 0);
 }
 
 // ---- pour chart ----------------------------------------------------------
@@ -2176,16 +2312,7 @@ function render(data) {
   tankCard.hidden = !DashboardLogic.sensorCardVisible(true, !!data.tank);
   if (data.tank) renderTank(data.tank);
 
-  const otherCard = document.getElementById('other-card');
-  otherCard.hidden = !data.other.length;
-  if (data.other.length) {
-    document.getElementById('other-rows').innerHTML = data.other
-      .map(s => {
-        const name = s.name === 'Environment' ? 'Room' : s.name;
-        return `<div class="row"><span>${escapeHtml(name)}</span><span class="v">${escapeHtml(s.message)}</span></div>`;
-      })
-      .join('');
-  }
+  renderRoom(data.other || []);
 
   hasPayload = true;
   document.getElementById('skeletons').hidden = true;
@@ -2311,9 +2438,34 @@ resetButton.addEventListener('click', async () => {
   }
 });
 
+let tankIsEmpty = true;
+
+function applyRefill(empty) {
+  tankIsEmpty = !!empty;
+  if (resetButton.classList.contains('armed')) return;
+  const spec = DashboardLogic.refillControl(tankIsEmpty);
+  resetButton.classList.toggle('refill-pill', spec.pill);
+  resetButton.classList.toggle('refill-inline', !spec.pill);
+  resetButton.setAttribute('aria-label', spec.name);
+  if (spec.pill) {
+    document.getElementById('tank-foot').appendChild(resetButton);
+    resetButton.replaceChildren();
+    const long = document.createElement('span');
+    long.className = 'refill-long';
+    long.textContent = spec.long;
+    const short = document.createElement('span');
+    short.className = 'refill-short';
+    short.textContent = spec.short;
+    resetButton.append(long, short);
+  } else {
+    document.getElementById('tank-used-row').appendChild(resetButton);
+    resetButton.textContent = spec.text;
+  }
+}
+
 function disarmReset() {
   resetButton.classList.remove('armed');
-  resetButton.textContent = 'I refilled the tank';
+  applyRefill(tankIsEmpty);
 }
 
 // ---- polling, with a backoff so a down machine is not hammered ----------
