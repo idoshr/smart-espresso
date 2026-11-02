@@ -688,9 +688,10 @@
   /* Tank and room share a row. The tank leads with shots left. */
   .pair {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 8px;
   }
+  .pair > * { min-width: 0; }
   .pair-label {
     font-size: 12.5px;
     font-weight: 600;
@@ -715,6 +716,7 @@
     font-size: 15px;
     font-weight: 600;
     letter-spacing: 0;
+    white-space: normal;
   }
   #tank-card .tank-foot {
     flex-direction: column;
@@ -733,7 +735,6 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    white-space: nowrap;
     container-type: inline-size;
     container-name: refill;
   }
@@ -748,6 +749,8 @@
     font-size: 12px;
     font-weight: 600;
     color: var(--acc, var(--crema-ink));
+    white-space: nowrap;
+    text-align: left;
     container-type: normal;
   }
   #tank-card .refill-short { display: none; }
@@ -770,11 +773,12 @@
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
   }
-  @media (max-width: 374px) {
+  @media (max-width: 399px) {
     .used-row { flex-wrap: wrap; }
     #tank-card .reset.refill-inline {
       flex-basis: 100%;
-      white-space: nowrap;
+      justify-content: flex-start;
+      text-align: left;
     }
   }
   @media (min-width: 1000px) {
