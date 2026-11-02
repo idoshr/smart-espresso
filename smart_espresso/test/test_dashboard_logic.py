@@ -1136,3 +1136,36 @@ class TestTokens:
         assert "font-size: 12.5px" in title
         assert "font-weight: 600" in title
         assert "gap: 3px" in _css_rule(self.page, ".figure")
+
+
+class TestDesktopGrid:
+    """From 1000 px the cards form three columns that can grow to 1440."""
+
+    def setup_method(self):
+        self.page = (
+            Path(__file__).resolve().parents[1] / "web" / "static" / "index.html"
+        ).read_text(encoding="utf-8")
+
+    def test_three_columns_from_1000(self):
+        at = self.page.find("grid-template-columns: repeat(3, minmax(280px, 1fr))")
+        assert at > 0
+        block = self.page[at - 400 : at + 1600]
+        assert "@media (min-width: 1000px)" in block
+        assert "max-width: 1440px" in block
+        assert "gap: 8px" in block
+        assert "max-width: 1100px" not in self.page
+        assert "min-width: 1024px" not in self.page
+        assert "#desk-meters { grid-column: 2; }" in block
+        assert "#desk-side { grid-column: 3; }" in block
+        assert "#state { grid-column: 1;" in block
+        assert (
+            "#tank-room { display: flex; flex-direction: column; gap: 8px; }" in block
+        )
+        assert "#recent-tiles { display: none; }" in block
+        assert (
+            ".shot-when { flex: none; overflow: visible; text-overflow: clip; }"
+            in self.page
+        )
+        assert "min-width: 1000px" in self.page.split("function syncDeskRecent", 1)[1]
+        assert "syncDeskRecent" in self.page
+        assert "#history-card { grid-column" not in block
