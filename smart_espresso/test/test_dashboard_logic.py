@@ -501,6 +501,7 @@ class TestTankLead:
             == "Tank's probably empty. Refill before the next shot."
         )
         assert call("logic.tankLead(1)") == "About 1 shot left"
+        assert call("logic.tankLead(16)") == "About 16 shots left"
         assert call("logic.tankLead(43)") == "About 43 shots left"
         assert call("logic.humidityLabel(45.2)") == "45% humidity"
         assert call("logic.humidityLabel(45.6)") == "46% humidity"
@@ -538,9 +539,7 @@ class TestRefillButton:
         assert "refill-pill" in self.page
         assert "min-width: 0" in _css_rule(self.page, ".pair-lead")
         assert "white-space: nowrap" not in _css_rule(self.page, ".pair-lead")
-        narrow_lead = re.search(
-            r"@media \(max-width: 339px\)\s*\{([^}]*)\}", self.page
-        )
+        narrow_lead = re.search(r"@media \(max-width: 339px\)\s*\{([^}]*)\}", self.page)
         assert narrow_lead is not None
         assert "font-size: 16px" in narrow_lead.group(1)
         assert "font-variant-numeric: tabular-nums" in _css_rule(self.page, ".pair-sub")
