@@ -335,6 +335,18 @@
     background: var(--card);
   }
 
+  [data-state="off"] { --state-solid: var(--state-off); --state-ink: var(--state-off-ink); }
+  [data-state="heating"] { --state-solid: var(--state-heating); --state-ink: var(--state-heating-ink); }
+  [data-state="ready"] { --state-solid: var(--state-ready); --state-ink: var(--state-ready-ink); }
+  [data-state="brewing"] { --state-solid: var(--state-brewing); --state-ink: var(--state-brewing-ink); }
+  [data-state="steaming"] { --state-solid: var(--state-steaming); --state-ink: var(--state-steaming-ink); }
+  [data-state="overpressure"] { --state-solid: var(--state-overpressure); --state-ink: var(--state-overpressure-ink); }
+  [data-state="unknown"] { --state-solid: var(--state-unknown); --state-ink: var(--state-unknown-ink); }
+
+  /* The state card is the hero. The chip names the state; the timer,
+     the aim and the window live in the body. Colours are look C tokens
+     so a later palette rebase does not rewrite these rules. */
+  .state { padding: 14px 18px 10px; }
   .state-band {
     display: flex;
     align-self: stretch;
@@ -370,9 +382,9 @@
     background: var(--bg);
     color: var(--ink);
     font-family: var(--display);
-    font-size: 14px;
+    font-size: 12.5px;
     font-weight: 700;
-    letter-spacing: -.01em;
+    letter-spacing: 0;
     line-height: 1.2;
     border: 1px solid var(--mute);
     border-radius: 99px;
@@ -457,33 +469,38 @@
     text-align: left;
   }
 
-  .state.offline .state-band {
-    min-height: 0;
+  /* Layout wrapper only. The pill is .state-label, so this box has
+     no border and no background of its own. */
+  .state-chip {
+    display: inline-flex;
+    align-items: center;
+    max-width: 100%;
+    border: none;
+    background: transparent;
     padding: 0;
-    background: transparent;
-    color: var(--mute, var(--ink-faint));
-  }
-  .state.offline .glyph,
-  .state.offline .lamp { display: none; }
-  .state.offline .state-label {
-    display: inline-block;
-    font-size: 12.5px;
-    font-weight: 700;
-    letter-spacing: 0;
-    line-height: 1.2;
-    color: var(--mute, var(--ink-faint));
-    background: transparent;
-    border: 1px dashed var(--mute, var(--ink-faint));
-    border-radius: 99px;
-    padding: 5px 12px;
   }
 
+  .state-chip .lamp { display: none; }
+  .state-label { text-wrap: balance; }
+  .state-chip.offline .state-label {
+    background: transparent;
+    color: var(--mute);
+    border: 1px dashed var(--mute);
+  }
+  .state-chip.offline .state-label::before,
+  .state.alert .state-label::before,
+  .state.off .state-label::before { display: none; }
+  .state-label.pulse::before { animation: lamp-pulse 1.6s ease-in-out infinite; }
+
+  .state-body { padding: 0; }
+
   .state-detail {
-    font-size: 15px;
-    color: var(--ink);
+    margin-top: 8px;
+    font-size: 12.5px;
+    font-weight: 500;
+    color: var(--mute, var(--ink-faint));
     line-height: 1.35;
-    text-align: left;
-    white-space: pre-line;
+    text-align: left;    white-space: pre-line;
   }
 
   .state.offline .state-detail {
@@ -520,25 +537,6 @@
     white-space: nowrap;
   }
 
-  /* The reference pull, kept as a chip: dialing in means comparing.
-     One line, even if that means the tail yields to an ellipsis. */
-  .last-pull {
-    display: inline-block;
-    max-width: 100%;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    vertical-align: top;
-    font-family: var(--mono);
-    font-size: 12px;
-    letter-spacing: .06em;
-    color: var(--ink-soft);
-    border: 1px solid var(--edge);
-    border-radius: 999px;
-    padding: 4px 10px;
-    margin-top: 16px;
-  }
-
   .lamp {
     width: 8px;
     height: 8px;
@@ -547,47 +545,58 @@
     background: var(--ink);
   }
 
-  /* The shot timer is the figure the eye is here for: full stage,
-     centered, and the target window drawn under it across the card. */
-  .shot {
-    display: flex;
-    flex-direction: column;
-    align-self: stretch;
-    width: 100%;
-    align-items: center;
-    text-align: center;
-    margin-top: 12px;
-  }
+  /* Timer on the left, aim and the live verdict on the right.
+     The yield stays on the water card, not under the timer. */
+  .shot { margin-top: 12px; text-align: left; }
 
-  .shot b {
+  .trow {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    gap: 12px;  }
+
+  .timer b {
     font-family: var(--display);
-    font-size: 64px;
-    font-weight: 600;
-    letter-spacing: -.03em;
+    font-size: 62px;
+    font-weight: 700;
+    letter-spacing: -.05em;
     font-variant-numeric: tabular-nums;
     line-height: 1;
-    transition: color .3s ease;
   }
 
+  .timer small {
+    font-size: 22px;
+    font-weight: 600;
+    color: var(--mute, var(--ink-faint));
+    margin-left: 4px;
+    letter-spacing: 0;
+  }
   .shot b.good { color: var(--ink); }
   .shot b.fast { color: var(--ink); }
   .shot b.long { color: var(--ink); }
-
-  .shot small {
-    display: block;
-    font-family: var(--mono);
-    font-size: 12px;
-    letter-spacing: .04em;
-    color: var(--ink-soft);
-    margin-top: 8px;
+  .hint {
+    text-align: right;
+    font-size: 12.5px;
+    font-weight: 500;
+    color: var(--mute, var(--ink-faint));
+    padding-bottom: 8px;
   }
 
-  /* Target extraction window, drawn under the shot timer. */
+  .hint b {
+    display: block;
+    color: var(--acc, var(--crema-ink));
+    font-size: 14px;
+    font-weight: 700;
+    margin-top: 2px;
+  }
+
+  /* 6 px track. The window box sticks out 4 px each side, so it is 14 px
+     tall, outlined in the accent, with a 5 px radius. */
   .shot-track {
     position: relative;
     width: 100%;
-    height: 5px;
-    margin-top: 12px;
+    height: 6px;
+    margin-top: 10px;
     border-radius: 3px;
     background: var(--bg);
   }
@@ -602,9 +611,39 @@
 
   .shot-track u {
     position: absolute;
-    top: -3px; bottom: -3px;
-    border-left: 1.5px solid var(--ink);
-    border-right: 1.5px solid var(--ink);
+    top: -4px;
+    bottom: -4px;
+    border: 1.5px solid var(--acc, var(--crema-ink));
+    border-radius: 5px;
+    text-decoration: none;
+  }
+
+  .tl {
+    display: flex;
+    justify-content: space-between;
+    position: relative;
+    margin-top: 6px;
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--mute, var(--ink-faint));
+  }
+
+  .tl .wl {
+    position: absolute;
+    left: 68.75%;
+    transform: translateX(-50%);
+    color: var(--acc, var(--crema-ink));
+    font-weight: 700;
+  }
+
+  @media (min-width: 1000px) {
+    .state-label { font-size: 14px; padding: 7px 15px; }
+    .timer b { font-size: 140px; margin-top: 14px; }
+    .timer small { font-size: 40px; }
+    .hint { font-size: 15px; padding-bottom: 22px; }
+    .hint b { font-size: 18px; }
+    .shot-track { height: 8px; margin-top: 22px; }
+    .tl { font-size: 12px; }
   }
 
   /* One card, two linear meters. Head is 0–12 bar and turns accent
@@ -1342,13 +1381,9 @@
   body.glance #tank-card,
   body.glance #other-card,
   body.glance #skeletons,
-  body.glance .last-pull,
+  body.glance footer,
   body.glance .warm {
     display: none !important;
-  }
-
-  body.glance .state-label {
-    font-size: clamp(40px, 9vh, 88px);
   }
 
   body.glance .shot b {
@@ -1403,14 +1438,13 @@
 <div class="stack">
   <div class="card state" id="state" data-state="unknown">
     <div class="state-band" id="state-band">
-      <span class="lamp" id="lamp"></span>
-      <span class="glyph" id="state-glyph" aria-hidden="true"></span>
-      <div class="state-copy">
-        <div class="state-label" id="state-label" aria-live="polite"><span
+      <span class="state-chip">
+        <i class="lamp" id="lamp"></i>
+        <span class="state-label" id="state-label" aria-live="polite"><span
             class="alert-mark" id="alert-mark" aria-hidden="true" hidden>!</span><span
-            id="state-label-text">Connecting…</span></div>
-        <span class="stale-tag" id="stale-tag" hidden>Last seen</span>
-      </div>
+            id="state-label-text">Connecting…</span></span>
+      </span>
+      <span class="stale-tag" id="stale-tag" hidden>Last seen</span>
     </div>
     <div class="state-body">
       <div class="state-detail" id="state-detail">waiting for the machine</div>
@@ -1419,12 +1453,17 @@
         <span class="warm-eta" id="warm-eta"></span>
       </div>
       <div class="shot" id="shot" hidden>
-        <b id="shot-seconds">0 s</b>
-        <span class="stale-tag" id="shot-stale" hidden>Last seen</span>
-        <small id="shot-ml">0 ml</small>
-        <div class="shot-track"><u id="shot-window"></u><i id="shot-progress"></i></div>
-      </div>
-      <span class="last-pull" id="last-pull" hidden></span>
+        <div class="trow">
+          <div class="timer"><b id="shot-seconds">0</b><small>s</small>
+            <span class="stale-tag" id="shot-stale" hidden>Last seen</span>
+          </div>
+          <div class="hint" id="shot-hint">
+            <span id="shot-aim">Aiming for 25 to 30 s</span>
+            <b id="shot-verdict">On target</b>
+          </div>
+        </div>
+        <div class="shot-track"><i id="shot-progress"></i><u id="shot-window"></u></div>
+        <div class="tl"><span>0 s</span><span class="wl">25–30 s</span><span>40 s</span></div>      </div>
     </div>
   </div>
 
@@ -1593,14 +1632,9 @@ function renderState(machine, pressure) {
   document.getElementById('brewbar').dataset.state = stateName;
   document.getElementById('bb-label').textContent = shownLabel;
 
-  const lamp = document.getElementById('lamp');
-  lamp.classList.toggle('pulse', machine.severity === 'alert');
-
-  const glyph = document.getElementById('state-glyph');
-  glyph.innerHTML =
-    `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-          stroke-linecap="round" stroke-linejoin="round">${GLYPHS[machine.state] || GLYPHS.unknown}</svg>`;
-  glyph.style.color = '';
+  document.getElementById('state-label').classList.toggle(
+    'pulse', machine.severity === 'alert'
+  );
 
   // Only rewritten when it actually changes: the label carries aria-live,
   // and a per-second "3s in this state" would talk an ear off.
@@ -1629,22 +1663,22 @@ function renderState(machine, pressure) {
     // Fresh payload: take the machine's number. displayedShotText refuses
     // to advance a held reading while offline, which is what keeps the
     // timer from counting up if a late render lands after the lamp flips.
-    const incomingShot = `${machine.shot.seconds.toFixed(0)} s`;
-    const shownShot = DashboardLogic.displayedShotText(true, heldShotText, incomingShot);
+    const incomingShot = machine.shot.seconds.toFixed(0);    const shownShot = DashboardLogic.displayedShotText(true, heldShotText, incomingShot);
     heldShotText = shownShot;
     shotSeconds.textContent = shownShot;
-    shotSeconds.className = verdictOf(machine.shot.seconds).key;
+    const verdict = DashboardLogic.liveVerdict(
+      machine.shot.seconds, SHOT_WINDOW[0], SHOT_WINDOW[1]
+    );
+    document.getElementById('shot-verdict').textContent = verdict;
     document.getElementById('bb-time').className =
       `bb-time ${verdictOf(machine.shot.seconds).key}`;
-    document.getElementById('shot-ml').textContent =
-      `${machine.shot.ml.toFixed(0)} ml`;
     document.getElementById('shot-progress').style.width =
       `${Math.min(100, machine.shot.seconds / SHOT_SCALE * 100)}%`;
     const windowEl = document.getElementById('shot-window');
     if (presentation.showTarget) Object.assign(windowEl.style, windowStyle());
     else windowEl.style.width = '0';
 
-    document.getElementById('bb-time').textContent = shownShot;
+    document.getElementById('bb-time').textContent = `${shownShot} s`;
     document.getElementById('bb-ml').textContent =
       `${machine.shot.ml.toFixed(0)} ml`;
   } else {
@@ -1656,23 +1690,19 @@ function renderState(machine, pressure) {
     document.getElementById('bb-time').className = 'bb-time';
   }
 
-  // The last shot stays up as a reference chip, even mid-shot.
-  // Ratio stays hidden until #26 stores a dose. See ratioText.
-  const chip = document.getElementById('last-pull');
-  const last = machine.last_shot;
-  chip.hidden = !last;
-  if (last) {
-    const lastVerdict = verdictOf(last.seconds);
-    chip.textContent =
-      `Last shot ${last.seconds.toFixed(0)} s · ${last.ml.toFixed(0)} ml · ${lastVerdict.label}`;
-  }
-
   const boilerBar = DashboardLogic.boilerReading(pressure);
   const detailMachine = flushDisplay
     ? Object.assign({}, machine, { shot: null, state: 'flushing' })
     : machine;
-  document.getElementById('state-detail').textContent =
-    DashboardLogic.heroDetail(detailMachine, boilerBar);
+  const detail = DashboardLogic.heroDetail(detailMachine, boilerBar);
+  const detailEl = document.getElementById('state-detail');
+  if (presentation.showShot) {
+    detailEl.hidden = true;
+    document.getElementById('shot-aim').textContent = detail;
+  } else {
+    detailEl.textContent = detail;
+    detailEl.hidden = detail === "";
+  }
   paintWarm(machine, boilerBar);
 
   syncBrewbar();
@@ -2275,12 +2305,12 @@ function paintOfflineChrome() {
   const offline = DashboardLogic.shownState(
     lastMachine, null, connected, hasPayload, lastSeenAt, Date.now()
   );
-  document.getElementById('state').classList.toggle('offline', offline.replace);
   const chip = document.querySelector('.state-chip');
+  const stateCard = document.getElementById('state');
   if (chip) chip.classList.toggle('offline', offline.replace);
+  if (stateCard) stateCard.classList.toggle('offline', offline.replace);
   if (offline.replace) {
-    const offlineCard = document.getElementById('state');
-    setStateLabel(applyPill(offlineCard, offline.label));
+    setStateLabel(applyPill(stateCard, offline.label));
     const detailEl = document.getElementById('state-detail');
     detailEl.textContent = offline.detail;
     detailEl.hidden = false;

@@ -206,26 +206,38 @@
     return "quiet";
   }
 
+  // The chip already names the state, so this line does not repeat it.
+  // During a shot the aim stays put; the live verdict is a separate line.
   function heroDetail(machine, boilerBar) {
-    if (machine.shot) {
-      const seconds = machine.shot.seconds;
-      if (seconds < 25) return "Aiming for 25 to 30 s";
-      if (seconds <= 30) return "On target";
-      return "Running long";
-    }
+    if (machine.shot) return "Aiming for 25 to 30 s";
     if (machine.state === "heating" && typeof boilerBar === "number") {
       const eta = formatEta(warmingEtaSeconds(boilerBar, machine.since_seconds));
       const base = boilerBar.toFixed(1) + " of 0.8 bar";
       return eta ? base + " · " + eta + " to go" : base;
     }
     if (machine.state === "overpressure") {
-      return (
-        "for " +
-        formatSpokenDuration(machine.since_seconds) +
-        "\nCheck the pressurestat"
-      );
+      const check = "Check the pressurestat";
+      if (!(Number(machine.since_seconds) >= 60)) return check;
+      return "for " + formatSpokenDuration(machine.since_seconds) + " · " + check;
+    }
+    // since_seconds is how long the published state has been held, counted
+    // from the transition into it. A Ready line before a minute is just
+    // "for 0 s", so the line stays hidden until the minute is real.
+    if (
+      (machine.state === "ready" || machine.state === "off") &&
+      !(Number(machine.since_seconds) >= 60)
+    ) {
+      return "";
     }
     return durationLine(machine.state, machine.since_seconds);
+  }
+
+  // Sentence case. short / on target / long from the same window.
+  function liveVerdict(seconds, windowLow, windowHigh) {
+    const verdict = shotVerdict(seconds, windowLow, windowHigh);
+    if (verdict.key === "fast") return "Short";
+    if (verdict.key === "long") return "Long";
+    return "On target";
   }
 
   function glanceOn(wakeHeld, pinned) {
@@ -470,6 +482,7 @@
     warmingEtaSeconds: warmingEtaSeconds,
     formatEta: formatEta,
     heroDetail: heroDetail,
+    liveVerdict: liveVerdict,
     pillLabel: pillLabel,
     pillKind: pillKind,
     glanceOn: glanceOn,
