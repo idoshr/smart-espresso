@@ -241,6 +241,28 @@
     return { shotSeen: false, buzzedInWindow: false };
   }
 
+  // Fixed scales from look C. Head marks 8–10 bar; boiler has no band.
+  function meterSpec(name) {
+    const key = String(name || "").toLowerCase();
+    if (key.indexOf("boiler") >= 0 || key.indexOf("steam") >= 0) {
+      return { label: "Boiler pressure", max: 2, band: null };
+    }
+    if (key.indexOf("head") >= 0) {
+      return { label: "Head pressure", max: 12, band: [8, 10] };
+    }
+    return { label: name || "Pressure", max: 12, band: null };
+  }
+
+  function meterFraction(bar, max) {
+    if (typeof bar !== "number" || !isFinite(bar) || !(max > 0)) return 0;
+    return Math.max(0, Math.min(1, bar / max));
+  }
+
+  function meterHot(bar, band) {
+    if (!band || typeof bar !== "number" || !isFinite(bar)) return false;
+    return bar >= band[0] && bar <= band[1];
+  }
+
   // The over-band arc is a warning mark. At 0 bar it is the loudest thing
   // on an idle dial, so it stays hidden until the reading nears the band.
   function showOverBand(bar, bandFrom) {
@@ -373,6 +395,9 @@
     noteShotWindow: noteShotWindow,
     clearShotWindow: clearShotWindow,
     showOverBand: showOverBand,
+    meterSpec: meterSpec,
+    meterFraction: meterFraction,
+    meterHot: meterHot,
     shotVerdict: shotVerdict,
     flowBars: flowBars,
     staleTagText: staleTagText,
