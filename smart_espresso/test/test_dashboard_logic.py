@@ -1110,3 +1110,19 @@ class TestPhoneHeader:
         assert "background: var(--ink)" in pressed
         assert "color: var(--card)" in pressed
         assert "border-color: var(--ink)" in pressed
+
+
+class TestTokens:
+    """Look C spacing: tighter cards, heavier labels, a closer unit."""
+
+    def setup_method(self):
+        self.page = (
+            Path(__file__).resolve().parents[1] / "web" / "static" / "index.html"
+        ).read_text(encoding="utf-8")
+
+    def test_cards_labels_and_units(self):
+        assert "gap: 8px" in _css_rule(self.page, ".stack")
+        title = _css_rule(self.page, ".title")
+        assert "font-size: 12.5px" in title
+        assert "font-weight: 600" in title
+        assert "gap: 3px" in _css_rule(self.page, ".figure")
