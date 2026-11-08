@@ -601,10 +601,13 @@ class TestWaterCard:
         assert "max-width: 10px" in bar
         assert len(call("logic.flowBars(Array(40).fill(1), 326)")) == 25
         wide = self.page[self.page.find("@media (min-width: 1000px)") :]
-        assert (
-            "#flow-card .chart { flex: 1 1 auto; height: auto; min-height: 72px; }"
-            in wide
-        )
+        assert "#flow-card .chart { flex: 1; height: auto; min-height: 170px; }" in wide
+        assert "height: 170px" in wide
+        number = _css_rule(self.page, "#flow-card .figure b")
+        assert "font-size: 28px" in number
+        assert "font-weight: 700" in number
+        peak = _css_rule(self.page, "#flow-card .peak b")
+        assert "font-variant-numeric: tabular-nums" in peak
 
 
 class TestMeters:
@@ -781,10 +784,7 @@ class TestHeroCurve:
         assert 'id="hero-band"' not in self.page
         assert "#hero-curve .band" not in self.page
         wide = self.page[self.page.find("@media (min-width: 1000px)") :]
-        assert (
-            "#hero-curve .chart { flex: 1 1 auto; height: auto; min-height: 180px;"
-            in wide
-        )
+        assert "#hero-curve .chart { flex: 1; height: auto; min-height: 220px;" in wide
 
     def test_append_uses_the_after_cursor_and_skips_points_already_held(self):
         first = call(
@@ -1193,3 +1193,19 @@ class TestDesktopGrid:
         assert "white-space: nowrap" in _css_rule(self.page, ".recent-tile .t-line")
         assert "syncDeskRecent" in self.page
         assert "#history-card { grid-column" not in block
+
+
+class TestTokens:
+    """Look C spacing: tighter cards, heavier labels, a closer unit."""
+
+    def setup_method(self):
+        self.page = (
+            Path(__file__).resolve().parents[1] / "web" / "static" / "index.html"
+        ).read_text(encoding="utf-8")
+
+    def test_cards_labels_and_units(self):
+        assert "gap: 8px" in _css_rule(self.page, ".stack")
+        title = _css_rule(self.page, ".title")
+        assert "font-size: 12.5px" in title
+        assert "font-weight: 600" in title
+        assert "gap: 3px" in _css_rule(self.page, ".figure")

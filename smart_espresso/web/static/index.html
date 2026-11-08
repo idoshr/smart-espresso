@@ -292,7 +292,7 @@
   button.live.on .dot { background: var(--ink); }
   button.live:focus-visible { outline: 2px solid var(--ink-soft); outline-offset: 2px; }
 
-  .stack { display: flex; flex-direction: column; gap: 12px; }
+  .stack { display: flex; flex-direction: column; gap: 8px; }
   .desk-col { display: contents; }
 
   /* Each column is its own stack, so a tall card in one column does not
@@ -399,7 +399,8 @@
 
   .title {
     font-family: var(--mono);
-    font-size: 11px;
+    font-size: 12.5px;
+    font-weight: 600;
     letter-spacing: .02em;
     color: var(--ink-soft);
   }
@@ -555,15 +556,6 @@
     padding: 0;
     text-align: left;
   }
-
-  .state.offline .state-band {
-    min-height: 0;
-    padding: 0;
-    background: transparent;
-    color: var(--mute, var(--ink-faint));
-  }
-  .state.offline .glyph,
-  .state.offline .lamp { display: none; }
 
   /* Layout wrapper only. The pill is .state-label, so this box has
      no border and no background of its own. */
@@ -803,7 +795,7 @@
     .shot-track { height: 8px; margin-top: 22px; }
     .tl { font-size: 12px; }
     #hero-curve .cvh { margin-top: 22px; }
-    #hero-curve .chart { flex: 1 1 auto; height: auto; min-height: 180px; margin-top: 12px; }
+    #hero-curve .chart { flex: 1; height: auto; min-height: 220px; margin-top: 12px; }
     #hero-curve .yl { font-size: 12px; }
   }
 
@@ -884,7 +876,7 @@
   }
 
   /* ---- figures ---- */
-  .figure { display: flex; align-items: baseline; gap: 7px; }
+  .figure { display: flex; align-items: baseline; gap: 3px; }
 
   .figure b {
     font-family: var(--display);
@@ -1093,9 +1085,14 @@
     font-weight: 500;
     color: var(--mute, var(--ink-faint));
   }
-  #flow-card .peak b { color: var(--ink); font-weight: 700; }
+  #flow-card .figure b { font-size: 28px; font-weight: 700; }
+  #flow-card .peak b {
+    color: var(--ink);
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
   @media (min-width: 1000px) {
-    #flow-card .chart { flex: 1 1 auto; height: auto; min-height: 72px; }
+    #flow-card .chart { flex: 1; height: auto; min-height: 170px; }
   }
 
   .chart.empty { height: 22px; }
@@ -1553,7 +1550,7 @@
 
   button.retry:focus-visible { outline: 2px solid var(--ink-soft); outline-offset: 2px; }
 
-  #skeletons { display: flex; flex-direction: column; gap: 12px; }
+  #skeletons { display: flex; flex-direction: column; gap: 8px; }
   .skeleton-card { display: flex; flex-direction: column; }
 
   .sk {
@@ -2571,7 +2568,7 @@ function paintOfflineChrome() {
   if (chip) chip.classList.toggle('offline', offline.replace);
   if (stateCard) stateCard.classList.toggle('offline', offline.replace);
   if (offline.replace) {
-    setStateLabel(applyPill(document.getElementById('state'), offline.label));
+    setStateLabel(applyPill(stateCard, offline.label));
     const detailEl = document.getElementById('state-detail');
     detailEl.textContent = offline.detail;
     detailEl.hidden = false;

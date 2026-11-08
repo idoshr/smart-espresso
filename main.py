@@ -3,7 +3,10 @@ import os
 from contextlib import contextmanager
 
 from smart_espresso.analog_sensor.analog_sensor import MedianFilterADC
-from smart_espresso.analog_sensor.pressure_analog_sensor import PressureAnalogSensor
+from smart_espresso.analog_sensor.pressure_analog_sensor import (
+    PressureAnalogSensor,
+    pressure_voltages_from_env,
+)
 from smart_espresso.analog_sensor.water_flow_sensor import WaterFlowAnalogSensor
 from smart_espresso.machine_state import MachineStateClassifier
 from smart_espresso.shot_history import DEFAULT_STATE_PATH as DEFAULT_SHOT_HISTORY_PATH
@@ -186,24 +189,20 @@ def build_analog_devices(adc_type=None, flow_sample_interval=_UNSET, adc_builder
             print(f"WARNING: {name} sensor disabled: {error}")
 
     pressure_gain = 2 / 3
-    attempt(
-        "Head",
-        lambda: PressureAnalogSensor(
-            adc=MedianFilterADC(adc_builder(0, pressure_gain)),
-            name="Head",
-            max_pressure_mpa=2.0,
-            state_path=_pressure_offset_path("Head"),
-        ),
-    )
-    attempt(
-        "Boiler",
-        lambda: PressureAnalogSensor(
-            adc=MedianFilterADC(adc_builder(1, pressure_gain)),
-            name="Boiler",
-            max_pressure_mpa=0.5,
-            state_path=_pressure_offset_path("Boiler"),
-        ),
-    )
+
+    def pressure(name, pin, max_pressure_mpa):
+        min_voltage, max_voltage = pressure_voltages_from_env(name)
+        return PressureAnalogSensor(
+            adc=MedianFilterADC(adc_builder(pin, pressure_gain)),
+            name=name,
+            max_pressure_mpa=max_pressure_mpa,
+            state_path=_pressure_offset_path(name),
+            min_voltage=min_voltage,
+            max_voltage=max_voltage,
+        )
+
+    attempt("Head", lambda: pressure("Head", 0, 2.0))
+    attempt("Boiler", lambda: pressure("Boiler", 1, 0.5))
     attempt(
         "Brew",
         lambda: WaterFlowAnalogSensor(
