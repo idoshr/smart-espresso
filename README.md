@@ -167,7 +167,32 @@ export DHT_ENABLE="True"          # Ambient DHT22/AM2302 sensor (GPIO)
 export DHT_PIN="4"                # BCM pin number for the DHT22
 
 export FLOW_SAMPLE_INTERVAL="0.005"  # Flow pulse sampling period, seconds
+
+# Pressure transducer output at 0 pressure and at full scale.
+# Defaults match a 5 V, 0.5–4.5 V sensor.
+# Measure the real voltages with a multimeter: machine off for zero,
+# and the voltage at a known pressure from a reference gauge to work out full scale.
+export HEAD_V_MIN="0.5"
+export HEAD_V_MAX="4.5"
+export BOILER_V_MIN="0.5"
+export BOILER_V_MAX="4.5"
+# Used for a sensor only when that sensor's own V_MIN or V_MAX is unset.
+export PRESSURE_V_MIN="0.5"
+export PRESSURE_V_MAX="4.5"
 ```
+
+`HEAD_V_MIN` / `HEAD_V_MAX` and `BOILER_V_MIN` / `BOILER_V_MAX` are the
+voltages that map to zero pressure and to the sensor's rated full scale.
+`V_MAX` is the voltage at that rated full-scale pressure, worked out
+linearly from a known-pressure reading. Leave them unset to keep 0.5 V
+and 4.5 V. The real pair comes from a multimeter calibration, not from
+the datasheet alone: a 3.3 V ratiometric transducer cannot reach 4.5 V.
+Min must be below max, and both must sit inside the ADC supply (0 V up
+to the ADC full-scale, or 5 V when the ADC does not publish one). A bad
+value is refused the same way a bad flow threshold is: that sensor is
+disabled at startup and a warning is logged, and the other channels still
+run. `PRESSURE_V_MIN` and `PRESSURE_V_MAX`
+fill in whichever side a sensor did not set for itself.
 
 The flow sensor's pulse polarity is detected automatically: sensors that
 idle low (pulses rise) and open-collector sensors that idle high (pulses
