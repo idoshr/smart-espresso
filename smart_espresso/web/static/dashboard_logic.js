@@ -289,6 +289,40 @@
 
   // fast / on target / long. The shape is what remains when colour is
   // removed: an open left chevron, a filled dot, a filled right chevron.
+  function humidityLabel(percent) {
+    if (typeof percent !== "number" || !isFinite(percent)) return null;
+    return Math.round(percent) + "% humidity";
+  }
+
+  // Normal: a short text button on the used row. Empty: the full-width pill,
+  // which still shortens its own label when the card is narrow.
+  function refillControl(empty) {
+    const name = "I refilled the tank";
+    if (empty) {
+      return {
+        pill: true,
+        text: "",
+        long: "I refilled the tank",
+        short: "I refilled it",
+        name: name,
+      };
+    }
+    return { pill: false, text: "I refilled it", long: "", short: "", name: name };
+  }
+
+  function tankMeterHidden(shotsLeft) {
+    return !(Number(shotsLeft) > 0);
+  }
+
+  function tankLead(shotsLeft) {
+    const count = Number(shotsLeft) || 0;
+    if (count <= 0) {
+      return "Tank's probably empty. Refill before the next shot.";
+    }
+    if (count === 1) return "About 1 shot left";
+    return "About " + count + " shots left";
+  }
+
   // Four recent tiles. The bar is the yield against a 45 ml double.
   // Short carries a minus so the word is not the only signal.
   function recentTile(seconds, ml, windowLow, windowHigh) {
@@ -446,6 +480,10 @@
     meterFraction: meterFraction,
     meterHot: meterHot,
     shotVerdict: shotVerdict,
+    tankLead: tankLead,
+    humidityLabel: humidityLabel,
+    tankMeterHidden: tankMeterHidden,
+    refillControl: refillControl,
     recentTile: recentTile,
     allShotsLink: allShotsLink,
     flowBars: flowBars,
