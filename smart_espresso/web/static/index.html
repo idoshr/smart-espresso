@@ -2895,16 +2895,33 @@ document.getElementById('all-shots').addEventListener('click', () => {
   document.getElementById('all-shots').setAttribute('aria-expanded', String(open));
 });
 
+function recentContentBottoms(row) {
+  return ['.ml', '.t-line', '.recent-bar', '.v'].map(selector => {
+    const el = row.querySelector(selector);
+    return el ? el.getBoundingClientRect().bottom : null;
+  }).filter(bottom => bottom != null);
+}
+
 function fitRecentRows() {
   if (!window.matchMedia('(min-width: 1000px)').matches) return;
   const rows = [...document.querySelectorAll('#recent-tiles .recent-tile')];
-  rows.forEach(row => { row.hidden = false; });
   const card = document.getElementById('pulls-card');
-  if (!card || rows.length < 4) return;
-  const limit = card.getBoundingClientRect().bottom + 1;
-  // Four rows is the normal list. Hide the fourth only when it still
-  // crosses the card, so a short offline window does not scroll.
-  if (rows[3].getBoundingClientRect().bottom > limit) rows[3].hidden = true;
+  const tiles = document.getElementById('recent-tiles');
+  if (!card || !rows.length) return;
+  // Measure against the clip edge, not the card border. Padding and
+  // overflow:hidden were leaving the fourth timestamp half inside the card.
+  const pad = parseFloat(getComputedStyle(card).paddingBottom) || 0;
+  const cardEdge = card.getBoundingClientRect().bottom - pad;
+  const tilesEdge = tiles ? tiles.getBoundingClientRect().bottom : cardEdge;
+  const limit = Math.min(cardEdge, tilesEdge);
+  let keep = rows.length;
+  while (keep > 0) {
+    rows.forEach((row, index) => { row.hidden = index >= keep; });
+    const measured = rows.slice(0, keep).map(row => ({ bottoms: recentContentBottoms(row) }));
+    const fitted = DashboardLogic.recentRowsThatFit(measured, limit);
+    if (fitted === keep) break;
+    keep = fitted;
+  }
 }
 
 function syncDeskRecent() {

@@ -361,6 +361,24 @@
   }
 
   // The link is only for the shots that do not fit in the four tiles.
+  // How many leading rows stay. A row stays only when every content edge
+  // (figure, time, bar, verdict) is at or above the card's content limit.
+  // Later rows are dropped whole so a clipped timestamp is not left showing.
+  function recentRowsThatFit(rows, limit) {
+    const list = Array.isArray(rows) ? rows : [];
+    const edge = Number(limit);
+    if (!isFinite(edge)) return 0;
+    let count = list.length;
+    while (count > 0) {
+      const bottoms = list[count - 1] && list[count - 1].bottoms;
+      const parts = Array.isArray(bottoms) ? bottoms : [];
+      const past = parts.some(bottom => !(Number(bottom) <= edge));
+      if (!past) break;
+      count -= 1;
+    }
+    return count;
+  }
+
   function allShotsLink(count, shown) {
     const total = Number(count) || 0;
     const tiles = typeof shown === "number" ? shown : 4;
@@ -661,6 +679,7 @@
     refillControl: refillControl,
     shotWhenLine: shotWhenLine,
     recentTile: recentTile,
+    recentRowsThatFit: recentRowsThatFit,
     allShotsLink: allShotsLink,
     flowBars: flowBars,
     staleTagText: staleTagText,

@@ -479,6 +479,57 @@ class TestShippedShell:
         assert "Today" not in today
         assert "Yest." not in yesterday
 
+    def test_a_row_is_dropped_when_its_content_crosses_the_card(self):
+        # Figure, time, bar and verdict are checked. One clipped edge drops
+        # that row and every row after it. The All N link still names the
+        # full log, not the number of tiles left on screen.
+        inside = {"bottoms": [10, 20, 18, 19]}
+        clipped_time = {"bottoms": [10, 21, 18, 19]}
+        clipped_bar = {"bottoms": [10, 12, 21, 19]}
+        assert (
+            call(
+                "logic.recentRowsThatFit([%s,%s,%s,%s], 20)"
+                % (
+                    json.dumps(inside),
+                    json.dumps(inside),
+                    json.dumps(inside),
+                    json.dumps(inside),
+                )
+            )
+            == 4
+        )
+        assert (
+            call(
+                "logic.recentRowsThatFit([%s,%s,%s,%s], 20)"
+                % (
+                    json.dumps(inside),
+                    json.dumps(inside),
+                    json.dumps(inside),
+                    json.dumps(clipped_time),
+                )
+            )
+            == 3
+        )
+        assert (
+            call(
+                "logic.recentRowsThatFit([%s,%s,%s,%s], 20)"
+                % (
+                    json.dumps(inside),
+                    json.dumps(inside),
+                    json.dumps(clipped_bar),
+                    json.dumps(clipped_time),
+                )
+            )
+            == 2
+        )
+        assert call("logic.recentRowsThatFit([], 20)") == 0
+        link = call("logic.allShotsLink(5, 4)")
+        assert link["hidden"] is False
+        assert link["text"] == "All 5 shots \u203A"
+        assert "recentRowsThatFit" in self.page
+        assert "'.ml', '.t-line', '.recent-bar', '.v'" in self.page
+        assert "font-size: 11px" in self.page
+
     def test_recent_tiles_keep_a_fixed_bar(self):
         assert "min-width: 0" in _css_rule(self.page, ".recent-tile")
         bar = _css_rule(self.page, ".recent-bar")
