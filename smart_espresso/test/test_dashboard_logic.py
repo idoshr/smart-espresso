@@ -586,6 +586,11 @@ class TestWaterCard:
         assert len(call("logic.flowBars(Array(40).fill(1), 326)")) == 25
         wide = self.page[self.page.find("@media (min-width: 1000px)") :]
         assert "height: 170px" in wide
+        number = _css_rule(self.page, "#flow-card .figure b")
+        assert "font-size: 28px" in number
+        assert "font-weight: 700" in number
+        peak = _css_rule(self.page, "#flow-card .peak b")
+        assert "font-variant-numeric: tabular-nums" in peak
 
 
 class TestMeters:
