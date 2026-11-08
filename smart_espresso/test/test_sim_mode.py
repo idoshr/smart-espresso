@@ -28,6 +28,29 @@ def _short_program():
 
 
 class TestSimMode(unittest.TestCase):
+    def test_shot_head_ramps_instead_of_jumping_to_nine(self):
+        machine = SimulatedMachine(seed=1, loop=False)
+        shot = next(segment for segment in machine.segments if segment.kind == "shot")
+
+        def bar_at(offset):
+            volts = machine.voltage(SimulatedMachine.HEAD, shot.start + offset)
+            return (volts - 0.5) * (20.0 / 4.0)
+
+        # Still near zero just after the pump starts, then up to the target.
+        self.assertLess(bar_at(0.2), 1.0)
+        early = bar_at(1.0)
+        mid = bar_at(3.0)
+        self.assertGreater(early, bar_at(0.2))
+        self.assertLess(early, 3.0)
+        self.assertGreater(mid, early)
+        self.assertLess(mid, 8.0)
+        self.assertGreater(bar_at(6.5), 8.5)
+        # A non-shot stretch is unchanged: ready stays at its scripted head.
+        ready = next(segment for segment in machine.segments if segment.kind == "ready")
+        volts = machine.voltage(SimulatedMachine.HEAD, ready.start + 0.5)
+        ready_bar = (volts - 0.5) * 5.0
+        self.assertAlmostEqual(ready_bar, ready.head_bar, places=2)
+
     def test_importing_sim_does_not_load_hardware(self):
         script = r"""
 import sys

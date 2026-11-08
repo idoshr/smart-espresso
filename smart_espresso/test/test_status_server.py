@@ -138,6 +138,66 @@ class TestStatusServer(unittest.TestCase):
         self.assertLessEqual(len(samples), max_age + 2)
         self.assertGreaterEqual(samples[0][0], self.clock.now - max_age - 1)
 
+    def test_room_sensor_publishes_temperature_and_humidity(self):
+        class Climate:
+            name = "Environment"
+            message = "Room: 22.1°C 45.2%"
+            temperature = 22.1
+            humidity = 45.2
+
+        self.server.update([Climate()])
+        entry = self.server.status_payload()["other"][0]
+        self.assertEqual(entry["temperature_c"], 22.1)
+        self.assertEqual(entry["humidity_pct"], 45.2)
+
+    def test_fahrenheit_climate_is_published_in_celsius(self):
+        class Climate:
+            name = "Environment"
+            message = "Room: 72°F 40%"
+            temperature_unit = "°F"
+
+            def temperature(self):
+                return 72.0
+
+            def humidity(self):
+                return 40
+
+        self.server.update([Climate()])
+        entry = self.server.status_payload()["other"][0]
+        self.assertEqual(entry["temperature_c"], 22.2)
+        self.assertEqual(entry["humidity_pct"], 40.0)
+
+    def test_a_sensor_without_climate_omits_the_fields(self):
+        class Lamp:
+            name = "Lamp"
+            message = "Lamp: on"
+
+        self.server.update([Lamp()])
+        entry = self.server.status_payload()["other"][0]
+        self.assertNotIn("temperature_c", entry)
+        self.assertNotIn("humidity_pct", entry)
+
+    def test_a_failed_climate_sensor_publishes_nulls(self):
+        class Climate:
+            name = "Environment"
+            message = "Room: fault"
+
+            def temperature(self):
+                return 22.1
+
+            def humidity(self):
+                return 45.0
+
+        self.server.update(
+            [Climate()],
+            health={
+                "Environment": {"ok": False, "last_error": "boom", "last_ok_age_s": 3}
+            },
+        )
+        entry = self.server.status_payload()["other"][0]
+        self.assertIsNone(entry["temperature_c"])
+        self.assertIsNone(entry["humidity_pct"])
+
     def test_non_analog_sensors_fall_back_to_their_message(self):
         class Dummy:
             name = "Room"
