@@ -601,8 +601,10 @@ class TestWaterCard:
         assert "max-width: 10px" in bar
         assert len(call("logic.flowBars(Array(40).fill(1), 326)")) == 25
         wide = self.page[self.page.find("@media (min-width: 1000px)") :]
-        assert "#flow-card .chart { flex: 1; height: auto; min-height: 170px; }" in wide
-        assert "height: 170px" in wide
+        assert (
+            "#flow-card .chart { flex: 1 1 auto; height: auto; min-height: 72px; }"
+            in wide
+        )
         number = _css_rule(self.page, "#flow-card .figure b")
         assert "font-size: 28px" in number
         assert "font-weight: 700" in number
@@ -784,7 +786,10 @@ class TestHeroCurve:
         assert 'id="hero-band"' not in self.page
         assert "#hero-curve .band" not in self.page
         wide = self.page[self.page.find("@media (min-width: 1000px)") :]
-        assert "#hero-curve .chart { flex: 1; height: auto; min-height: 220px;" in wide
+        assert (
+            "#hero-curve .chart { flex: 1 1 auto; height: auto; min-height: 180px;"
+            in wide
+        )
 
     def test_append_uses_the_after_cursor_and_skips_points_already_held(self):
         first = call(
