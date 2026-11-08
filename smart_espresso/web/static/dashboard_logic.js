@@ -18,7 +18,24 @@
     return "offline";
   }
 
-  // Null while the page has never applied a payload. The footer must not
+  function todayVolume(ml) {
+    const n = Number(ml);
+    if (!Number.isFinite(n)) return "0 ml";
+    if (n >= 10000) return (n / 1000).toFixed(1) + " L";
+    return Math.round(n).toLocaleString("en-US") + " ml";
+  }
+
+  // Saved shots only. The shot still running is not in the tally, so the
+  // first one of the day leaves the line empty instead of "No shots yet".
+  function todayLine(today, shotActive) {
+    if (!today) return null;
+    const shots = Number(today.shots) || 0;
+    if (shots <= 0) return shotActive ? "" : "No shots yet today";
+    const noun = shots === 1 ? "shot" : "shots";
+    return shots + " " + noun + " · " + todayVolume(today.ml) + " today";
+  }
+
+  // Null while the page has never applied a payload. The banner must not
   // invent a "last seen" age from the moment the document loaded.
   function footerText(connected, lastSeenAt, now) {
     if (connected) return null;
@@ -251,6 +268,28 @@
     return { shotSeen: false, buzzedInWindow: false };
   }
 
+  // Fixed scales from look C. Head marks 8–10 bar; boiler has no band.
+  function meterSpec(name) {
+    const key = String(name || "").toLowerCase();
+    if (key.indexOf("boiler") >= 0 || key.indexOf("steam") >= 0) {
+      return { label: "Boiler pressure", max: 2, band: null };
+    }
+    if (key.indexOf("head") >= 0) {
+      return { label: "Head pressure", max: 12, band: [8, 10] };
+    }
+    return { label: name || "Pressure", max: 12, band: null };
+  }
+
+  function meterFraction(bar, max) {
+    if (typeof bar !== "number" || !isFinite(bar) || !(max > 0)) return 0;
+    return Math.max(0, Math.min(1, bar / max));
+  }
+
+  function meterHot(bar, band) {
+    if (!band || typeof bar !== "number" || !isFinite(bar)) return false;
+    return bar >= band[0] && bar <= band[1];
+  }
+
   // The over-band arc is a warning mark. At 0 bar it is the loudest thing
   // on an idle dial, so it stays hidden until the reading nears the band.
   function showOverBand(bar, bandFrom) {
@@ -260,6 +299,67 @@
 
   // fast / on target / long. The shape is what remains when colour is
   // removed: an open left chevron, a filled dot, a filled right chevron.
+  function humidityLabel(percent) {
+    if (typeof percent !== "number" || !isFinite(percent)) return null;
+    return Math.round(percent) + "% humidity";
+  }
+
+  // Normal: a short text button on the used row. Empty: the full-width pill,
+  // which still shortens its own label when the card is narrow.
+  function refillControl(empty) {
+    const name = "I refilled the tank";
+    if (empty) {
+      return {
+        pill: true,
+        text: "",
+        long: "I refilled the tank",
+        short: "I refilled it",
+        name: name,
+      };
+    }
+    return { pill: false, text: "I refilled it", long: "", short: "", name: name };
+  }
+
+  function tankMeterHidden(shotsLeft) {
+    return !(Number(shotsLeft) > 0);
+  }
+
+  function tankLead(shotsLeft) {
+    const count = Number(shotsLeft) || 0;
+    if (count <= 0) {
+      return "Tank's probably empty. Refill before the next shot.";
+    }
+    if (count === 1) return "About 1 shot left";
+    return "About " + count + " shots left";
+  }
+
+  // Four recent tiles. The bar is the yield against a 45 ml double.
+  // Short carries a minus so the word is not the only signal.
+  function recentTile(seconds, ml, windowLow, windowHigh) {
+    const verdict = shotVerdict(seconds, windowLow, windowHigh);
+    let label = "On target";
+    if (verdict.key === "fast") label = "Short";
+    else if (verdict.key === "long") label = "Long";
+    const volume = typeof ml === "number" && isFinite(ml) ? ml : 0;
+    return {
+      key: verdict.key,
+      label: label,
+      bar: Math.max(0, Math.min(1, volume / 45)),
+      mark: verdict.key === "fast" ? "\u2212" : "",
+    };
+  }
+
+  // The link is only for the shots that do not fit in the four tiles.
+  function allShotsLink(count, shown) {
+    const total = Number(count) || 0;
+    const tiles = typeof shown === "number" ? shown : 4;
+    const noun = total === 1 ? "shot" : "shots";
+    return {
+      hidden: total <= tiles,
+      text: "All " + total + " " + noun + " \u203A",
+    };
+  }
+
   // About 9 px bars with 4 px gaps. Extra samples are grouped so the
   // row stays that wide instead of turning into hairlines.
   function flowBars(values, width) {
@@ -519,6 +619,7 @@
   return {
     pillText: pillText,
     footerText: footerText,
+    todayLine: todayLine,
     sensorCardVisible: sensorCardVisible,
     formatReading: formatReading,
     readingFaulted: readingFaulted,
@@ -542,7 +643,16 @@
     noteShotWindow: noteShotWindow,
     clearShotWindow: clearShotWindow,
     showOverBand: showOverBand,
+    meterSpec: meterSpec,
+    meterFraction: meterFraction,
+    meterHot: meterHot,
     shotVerdict: shotVerdict,
+    tankLead: tankLead,
+    humidityLabel: humidityLabel,
+    tankMeterHidden: tankMeterHidden,
+    refillControl: refillControl,
+    recentTile: recentTile,
+    allShotsLink: allShotsLink,
     flowBars: flowBars,
     staleTagText: staleTagText,
     offlineMessage: offlineMessage,

@@ -105,7 +105,7 @@ class TestProductLanguage:
         assert 'aria-label="Recent shots"' in PAGE
         assert ">Water used, last 2 min<" in PAGE
         assert ">0 ml used<" in PAGE
-        assert ">About 0 shots left<" in PAGE
+        assert ">Tank's probably empty. Refill before the next shot.<" in PAGE
         assert ">I refilled the tank<" in PAGE
         assert ">Room<" in PAGE
         assert ">Last seen<" in PAGE
