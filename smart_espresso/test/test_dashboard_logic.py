@@ -228,13 +228,30 @@ class TestGlance:
         )
         assert ready["replace"] is True
         assert ready["showShot"] is False
+        assert ready["label"] == "Offline"
+        assert ready["detail"] == "Readings below are from before it went offline."
         assert "Ready to pull" not in ready["label"]
-        assert "Last seen 40 s ago" in ready["label"]
+        assert "Can't reach" not in ready["detail"]
+        assert "Same Wi-Fi" not in ready["detail"]
+        quiet = _css_rule(
+            Path(__file__)
+            .resolve()
+            .parents[1]
+            .joinpath("web/static/index.html")
+            .read_text(encoding="utf-8"),
+            ".state.offline .state-label",
+        )
+        assert "border: 1px dashed var(--mute" in quiet
+        assert "background: transparent" in quiet
+        banner = call("logic.offlineBanner(false, 3, 1000, 41000)")
+        assert "Can't reach the machine. Last seen 40 s ago" in banner["title"]
+        assert "Same Wi-Fi" in banner["title"]
         brewing = call(
             "logic.shownState({state:'brewing', label:'Pulling a shot',"
             " shot:{seconds:20, ml:30}}, 9, false, true, 1000, 41000)"
         )
         assert brewing["showShot"] is False
+        assert brewing["label"] == "Offline"
         assert "Pulling a shot" not in brewing["label"]
         live = call(
             "logic.shownState({state:'ready', label:'Ready to pull', shot:null},"
@@ -340,7 +357,9 @@ class TestShippedShell:
         assert 'class="dot off"' in self.page
 
     def test_markup_does_not_ship_a_last_seen_footer(self):
-        assert 'id="footer">never connected' in self.page
+        # The offline banner already says Last seen. A footer would repeat it.
+        assert 'id="footer"' not in self.page
+        assert "dashboard up" not in self.page
         assert "let lastSeenAt = null" in self.page
         assert "let lastSeenAt = Date.now()" not in self.page
 
@@ -373,16 +392,93 @@ class TestShippedShell:
         assert handler.index("tankPostAllowed") < handler.index("fetch(")
         assert "resetFailureToast" in handler
 
-    def test_verdict_is_written_and_ticks_are_not_buttons(self):
-        assert 'class="pulls-legend"' in self.page
-        assert "> short<" in self.page
-        assert "> on target<" in self.page
-        assert "> long<" in self.page
-        assert "pointer-events: none" in self.page
-        assert "nearestTickIndex" in self.page
-        assert "verdict.label" in self.page
+    def test_recent_tiles_open_a_shot_and_the_log(self):
+        assert 'class="pulls-legend"' not in self.page
+        assert 'id="pulls-track"' not in self.page
+        assert 'id="recent-tiles"' in self.page
+        assert 'id="all-shots"' in self.page
+        assert 'id="history-card" hidden' in self.page
+        assert "Yesterday" in self.page
+        assert "toLocaleTimeString" in self.page
+        assert "createElement('button')" in self.page
         assert "setAttribute('role', 'button')" not in self.page
-        assert 'role="listbox"' in self.page
+        tile = _css_rule(self.page, ".recent-tile .ml")
+        assert "font-size: 17px" in tile
+        assert "font-weight: 700" in tile
+        assert "font-variant-numeric: tabular-nums" in tile
+        assert "font-variant-numeric: tabular-nums" in _css_rule(
+            self.page, ".recent-tile .t"
+        )
+        tiles = _css_rule(self.page, ".recent-tiles")
+        assert "repeat(4, minmax(0, 1fr))" in tiles
+        when = _css_rule(self.page, ".recent-tile .t")
+        assert "white-space: nowrap" not in when
+        assert "min-width: 0" in when
+        assert "white-space: nowrap" in _css_rule(self.page, ".recent-tile .t-time")
+        assert "t-day" in self.page
+        assert "shotWhenParts" in self.page
+        # Oct 31 8:42 AM and Yesterday 12:17 PM, seen on 2 Nov 2026.
+        # The meridiem stays on the time, so a narrow tile cannot leave AM/PM alone.
+        stamped = subprocess.run(
+            [
+                "node",
+                "-e",
+                "const fs=require('fs');"
+                "const html=fs.readFileSync(process.argv[1],'utf8');"
+                "const start=html.indexOf('function shotWhenParts');"
+                "const end=html.indexOf('function shotWhen(');"
+                "const shotWhenParts=new Function(html.slice(start,end)+';return shotWhenParts;')();"
+                "const Orig=Date;"
+                "function at(iso, nowMs){"
+                "function Fake(...args){"
+                "if(!(this instanceof Fake)) return new Orig(...(args.length?args:[nowMs])).toString();"
+                "return new Orig(...(args.length?args:[nowMs]));"
+                "}"
+                "Fake.prototype=Orig.prototype; Fake.now=()=>nowMs; Fake.parse=Orig.parse; Fake.UTC=Orig.UTC;"
+                "global.Date=Fake;"
+                "try{return shotWhenParts(iso);}finally{global.Date=Orig;}"
+                "}"
+                "const now=new Date(2026,10,2,15,0,0).getTime();"
+                "process.stdout.write(JSON.stringify({"
+                "oct:at('2026-10-31T08:42:00',now),"
+                "yest:at('2026-11-01T12:17:00',now)"
+                "}));",
+                str(
+                    Path(__file__).resolve().parents[1]
+                    / "web"
+                    / "static"
+                    / "index.html"
+                ),
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        parts = json.loads(stamped.stdout)
+        assert parts["oct"] == {"day": "Oct 31", "time": "8:42 AM"}
+        assert parts["yest"] == {"day": "Yesterday", "time": "12:17 PM"}
+        assert "min-width: 0" in _css_rule(self.page, ".recent-tile")
+        bar = _css_rule(self.page, ".recent-bar")
+        assert "height: 4px" in bar
+        assert call("logic.recentTile(26, 34, 25, 30)")["label"] == "On target"
+        assert call("logic.recentTile(26, 34, 25, 30)")["bar"] == 34 / 45
+        short = call("logic.recentTile(12, 22, 25, 30)")
+        assert short["label"] == "Short"
+        assert short["mark"] == "\u2212"
+        assert call("logic.recentTile(40, 50, 25, 30)")["label"] == "Long"
+        assert call("logic.recentTile(40, 90, 25, 30)")["bar"] == 1
+        assert call("logic.allShotsLink(1, 4)")["hidden"] is True
+        assert call("logic.allShotsLink(4, 4)")["hidden"] is True
+        five = call("logic.allShotsLink(5, 4)")
+        assert five["hidden"] is False
+        assert five["text"] == "All 5 shots \u203A"
+        tank = self.page.find('id="tank-card"')
+        room = self.page.find('id="other-card"')
+        recent = self.page.find('id="pulls-card"')
+        assert tank < room < recent
+        head = self.page[recent : self.page.find('id="recent-tiles"', recent)]
+        assert 'id="all-shots"' in head
+        assert "card-head .all-shots" in self.page
 
 
 def _css_rule(page, selector):
@@ -486,6 +582,52 @@ class TestWaterCard:
         assert "height: 170px" in wide
 
 
+class TestMeters:
+    """Head and boiler share one card of linear meters. The dials are gone."""
+
+    def setup_method(self):
+        self.page = (
+            Path(__file__).resolve().parents[1] / "web" / "static" / "index.html"
+        ).read_text(encoding="utf-8")
+
+    def test_scales_and_the_head_band(self):
+        head = call("logic.meterSpec('Head')")
+        assert head["label"] == "Head pressure"
+        assert head["max"] == 12
+        assert head["band"] == [8, 10]
+        boiler = call("logic.meterSpec('Boiler')")
+        assert boiler == {"label": "Boiler pressure", "max": 2, "band": None}
+        assert call("logic.meterFraction(9, 12)") == 0.75
+        assert call("logic.meterFraction(1.2, 2)") == 0.6
+        assert call("logic.meterFraction(15, 12)") == 1
+        assert call("logic.meterFraction(-1, 12)") == 0
+        assert call("logic.meterHot(9, [8, 10])") is True
+        assert call("logic.meterHot(8, [8, 10])") is True
+        assert call("logic.meterHot(10, [8, 10])") is True
+        assert call("logic.meterHot(7.9, [8, 10])") is False
+        assert call("logic.meterHot(10.1, [8, 10])") is False
+        assert call("logic.meterHot(1.2, null)") is False
+
+    def test_markup_is_one_card_of_linear_meters(self):
+        meter = _css_rule(self.page, ".meter")
+        assert "height: 6px" in meter
+        number = _css_rule(self.page, ".meter-num")
+        assert "font-size: 28px" in number
+        assert "font-weight: 700" in number
+        hot = _css_rule(self.page, ".meter i.hot")
+        assert 'class="band"' not in self.page
+        assert ".meter u.band" not in self.page
+        assert "var(--acc" in hot
+        assert "function renderRings" not in self.page
+        assert 'class="ring"' not in self.page
+        assert "renderMeters" in self.page
+        assert "12 bar" in self.page
+        assert "2 bar" in self.page
+        wide = self.page[self.page.find("@media (min-width: 1000px)") :]
+        assert "font-size: 38px" in wide
+        assert "font-weight: 700" in _css_rule(self.page, ".meter-num b")
+
+
 class TestLastShotChip:
     """The chip is an inline span on main, so its box rules do nothing."""
 
@@ -504,6 +646,34 @@ class TestLastShotChip:
         assert "margin-top: 12px" in _css_rule(self.page, ".shot")
 
 
+class TestTodayLine:
+    """Today's tally, including the first shot while it is still running."""
+
+    def test_idle_with_no_shots_names_the_empty_day(self):
+        assert call("logic.todayLine({shots:0, ml:0}, false)") == "No shots yet today"
+
+    def test_the_first_shot_of_the_day_leaves_the_line_empty(self):
+        assert call("logic.todayLine({shots:0, ml:0}, true)") == ""
+
+    def test_one_shot_and_two_shots(self):
+        assert (
+            call("logic.todayLine({shots:1, ml:39}, false)") == "1 shot · 39 ml today"
+        )
+        assert (
+            call("logic.todayLine({shots:2, ml:68}, true)") == "2 shots · 68 ml today"
+        )
+        assert (
+            call("logic.todayLine({shots:12, ml:1234}, false)")
+            == "12 shots · 1,234 ml today"
+        )
+
+    def test_the_empty_line_is_removed_from_the_header(self):
+        page = (
+            Path(__file__).resolve().parents[1] / "web" / "static" / "index.html"
+        ).read_text(encoding="utf-8")
+        assert "header .tagline:empty { display: none" in page
+
+
 class TestWording:
     def setup_method(self):
         self.page = (
@@ -514,9 +684,8 @@ class TestWording:
         assert 'id="shot-seconds">0 s<' in self.page
         assert 'id="bb-time">0 s<' in self.page
         assert "${machine.shot.seconds.toFixed(0)} s" in self.page
-        assert "${Math.floor(seconds)} s" in self.page
         assert ">BAR<" not in self.page
-        assert "<span>bar</span>" in self.page
+        assert "<small>bar</small>" in self.page
 
     def test_live_pill_and_last_shot_chip_are_sentence_case(self):
         assert "Last shot ${last.seconds.toFixed(0)} s" in self.page
@@ -532,7 +701,7 @@ class TestWording:
         assert "text-align: center" in _css_rule(self.page, ".shot")
         assert "font-variant-numeric: tabular-nums" in _css_rule(self.page, ".shot b")
         assert "font-variant-numeric: tabular-nums" in _css_rule(
-            self.page, ".ring-read b"
+            self.page, ".meter-num"
         )
         assert "font-variant-numeric: tabular-nums" in _css_rule(self.page, ".figure b")
         # The connection pill shares the class live. Unscoped, it centers the card.
@@ -541,8 +710,9 @@ class TestWording:
 
     def test_only_shot_history_shows_a_count(self):
         assert "history.length} shot" not in self.page
-        assert "`${count} saved`" in self.page
-        assert "'1 saved'" in self.page
+        assert "`${count} saved`" not in self.page
+        assert ">All 0 shots ›<" in self.page
+        assert call("logic.allShotsLink(6, 4)")["text"] == "All 6 shots ›"
 
     def test_live_pill_paints_its_dot(self):
         dot = _css_rule(self.page, ".state.live .state-label::before")
@@ -578,20 +748,27 @@ class TestPhoneHeader:
             Path(__file__).resolve().parents[1] / "web" / "static" / "index.html"
         ).read_text(encoding="utf-8")
 
-    def test_today_line_moves_into_the_state_card_on_a_phone(self):
-        assert 'id="tagline-card"' in self.page
-        phone = re.search(r"@media \(max-width: 999px\)\s*\{([^}]*)\}", self.page)
-        assert phone is not None
-        assert "header .tagline" in phone.group(1)
-        assert "display: none" in phone.group(1)
-        wide_at = self.page.find("@media (min-width: 1000px)")
-        assert wide_at > 0
-        wide = self.page[wide_at : wide_at + 400]
-        assert "#tagline-card" in wide
-        assert "display: none" in wide
-        # One sentence, written to both slots. No second wording.
-        assert "getElementById('tagline-card').textContent = text" in self.page
-        assert "getElementById('tagline').textContent = text" in self.page
+    def test_today_line_stays_on_the_header_row(self):
+        assert 'id="tagline-card"' not in self.page
+        assert "header .tagline:empty { display: none" in self.page
+        title = _css_rule(self.page, "header h1")
+        assert "flex: 0 0 auto" in title
+        assert "text-overflow: ellipsis" not in title
+        today = _css_rule(self.page, "header .tagline")
+        assert "font-size: 12.5px" in today
+        assert "font-weight: 500" in today
+        assert "font-variant-numeric: tabular-nums" in today
+        assert "min-width: 0" in today
+        assert "text-overflow: ellipsis" in today
+        assert "var(--mute" in today
+        gap = _css_rule(self.page, "header .conn + .tagline")
+        assert "margin-left: 6px" in gap
+        narrow = re.search(r"@media \(max-width: 374px\)\s*\{([^}]*)\}", self.page)
+        assert narrow is not None
+        assert "header .tagline" in narrow.group(1)
+        assert "header .conn" in narrow.group(1)
+        assert "display: none" in narrow.group(1)
+        assert "todayLine(" in self.page
 
     def test_title_stays_whole_at_768_and_1280_with_connecting(self):
         # A labelled wake control plus "Connecting…" is about 438 px. The
@@ -617,13 +794,14 @@ class TestPhoneHeader:
         assert "@media (max-width: 480px)" not in self.page
 
     def test_narrow_phones_do_not_scroll_sideways(self):
-        # 320 and 360 used to overflow: the title could not shrink, so the
-        # connecting pill stuck out. The title ellipsizes instead.
+        # The title stays whole. A long today line ellipsizes instead.
         title = _css_rule(self.page, "header h1")
-        assert "min-width: 0" in title
-        assert "overflow: hidden" in title
-        assert "text-overflow: ellipsis" in title
+        assert "flex: 0 0 auto" in title
         assert "white-space: nowrap" in title
+        today = _css_rule(self.page, "header .tagline")
+        assert "min-width: 0" in today
+        assert "overflow: hidden" in today
+        assert "text-overflow: ellipsis" in today
         assert 'class="header-tools"' in self.page
         face = _css_rule(self.page, ".header-tools .pill-face")
         assert "height: 36px" in face
