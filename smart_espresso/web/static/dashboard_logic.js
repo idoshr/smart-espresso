@@ -219,14 +219,9 @@
       return "for " + formatSpokenDuration(machine.since_seconds) + " · " + check;
     }
     // since_seconds is how long the published state has been held, counted
-    // from the transition into it. A Ready or Off line before a minute is
-    // just "for 0 s", so the line stays hidden until the minute is real.
-    if (
-      (machine.state === "ready" || machine.state === "off") &&
-      !(Number(machine.since_seconds) >= 60)
-    ) {
-      return "";
-    }
+    // from the transition into it. A duration before a minute is just
+    // "for 0 s", so every state keeps that line hidden until it is real.
+    if (!(Number(machine.since_seconds) >= 60)) return "";
     return durationLine(machine.state, machine.since_seconds);
   }
 
@@ -335,6 +330,22 @@
 
   // Four recent tiles. The bar is the yield against a 45 ml double.
   // Short carries a minus so the word is not the only signal.
+  // Desktop recent rows keep the day and the time on one line. Today is
+  // the locale time only. Yesterday is spelled out. Older shots are the
+  // short locale date, a comma, then the time. No fixed 12h or 24h.
+  function shotWhenLine(iso, now) {
+    const date = new Date(iso);
+    if (Number.isNaN(date.getTime())) return String(iso || "");
+    const time = date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+    const today = now ? new Date(now) : new Date();
+    if (date.toDateString() === today.toDateString()) return time;
+    const yesterday = new Date(today);
+    yesterday.setDate(today.getDate() - 1);
+    if (date.toDateString() === yesterday.toDateString()) return "Yesterday " + time;
+    const day = date.toLocaleDateString([], { month: "short", day: "numeric" });
+    return day + ", " + time;
+  }
+
   function recentTile(seconds, ml, windowLow, windowHigh) {
     const verdict = shotVerdict(seconds, windowLow, windowHigh);
     let label = "On target";
@@ -511,13 +522,12 @@
     return points.slice(0, end + 1);
   }
 
-  // Live samples while a shot runs. The saved curve in Ready. Nothing
-  // else, including a shot that has not produced a point yet.
+  // Live samples while a shot runs. Every other state shows the last
+  // saved curve, the same way Ready does. An empty slot stays hidden.
   function heroCurveSlot(view) {
     const live = view && Array.isArray(view.liveSamples) ? view.liveSamples : [];
     const last = view && Array.isArray(view.lastSamples) ? view.lastSamples : [];
     const shotActive = !!(view && view.shotActive);
-    const state = view && view.state;
     if (shotActive) {
       if (!live.length) return { hidden: true, source: null, samples: [], label: "" };
       return {
@@ -527,16 +537,14 @@
         label: "This shot's pressure",
       };
     }
-    if (state === "ready") {
-      const saved = pourCurveSamples(last.length ? last : live);
-      if (saved.length) {
-        return {
-          hidden: false,
-          source: last.length ? "last" : "live",
-          samples: saved,
-          label: "Last shot's pressure",
-        };
-      }
+    const saved = pourCurveSamples(last.length ? last : live);
+    if (saved.length) {
+      return {
+        hidden: false,
+        source: last.length ? "last" : "live",
+        samples: saved,
+        label: "Last shot's pressure",
+      };
     }
     return { hidden: true, source: null, samples: [], label: "" };
   }
@@ -651,6 +659,7 @@
     humidityLabel: humidityLabel,
     tankMeterHidden: tankMeterHidden,
     refillControl: refillControl,
+    shotWhenLine: shotWhenLine,
     recentTile: recentTile,
     allShotsLink: allShotsLink,
     flowBars: flowBars,

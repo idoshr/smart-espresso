@@ -176,7 +176,7 @@ class TestGlance:
             call(
                 "logic.heroDetail({state:'flushing', since_seconds:26, shot:null}, null)"
             )
-            == "for 26 s"
+            == ""
         )
         assert (
             call("logic.heroDetail({state:'off', since_seconds:4, shot:null}, null)")
@@ -184,13 +184,13 @@ class TestGlance:
         )
         assert (
             call("logic.heroDetail({state:'steaming', since_seconds:26, shot:null}, 1)")
-            == "for 26 s"
+            == ""
         )
         assert (
             call(
                 "logic.heroDetail({state:'unknown', since_seconds:8, shot:null}, null)"
             )
-            == "for 8 s"
+            == ""
         )
         aiming = call(
             "logic.heroDetail({state:'brewing', since_seconds:12, shot:{seconds:12}}, null)"
@@ -464,6 +464,22 @@ class TestShippedShell:
         parts = json.loads(stamped.stdout)
         assert parts["oct"] == {"day": "Oct 31", "time": "8:42 AM"}
         assert parts["yest"] == {"day": "Yesterday", "time": "12:17 PM"}
+
+    def test_desktop_shot_line_is_one_locale_line(self):
+        now = "2026-11-02T15:00:00"
+        today = call("logic.shotWhenLine('2026-11-02T18:05:00', '%s')" % now)
+        yesterday = call("logic.shotWhenLine('2026-11-01T18:05:00', '%s')" % now)
+        older = call("logic.shotWhenLine('2026-10-31T08:42:00', '%s')" % now)
+        morning = call("logic.shotWhenLine('2026-11-02T08:42:00', '%s')" % now)
+        # Device locale, same clock as the phone parts test: 12-hour en-US.
+        assert today == "6:05 PM"
+        assert yesterday == "Yesterday 6:05 PM"
+        assert older == "Oct 31, 8:42 AM"
+        assert morning == "8:42 AM"
+        assert "Today" not in today
+        assert "Yest." not in yesterday
+
+    def test_recent_tiles_keep_a_fixed_bar(self):
         assert "min-width: 0" in _css_rule(self.page, ".recent-tile")
         bar = _css_rule(self.page, ".recent-bar")
         assert "height: 4px" in bar
@@ -585,7 +601,10 @@ class TestWaterCard:
         assert "max-width: 10px" in bar
         assert len(call("logic.flowBars(Array(40).fill(1), 326)")) == 25
         wide = self.page[self.page.find("@media (min-width: 1000px)") :]
-        assert "height: 170px" in wide
+        assert (
+            "#flow-card .chart { flex: 1 1 auto; height: auto; min-height: 72px; }"
+            in wide
+        )
         number = _css_rule(self.page, "#flow-card .figure b")
         assert "font-size: 28px" in number
         assert "font-weight: 700" in number
@@ -729,6 +748,18 @@ class TestHero:
         assert call("logic.heroDetail(%s, null)" % (young % 60)) == "for 1 min"
         assert call("logic.heroDetail(%s, null)" % (young % 120)) == "for 2 min"
 
+    def test_a_short_duration_stays_hidden_in_every_state(self):
+        for state in ("ready", "off", "steaming", "flushing", "unknown"):
+            young = "{state:'%s', since_seconds:4, shot:null}" % state
+            assert call("logic.heroDetail(%s, null)" % young) == ""
+            minute = "{state:'%s', since_seconds:60, shot:null}" % state
+            assert call("logic.heroDetail(%s, null)" % minute) == "for 1 min"
+        heating = call(
+            "logic.heroDetail({state:'heating', since_seconds:4, shot:null}, 0.4)"
+        )
+        assert heating.startswith("0.4 of 0.8 bar")
+        assert "for 4 s" not in heating
+
 
 class TestHeroCurve:
     """The hero curve: live tail, a reset on the next shot, last curve in Ready."""
@@ -755,7 +786,10 @@ class TestHeroCurve:
         assert 'id="hero-band"' not in self.page
         assert "#hero-curve .band" not in self.page
         wide = self.page[self.page.find("@media (min-width: 1000px)") :]
-        assert "height: 220px" in wide
+        assert (
+            "#hero-curve .chart { flex: 1 1 auto; height: auto; min-height: 180px;"
+            in wide
+        )
 
     def test_append_uses_the_after_cursor_and_skips_points_already_held(self):
         first = call(
@@ -818,13 +852,21 @@ class TestHeroCurve:
         assert brewing["source"] == "live"
         assert brewing["label"] == "This shot's pressure"
         assert brewing["samples"] == live
-        for state in ("ready", "heating", "off"):
+        for state in ("ready", "heating", "off", "steaming"):
             empty = call(
                 "logic.heroCurveSlot({state:'%s', shotActive:false,"
                 " liveSamples:[], lastSamples:[]})" % state
             )
             assert empty["hidden"] is True
             assert empty["samples"] == []
+        for state in ("heating", "off", "steaming", "flushing"):
+            quiet = call(
+                "logic.heroCurveSlot({state:'%s', shotActive:false,"
+                " liveSamples:[], lastSamples:%s})" % (state, json.dumps(last))
+            )
+            assert quiet["hidden"] is False
+            assert quiet["label"] == "Last shot's pressure"
+            assert quiet["samples"] == last
         waiting = call(
             "logic.heroCurveSlot({state:'brewing', shotActive:true,"
             " liveSamples:[], lastSamples:[]})"
@@ -1110,6 +1152,52 @@ class TestPhoneHeader:
         assert "background: var(--ink)" in pressed
         assert "color: var(--card)" in pressed
         assert "border-color: var(--ink)" in pressed
+
+
+class TestDesktopGrid:
+    """From 1000 px the cards form three columns that can grow to 1440."""
+
+    def setup_method(self):
+        self.page = (
+            Path(__file__).resolve().parents[1] / "web" / "static" / "index.html"
+        ).read_text(encoding="utf-8")
+
+    def test_three_columns_from_1000(self):
+        at = self.page.find("grid-template-columns: repeat(3, minmax(280px, 1fr))")
+        assert at > 0
+        block = self.page[at - 1200 : at + 4000]
+        assert "@media (min-width: 1000px)" in block
+        assert "max-width: 1440px" in block
+        assert "gap: 8px" in block
+        assert "max-width: 1100px" not in self.page
+        assert "min-width: 1024px" not in self.page
+        assert "#desk-meters { grid-column: 2; }" in block
+        assert "#desk-side { grid-column: 3; }" in block
+        assert "#state {\n      grid-column: 1;" in block
+        assert (
+            "#tank-room { display: flex; flex-direction: column; gap: 8px; flex: 0 0 auto; }"
+            in block
+        )
+        assert "align-items: stretch" in block
+        assert "min-height: 100dvh" in block
+        assert "justify-content: space-between" in block
+        assert "#recent-tiles { display: none; }" not in block
+        assert "#pulls-card {" in block
+        assert "flex: 1 1 auto" in block
+        assert "grid-template-columns: 148px minmax(0, 1fr) 84px" in self.page
+        narrow = self.page.find("@media (min-width: 1000px) and (max-width: 1199px)")
+        assert narrow > 0
+        narrow_block = self.page[narrow : narrow + 700]
+        assert "grid-template-columns: 116px minmax(0, 1fr) 64px" in narrow_block
+        assert "font-size: 11px" in narrow_block
+        assert "width: 64px" in narrow_block
+        assert 'grid-template-areas: "ml bar verdict" "when bar verdict"' in self.page
+        assert ".recent-tile .t-line" in self.page
+        assert "shotWhenLine" in self.page
+        assert "grid-area: verdict" in self.page
+        assert "white-space: nowrap" in _css_rule(self.page, ".recent-tile .t-line")
+        assert "syncDeskRecent" in self.page
+        assert "#history-card { grid-column" not in block
 
 
 class TestTokens:
