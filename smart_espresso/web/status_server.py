@@ -10,6 +10,7 @@ from flask import Flask, jsonify, request, send_from_directory
 
 from smart_espresso.analog_sensor.pressure_analog_sensor import PressureAnalogSensor
 from smart_espresso.analog_sensor.water_flow_sensor import WaterFlowAnalogSensor
+from smart_espresso.machine_profile import MachineProfileStore, ProfileError
 from smart_espresso.machine_state import MachineStateClassifier
 from smart_espresso.shot_history import ShotHistory
 from smart_espresso.water_tank import WaterTank
@@ -52,6 +53,7 @@ class StatusServer:
         tank: Optional[WaterTank] = None,
         classifier: Optional[MachineStateClassifier] = None,
         shot_history: Optional[ShotHistory] = None,
+        profiles: Optional[MachineProfileStore] = None,
     ):
         """
         Initialize the status server.
@@ -67,17 +69,31 @@ class StatusServer:
             shot_history: Persisted shot log. A default log (under
                 ``~/.smart_espresso/``) is created if omitted. Pass the same
                 instance the classifier records into when supplying both.
+            profiles: Active machine profile. When supplied, the tank size
+                follows it, including a later switch. Omitted, a tank the
+                caller passed in is left as it is.
         """
         self.host = host
         self.port = port
         self.window_seconds = window_seconds
-        self.tank = tank if tank is not None else WaterTank()
+        self.profiles = (
+            profiles if profiles is not None else MachineProfileStore(state_path=None)
+        )
+        if tank is not None:
+            self.tank = tank
+        else:
+            active = self.profiles.active()
+            capacity = None if active is None else active.tank_capacity_ml
+            self.tank = WaterTank(capacity_ml=capacity)
         self.shot_history = shot_history if shot_history is not None else ShotHistory()
         self.classifier = (
             classifier
             if classifier is not None
             else MachineStateClassifier(shot_history=self.shot_history)
         )
+        self.classifier.on_shot_closed = self._on_shot_closed
+        if profiles is not None:
+            self.profiles.apply(self.classifier, self.tank)
 
         self._lock = threading.Lock()
         self._snapshot: dict = {
@@ -194,6 +210,103 @@ class StatusServer:
             self.tank.reset()
             return jsonify(self.tank.snapshot())
 
+        self.app.add_url_rule(
+            "/api/machine-profiles", "machine_profiles", self._machine_profiles
+        )
+        self.app.add_url_rule(
+            "/api/machine-profile", "machine_profile", self._machine_profile
+        )
+        self.app.add_url_rule(
+            "/api/machine-profile",
+            "set_machine_profile",
+            self._set_machine_profile,
+            methods=["POST"],
+        )
+        self.app.add_url_rule(
+            "/api/machine-profile/prompt/dismiss",
+            "dismiss_machine_prompt",
+            self._dismiss_machine_prompt,
+            methods=["POST"],
+        )
+
+    def _machine_profiles(self):
+        """Built-in models plus the saved custom values."""
+        return jsonify({"profiles": self.profiles.list_profiles()})
+
+    def _machine_profile(self):
+        """The live profile, any pending switch, and the model prompt."""
+        return jsonify(self.profiles.public())
+
+    def _reject_profile(self, detail: str):
+        return (
+            jsonify({"ok": False, "error": "invalid_profile", "detail": detail}),
+            400,
+        )
+
+    def _set_machine_profile(self):
+        """Switch model. An open shot defers the change until it is saved."""
+        if request.headers.get("X-Espresso-Dashboard") != "1":
+            return jsonify({"error": "missing dashboard header"}), 403
+        body = request.get_json(silent=True)
+        if not isinstance(body, dict):
+            return self._reject_profile("expected an object")
+        if "id" not in body:
+            return self._reject_profile("id is required")
+        extra = set(body) - {"id", "tank_capacity_ml", "pressure", "accent"}
+        if extra:
+            names = ", ".join(sorted(str(name) for name in extra))
+            return self._reject_profile(f"unknown fields: {names}")
+        updates = {
+            key: body[key]
+            for key in ("tank_capacity_ml", "pressure", "accent")
+            if key in body
+        }
+        try:
+            state = self.profiles.select(
+                body["id"], updates, defer=self._shot_is_open()
+            )
+        except ProfileError as error:
+            return (
+                jsonify(
+                    {
+                        "ok": False,
+                        "error": error.code,
+                        "detail": error.detail,
+                        "active": self.profiles.public(),
+                    }
+                ),
+                400,
+            )
+        if state.get("status") != "pending":
+            self.profiles.apply(self.classifier, self.tank)
+        return jsonify(state)
+
+    def _dismiss_machine_prompt(self):
+        """Clear the one-time pick-your-model prompt. It stays cleared."""
+        if request.headers.get("X-Espresso-Dashboard") != "1":
+            return jsonify({"error": "missing dashboard header"}), 403
+        return jsonify(self.profiles.dismiss_prompt())
+
+    def _shot_is_open(self) -> bool:
+        if self.shot_history is not None:
+            if self.shot_history.current_payload().get("active"):
+                return True
+        return bool(getattr(self.classifier, "shot_is_open", False))
+
+    def _on_shot_closed(self, saved: bool) -> None:
+        """Apply a deferred switch once the open pull closes.
+
+        ``saved`` is true when the pull was committed to the shot log. A
+        discarded pull is not saved; the switch still applies then, because
+        there is no save left to wait for.
+        """
+        if not self.profiles.has_pending():
+            return
+        # ``saved`` is recorded by the caller. Both outcomes close the pull.
+        _ = saved
+        self.profiles.activate_pending()
+        self.profiles.apply(self.classifier, self.tank)
+
     def update(self, sensors: list, health: Optional[dict] = None) -> None:
         """
         Copy the current sensor readings into the snapshot served over HTTP.
@@ -272,6 +385,7 @@ class StatusServer:
         # must show up in the very next response.
         snapshot["machine"] = self.classifier.snapshot()
         snapshot["tank"] = self.tank.snapshot()
+        snapshot["machine_profile"] = self.profiles.public()
         # In memory, same as the machine and tank blocks. The curves are
         # not included; a tap on the dashboard fetches those by id.
         snapshot["shots"] = self.shot_history.status_summary(limit=self.RECENT_SHOTS)
