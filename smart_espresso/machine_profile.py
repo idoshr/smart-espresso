@@ -1,4 +1,4 @@
-"""Switchable machine profiles: tank size, pressure targets, and a colour id.
+"""Switchable machine profiles: tank size, one pressure target, and a colour id.
 
 ``machine_profile`` is the saved choice. A fresh install with no tank
 capacity configured is ``Machine not set``: the capacity is null and
@@ -6,7 +6,13 @@ shots-left is not computed. An install that already had a tank size
 (``WATER_TANK_ML`` or a saved tank file) is migrated once onto ``custom``
 with that capacity, so shots-left keeps working, and a one-time
 ``prompt_pick_model`` flag asks the user to pick a model. Dismissing the
-prompt persists.
+prompt persists. Migration is not a model switch: used water stays and
+no refill is required.
+
+A profile carries a tank capacity and a brew pressure target. The target
+is 9 bar when the profile does not set one. Shot time (25 to 30 s) and
+millilitres per cup (36 ml) are global and do not change when the model
+changes.
 
 Built-in models ship a tank size only when a maker spec page is cited.
 A built-in with no spec URL is unconfirmed and carries no capacity; the
@@ -15,28 +21,23 @@ user enters theirs. ``custom`` is the unlisted machine.
 Theme data is an accent colour id. This module does not carry logos,
 trademark artwork, or model illustrations.
 
-Pressure targets on cited models are the app's existing detection and
-meter defaults. The spec pages publish a tank size, not this app's ready
-band, so those numbers are not invented per vendor.
-
-A switch requested while a shot is open is stored as pending and applied
-when that shot is saved. The open shot is not restored after a restart,
-so a pending switch found on disk is applied at startup.
-
-Forced refill on switch is not defined for this backend, so it is not
-stored or returned.
+Switching to a different model sets ``refill_required``. Used water is
+kept, the tank status becomes ``refill_needed``, and shots-left is
+hidden until ``POST /api/machine-profile/refilled``. That call zeros
+used water and clears the flag. Shots are not blocked while the flag
+is set. A switch requested during an open shot waits until that shot
+is saved, and the refill flag is set then.
 """
 
 import math
 import os
 import re
 import threading
-from dataclasses import asdict, dataclass, replace
+from dataclasses import dataclass, replace
 from typing import Any, Dict, Mapping, Optional, Tuple
 from urllib.parse import urlparse
 
 from smart_espresso.json_store import atomic_write_json, load_with_backup
-from smart_espresso.machine_state import MachineStateClassifier
 
 DEFAULT_STATE_PATH = "~/.smart_espresso/machine_profile.json"
 
@@ -54,14 +55,16 @@ LEGACY_DEFAULT_TANK_ML = 2000.0
 TANK_ML_MIN = 250.0
 TANK_ML_MAX = 5000.0
 
-# Meter scales the dashboard already draws, kept on the profile so a later
-# UI can read them from one place. Not a vendor measurement.
-HEAD_METER_MAX_BAR = 12.0
-HEAD_BAND_LOW_BAR = 8.0
-HEAD_BAND_HIGH_BAR = 10.0
-BOILER_METER_MAX_BAR = 2.0
-SHOT_WINDOW_LOW_S = 25.0
-SHOT_WINDOW_HIGH_S = 30.0
+# Brew pressure target used when a profile does not set its own.
+DEFAULT_PRESSURE_TARGET_BAR = 9.0
+PRESSURE_TARGET_MIN_BAR = 1.0
+PRESSURE_TARGET_MAX_BAR = 15.0
+
+# Global shot settings. They are not stored on a profile and a model
+# switch must not change them. 36 ml matches WaterTank.SHOT_ML.
+SHOT_TIME_LOW_S = 25.0
+SHOT_TIME_HIGH_S = 30.0
+ML_PER_CUP = 36.0
 
 # Gaggia, "Capacity Water Tank 2,1 lt":
 # https://www.gaggia.com/manual-machines/new-classic-e24/
@@ -71,18 +74,16 @@ GAGGIA_CLASSIC_E24_SOURCE = "https://www.gaggia.com/manual-machines/new-classic-
 RANCILIO_SILVIA_SOURCE = "https://www.ranciliogroup.com/rancilio/silvia/silvia/"
 
 _ACCENT = re.compile(r"^[a-z][a-z0-9-]{0,31}$")
-_PRESSURE_FIELDS = (
-    "head_max_bar",
-    "head_band_low_bar",
-    "head_band_high_bar",
-    "boiler_max_bar",
-    "boiler_ready_min_bar",
-    "boiler_ready_max_bar",
-    "brew_head_bar",
-    "pump_head_bar",
-    "shot_window_low_s",
-    "shot_window_high_s",
-)
+_PROFILE_FIELDS = ("tank_capacity_ml", "pressure_target_bar", "accent")
+
+
+def global_settings() -> Dict[str, float]:
+    """Shot time and millilitres per cup. The same values for every machine."""
+    return {
+        "shot_time_low_s": SHOT_TIME_LOW_S,
+        "shot_time_high_s": SHOT_TIME_HIGH_S,
+        "ml_per_cup": ML_PER_CUP,
+    }
 
 
 class ProfileError(ValueError):
@@ -95,25 +96,6 @@ class ProfileError(ValueError):
 
 
 @dataclass(frozen=True)
-class PressureTargets:
-    """Detection thresholds and the meter scales that go with a machine."""
-
-    head_max_bar: float = HEAD_METER_MAX_BAR
-    head_band_low_bar: float = HEAD_BAND_LOW_BAR
-    head_band_high_bar: float = HEAD_BAND_HIGH_BAR
-    boiler_max_bar: float = BOILER_METER_MAX_BAR
-    boiler_ready_min_bar: float = MachineStateClassifier.READY_MIN_BAR
-    boiler_ready_max_bar: float = MachineStateClassifier.READY_MAX_BAR
-    brew_head_bar: float = MachineStateClassifier.BREW_HEAD_BAR
-    pump_head_bar: float = MachineStateClassifier.PUMP_HEAD_BAR
-    shot_window_low_s: float = SHOT_WINDOW_LOW_S
-    shot_window_high_s: float = SHOT_WINDOW_HIGH_S
-
-    def to_dict(self) -> Dict[str, float]:
-        return asdict(self)
-
-
-@dataclass(frozen=True)
 class MachineProfile:
     """One machine model, or the custom bucket for an unlisted machine."""
 
@@ -121,7 +103,7 @@ class MachineProfile:
     vendor: str
     model: str
     tank_capacity_ml: Optional[float]
-    pressure: PressureTargets
+    pressure_target_bar: float
     accent: str
     source_url: Optional[str]
     custom: bool
@@ -144,9 +126,9 @@ class MachineProfile:
             "unconfirmed": self.unconfirmed,
             "capacity_confirmed": confirmed,
             "tank_capacity_ml": self.tank_capacity_ml,
+            "pressure_target_bar": self.pressure_target_bar,
             "theme": {"accent": self.accent},
             "source_url": self.source_url,
-            "pressure": self.pressure.to_dict(),
         }
 
 
@@ -156,16 +138,6 @@ def _finite(name: str, value: Any) -> float:
     number = float(value)
     if not math.isfinite(number):
         raise ProfileError("invalid_profile", f"{name} must be a finite number")
-    return number
-
-
-def _in_range(name: str, value: Any, low: float, high: float) -> float:
-    number = _finite(name, value)
-    if number < low or number > high:
-        raise ProfileError(
-            "invalid_profile",
-            f"{name} must be between {low:g} and {high:g}",
-        )
     return number
 
 
@@ -203,66 +175,29 @@ def validate_accent(value: Any) -> str:
     return value
 
 
-def _check_head_band(pressure: PressureTargets) -> None:
-    low = pressure.head_band_low_bar
-    high = pressure.head_band_high_bar
-    if not (0 < low < high <= pressure.head_max_bar):
+def validate_pressure_target(value: Any) -> float:
+    """Accept one brew pressure target in bar. Omitted profiles use 9."""
+    if isinstance(value, str):
+        stripped = value.strip()
+        try:
+            number = float(stripped) if stripped else float("nan")
+        except ValueError as error:
+            raise ProfileError(
+                "invalid_profile", "pressure_target_bar must be a number"
+            ) from error
+        if not math.isfinite(number):
+            raise ProfileError(
+                "invalid_profile", "pressure_target_bar must be a finite number"
+            )
+    else:
+        number = _finite("pressure_target_bar", value)
+    if number < PRESSURE_TARGET_MIN_BAR or number > PRESSURE_TARGET_MAX_BAR:
         raise ProfileError(
             "invalid_profile",
-            "head band must sit inside 0 and head_max_bar, low below high",
+            "pressure_target_bar must be between "
+            f"{PRESSURE_TARGET_MIN_BAR:g} and {PRESSURE_TARGET_MAX_BAR:g}",
         )
-
-
-def _check_ready_band(pressure: PressureTargets) -> None:
-    if not (
-        0 < pressure.boiler_ready_min_bar < pressure.boiler_ready_max_bar
-        and pressure.boiler_ready_max_bar <= pressure.boiler_max_bar
-    ):
-        raise ProfileError(
-            "invalid_profile",
-            "boiler ready band must sit inside 0 and boiler_max_bar, min below max",
-        )
-
-
-def _check_brew_targets(pressure: PressureTargets) -> None:
-    if not (
-        0 < pressure.brew_head_bar < pressure.pump_head_bar <= pressure.head_max_bar
-    ):
-        raise ProfileError(
-            "invalid_profile",
-            "pump_head_bar must be above brew_head_bar and at most head_max_bar",
-        )
-    if not (10 <= pressure.shot_window_low_s < pressure.shot_window_high_s <= 90):
-        raise ProfileError(
-            "invalid_profile",
-            "shot window must sit between 10 and 90 seconds, low below high",
-        )
-
-
-def validate_pressure(pressure: PressureTargets) -> PressureTargets:
-    """Reject a non-finite, negative, or unordered target set."""
-    for name in _PRESSURE_FIELDS:
-        _finite(name, getattr(pressure, name))
-    _in_range("head_max_bar", pressure.head_max_bar, 6.0, 15.0)
-    _in_range("boiler_max_bar", pressure.boiler_max_bar, 1.0, 4.0)
-    _check_head_band(pressure)
-    _check_ready_band(pressure)
-    _check_brew_targets(pressure)
-    return pressure
-
-
-def pressure_from_partial(partial: Any, base: PressureTargets) -> PressureTargets:
-    """Merge a partial target object onto ``base`` and validate the result."""
-    if not isinstance(partial, dict):
-        raise ProfileError("invalid_profile", "pressure must be an object")
-    unknown = set(partial) - set(_PRESSURE_FIELDS)
-    if unknown:
-        names = ", ".join(sorted(str(name) for name in unknown))
-        raise ProfileError("invalid_profile", f"unknown pressure fields: {names}")
-    data = base.to_dict()
-    for key, value in partial.items():
-        data[key] = _finite(key, value)
-    return validate_pressure(PressureTargets(**data))
+    return number
 
 
 def is_spec_url(value: Optional[str]) -> bool:
@@ -300,28 +235,10 @@ def require_source_url(profile: MachineProfile) -> None:
         )
 
 
-def apply_pressure_targets(classifier: Any, pressure: PressureTargets) -> None:
-    """Copy the profile's brew and ready thresholds onto a live classifier.
-
-    Meter scales and the shot window stay on the profile for the API. The
-    shell does not read them yet, so switching does not redraw the page.
-    """
-    lock = getattr(classifier, "_lock", None)
-
-    def assign() -> None:
-        classifier.ready_min_bar = pressure.boiler_ready_min_bar
-        classifier.ready_max_bar = pressure.boiler_ready_max_bar
-        classifier.brew_head_bar = pressure.brew_head_bar
-        classifier.pump_head_bar = pressure.pump_head_bar
-
-    if lock is None:
-        assign()
-        return
-    with lock:
-        assign()
-
-
-DEFAULT_PRESSURE = validate_pressure(PressureTargets())
+def _pressure_or_default(value: Any) -> float:
+    if value is None:
+        return DEFAULT_PRESSURE_TARGET_BAR
+    return validate_pressure_target(value)
 
 
 def _builtin(
@@ -337,7 +254,7 @@ def _builtin(
         vendor=vendor,
         model=model,
         tank_capacity_ml=validate_tank(tank_capacity_ml),
-        pressure=DEFAULT_PRESSURE,
+        pressure_target_bar=DEFAULT_PRESSURE_TARGET_BAR,
         accent=validate_accent(accent),
         source_url=source_url,
         custom=False,
@@ -356,7 +273,7 @@ def _unconfirmed(
         vendor=vendor,
         model=model,
         tank_capacity_ml=None,
-        pressure=DEFAULT_PRESSURE,
+        pressure_target_bar=DEFAULT_PRESSURE_TARGET_BAR,
         accent=validate_accent(accent),
         source_url=None,
         custom=False,
@@ -390,7 +307,7 @@ CATALOG_ORDER: Tuple[MachineProfile, ...] = (
         vendor="Custom",
         model="Custom",
         tank_capacity_ml=None,
-        pressure=DEFAULT_PRESSURE,
+        pressure_target_bar=DEFAULT_PRESSURE_TARGET_BAR,
         accent="crema",
         source_url=None,
         custom=True,
@@ -402,7 +319,7 @@ CATALOG: Dict[str, MachineProfile] = {profile.id: profile for profile in CATALOG
 
 for _profile in CATALOG_ORDER:
     require_source_url(_profile)
-    validate_pressure(_profile.pressure)
+    validate_pressure_target(_profile.pressure_target_bar)
     validate_accent(_profile.accent)
 
 
@@ -447,7 +364,7 @@ def read_legacy_tank_capacity(
 def _custom_from_payload(data: Any) -> MachineProfile:
     if not isinstance(data, dict):
         raise ValueError("custom must be an object")
-    unknown = set(data) - {"tank_capacity_ml", "pressure", "accent"}
+    unknown = set(data) - {"tank_capacity_ml", "pressure_target_bar", "accent"}
     if unknown:
         names = ", ".join(sorted(str(name) for name in unknown))
         raise ValueError(f"unknown custom fields: {names}")
@@ -457,14 +374,16 @@ def _custom_from_payload(data: Any) -> MachineProfile:
             tank = None
         else:
             tank = validate_tank(data["tank_capacity_ml"])
-        if "pressure" in data and data["pressure"] is not None:
-            pressure = pressure_from_partial(data["pressure"], base.pressure)
+        if "pressure_target_bar" in data:
+            target = _pressure_or_default(data["pressure_target_bar"])
         else:
-            pressure = base.pressure
+            target = base.pressure_target_bar
         accent = validate_accent(data["accent"]) if "accent" in data else base.accent
     except ProfileError as error:
         raise ValueError(error.detail) from error
-    return replace(base, tank_capacity_ml=tank, pressure=pressure, accent=accent)
+    return replace(
+        base, tank_capacity_ml=tank, pressure_target_bar=target, accent=accent
+    )
 
 
 def _parse_user_capacities(data: Any) -> Dict[str, float]:
@@ -491,6 +410,7 @@ def _parse_state(payload: Any) -> Dict[str, Any]:
         "pending",
         "user_capacities",
         "migrated_from_tank",
+        "refill_required",
     }
     unknown = set(payload) - allowed
     if unknown:
@@ -518,6 +438,9 @@ def _parse_state(payload: Any) -> Dict[str, Any]:
     migrated = payload.get("migrated_from_tank", False)
     if not isinstance(migrated, bool):
         raise ValueError("migrated_from_tank must be a boolean")
+    refill = payload.get("refill_required", False)
+    if not isinstance(refill, bool):
+        raise ValueError("refill_required must be a boolean")
     return {
         "profile_id": profile_id,
         "custom": custom,
@@ -525,6 +448,7 @@ def _parse_state(payload: Any) -> Dict[str, Any]:
         "pending": pending,
         "user_capacities": user_capacities,
         "migrated_from_tank": migrated,
+        "refill_required": refill,
     }
 
 
@@ -556,6 +480,7 @@ class MachineProfileStore:
         self._user_capacities: Dict[str, float] = {}
         self._pending: Optional[MachineProfile] = None
         self._prompt_pick_model = False
+        self._refill_required = False
         self._migrated = False
         self._persisted = False
         self._load_error: Optional[str] = None
@@ -580,6 +505,7 @@ class MachineProfileStore:
         self._requested_id = loaded["profile_id"]
         self._custom = loaded["custom"]
         self._prompt_pick_model = loaded["prompt_pick_model"]
+        self._refill_required = loaded["refill_required"]
         self._user_capacities = loaded["user_capacities"]
         self._migrated = loaded["migrated_from_tank"]
         self._persisted = True
@@ -594,7 +520,10 @@ class MachineProfileStore:
                 self._write(self._payload_unlocked())
 
     def _promote_pending(self, pending: Dict[str, Any]) -> None:
-        self._install(self._profile_from_pending(pending))
+        previous = self._requested_id
+        profile = self._profile_from_pending(pending)
+        self._install(profile)
+        self._mark_refill_if_switched(previous, profile.id)
         self._pending = None
 
     def _profile_from_pending(self, pending: Mapping[str, Any]) -> MachineProfile:
@@ -604,7 +533,7 @@ class MachineProfileStore:
         catalog = CATALOG.get(profile_id) if isinstance(profile_id, str) else None
         updates: Dict[str, Any] = {}
         if catalog is not None and catalog.custom:
-            for key in ("tank_capacity_ml", "pressure", "accent"):
+            for key in _PROFILE_FIELDS:
                 if key in pending:
                     updates[key] = pending[key]
         elif (
@@ -650,6 +579,7 @@ class MachineProfileStore:
         self._requested_id = CUSTOM_ID
         self._custom = custom
         self._prompt_pick_model = True
+        self._refill_required = False
         self._migrated = True
         self._persisted = True
         self._pending = None
@@ -707,6 +637,7 @@ class MachineProfileStore:
             "vendor": pending.vendor,
             "model": pending.model,
             "tank_capacity_ml": pending.tank_capacity_ml,
+            "pressure_target_bar": pending.pressure_target_bar,
             "status": "pending",
             "reason": "shot_in_progress",
         }
@@ -723,9 +654,9 @@ class MachineProfileStore:
                 "unconfirmed": False,
                 "capacity_confirmed": False,
                 "tank_capacity_ml": None,
+                "pressure_target_bar": None,
                 "theme": None,
                 "source_url": None,
-                "pressure": None,
             }
             label = UNSET_LABEL
         else:
@@ -739,6 +670,7 @@ class MachineProfileStore:
         body["fallback_id"] = None
         body["pending"] = self._pending_public()
         body["prompt_pick_model"] = self._prompt_pick_model
+        body["refill_required"] = self._refill_required
         body["tank_capacity_source"] = self._capacity_source_unlocked(active)
         return body
 
@@ -785,17 +717,20 @@ class MachineProfileStore:
                 profile_id if isinstance(profile_id, str) else type(profile_id).__name__
             )
             raise ProfileError("unknown_profile", f"Unknown machine profile '{shown}'")
-        unknown = set(updates) - {"tank_capacity_ml", "pressure", "accent"}
+        unknown = set(updates) - set(_PROFILE_FIELDS)
         if unknown:
             names = ", ".join(sorted(str(name) for name in unknown))
             raise ProfileError("invalid_profile", f"unknown fields: {names}")
         profile = CATALOG[profile_id]
         if profile.custom:
             return self._resolve_custom(updates)
-        if updates.get("pressure") is not None or updates.get("accent") is not None:
+        if (
+            updates.get("pressure_target_bar") is not None
+            or updates.get("accent") is not None
+        ):
             raise ProfileError(
                 "invalid_profile",
-                "Pressure targets and accent are set on the custom profile",
+                "The pressure target and accent are set on the custom profile",
             )
         if "tank_capacity_ml" in updates:
             if not profile.unconfirmed:
@@ -825,13 +760,16 @@ class MachineProfileStore:
                 tank = None
             else:
                 tank = validate_tank(updates["tank_capacity_ml"])
-        pressure = base.pressure
-        if "pressure" in updates:
-            pressure = pressure_from_partial(updates["pressure"], base.pressure)
+        if "pressure_target_bar" in updates:
+            target = _pressure_or_default(updates["pressure_target_bar"])
+        else:
+            target = base.pressure_target_bar
         accent = base.accent
         if "accent" in updates:
             accent = validate_accent(updates["accent"])
-        return replace(base, tank_capacity_ml=tank, pressure=pressure, accent=accent)
+        return replace(
+            base, tank_capacity_ml=tank, pressure_target_bar=target, accent=accent
+        )
 
     def _install(self, profile: MachineProfile) -> None:
         self._requested_id = profile.id
@@ -840,17 +778,23 @@ class MachineProfileStore:
         elif profile.unconfirmed and profile.tank_capacity_ml is not None:
             self._user_capacities[profile.id] = profile.tank_capacity_ml
 
+    def _mark_refill_if_switched(self, previous: str, new_id: str) -> None:
+        """A change of model asks for a refill. The first choice does not."""
+        if previous and previous != new_id:
+            self._refill_required = True
+
     def _payload_unlocked(self) -> Dict[str, Any]:
         payload: Dict[str, Any] = {
             "machine_profile": self._requested_id or None,
             "prompt_pick_model": self._prompt_pick_model,
+            "refill_required": self._refill_required,
         }
         if self._migrated:
             payload["migrated_from_tank"] = True
         if self._custom is not None:
             payload["custom"] = {
                 "tank_capacity_ml": self._custom.tank_capacity_ml,
-                "pressure": self._custom.pressure.to_dict(),
+                "pressure_target_bar": self._custom.pressure_target_bar,
                 "accent": self._custom.accent,
             }
         if self._user_capacities:
@@ -859,7 +803,7 @@ class MachineProfileStore:
             payload["pending"] = {
                 "id": self._pending.id,
                 "tank_capacity_ml": self._pending.tank_capacity_ml,
-                "pressure": self._pending.pressure.to_dict(),
+                "pressure_target_bar": self._pending.pressure_target_bar,
                 "accent": self._pending.accent,
             }
         return payload
@@ -889,8 +833,10 @@ class MachineProfileStore:
             if defer:
                 self._pending = resolved
             else:
+                previous = self._requested_id
                 self._install(resolved)
                 self._pending = None
+                self._mark_refill_if_switched(previous, resolved.id)
             self._load_error = None
             self._persisted = True
             payload = self._payload_unlocked()
@@ -904,7 +850,9 @@ class MachineProfileStore:
             pending = self._pending
             if pending is None:
                 return False
+            previous = self._requested_id
             self._install(pending)
+            self._mark_refill_if_switched(previous, pending.id)
             self._pending = None
             self._persisted = True
             payload = self._payload_unlocked()
@@ -922,22 +870,32 @@ class MachineProfileStore:
         self._write(payload)
         return state
 
-    def apply(self, classifier: Any, tank: Any = None) -> None:
-        """Push the live tank size and pressure targets into the machine.
+    def clear_refill(self) -> Dict[str, Any]:
+        """Drop the refill flag. The caller zeros used water itself."""
+        with self._lock:
+            self._refill_required = False
+            self._persisted = True
+            payload = self._payload_unlocked()
+            state = self._public_unlocked()
+        self._write(payload)
+        return state
 
-        No profile, or a profile with no capacity, clears the tank size.
-        Shots-left is then left uncomputed. Used water is not touched.
+    def apply(self, tank: Any = None) -> None:
+        """Push the live tank size and the refill flag onto the tank.
+
+        Used water is not changed here. No capacity leaves shots-left
+        uncomputed. A required refill hides shots-left until it is confirmed.
         """
         profile = self.active()
-        if profile is None:
-            apply_pressure_targets(classifier, DEFAULT_PRESSURE)
-            if tank is not None:
-                tank.set_capacity(None, status="machine_not_set")
-            return
-        apply_pressure_targets(classifier, profile.pressure)
         if tank is None:
+            return
+        if profile is None:
+            tank.set_capacity(None, status="machine_not_set")
+            tank.set_refill_required(False)
             return
         if profile.tank_capacity_ml is None:
             tank.set_capacity(None, status="capacity_unconfirmed")
+            tank.set_refill_required(False)
             return
         tank.set_capacity(profile.tank_capacity_ml)
+        tank.set_refill_required(self._refill_required)

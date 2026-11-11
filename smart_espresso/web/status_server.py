@@ -10,7 +10,11 @@ from flask import Flask, jsonify, request, send_from_directory
 
 from smart_espresso.analog_sensor.pressure_analog_sensor import PressureAnalogSensor
 from smart_espresso.analog_sensor.water_flow_sensor import WaterFlowAnalogSensor
-from smart_espresso.machine_profile import MachineProfileStore, ProfileError
+from smart_espresso.machine_profile import (
+    MachineProfileStore,
+    ProfileError,
+    global_settings,
+)
 from smart_espresso.machine_state import MachineStateClassifier
 from smart_espresso.shot_history import ShotHistory
 from smart_espresso.water_tank import WaterTank
@@ -93,7 +97,7 @@ class StatusServer:
         )
         self.classifier.on_shot_closed = self._on_shot_closed
         if profiles is not None:
-            self.profiles.apply(self.classifier, self.tank)
+            self.profiles.apply(self.tank)
 
         self._lock = threading.Lock()
         self._snapshot: dict = {
@@ -228,10 +232,18 @@ class StatusServer:
             self._dismiss_machine_prompt,
             methods=["POST"],
         )
+        self.app.add_url_rule(
+            "/api/machine-profile/refilled",
+            "confirm_machine_refill",
+            self._confirm_machine_refill,
+            methods=["POST"],
+        )
 
     def _machine_profiles(self):
         """Built-in models plus the saved custom values."""
-        return jsonify({"profiles": self.profiles.list_profiles()})
+        return jsonify(
+            {"profiles": self.profiles.list_profiles(), "globals": global_settings()}
+        )
 
     def _machine_profile(self):
         """The live profile, any pending switch, and the model prompt."""
@@ -252,13 +264,13 @@ class StatusServer:
             return self._reject_profile("expected an object")
         if "id" not in body:
             return self._reject_profile("id is required")
-        extra = set(body) - {"id", "tank_capacity_ml", "pressure", "accent"}
+        extra = set(body) - {"id", "tank_capacity_ml", "pressure_target_bar", "accent"}
         if extra:
             names = ", ".join(sorted(str(name) for name in extra))
             return self._reject_profile(f"unknown fields: {names}")
         updates = {
             key: body[key]
-            for key in ("tank_capacity_ml", "pressure", "accent")
+            for key in ("tank_capacity_ml", "pressure_target_bar", "accent")
             if key in body
         }
         try:
@@ -278,7 +290,20 @@ class StatusServer:
                 400,
             )
         if state.get("status") != "pending":
-            self.profiles.apply(self.classifier, self.tank)
+            self.profiles.apply(self.tank)
+        return jsonify(state)
+
+    def _confirm_machine_refill(self):
+        """The user filled the tank. Zero used water and clear the flag.
+
+        Shot history is not touched. A shot taken before this call is
+        already saved and already counted in used water.
+        """
+        if request.headers.get("X-Espresso-Dashboard") != "1":
+            return jsonify({"error": "missing dashboard header"}), 403
+        self.tank.reset()
+        state = self.profiles.clear_refill()
+        self.profiles.apply(self.tank)
         return jsonify(state)
 
     def _dismiss_machine_prompt(self):
@@ -305,7 +330,7 @@ class StatusServer:
         # ``saved`` is recorded by the caller. Both outcomes close the pull.
         _ = saved
         self.profiles.activate_pending()
-        self.profiles.apply(self.classifier, self.tank)
+        self.profiles.apply(self.tank)
 
     def update(self, sensors: list, health: Optional[dict] = None) -> None:
         """
@@ -386,6 +411,7 @@ class StatusServer:
         snapshot["machine"] = self.classifier.snapshot()
         snapshot["tank"] = self.tank.snapshot()
         snapshot["machine_profile"] = self.profiles.public()
+        snapshot["globals"] = global_settings()
         # In memory, same as the machine and tank blocks. The curves are
         # not included; a tap on the dashboard fetches those by id.
         snapshot["shots"] = self.shot_history.status_summary(limit=self.RECENT_SHOTS)

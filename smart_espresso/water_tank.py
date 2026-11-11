@@ -64,6 +64,7 @@ class WaterTank:
         else:
             self.capacity_ml = float(capacity_ml)
             self.capacity_status = "ok"
+        self.refill_required = False
         self.low_fraction = low_fraction
         self.state_path = os.path.expanduser(state_path) if state_path else None
         self.save_interval = save_interval
@@ -105,6 +106,15 @@ class WaterTank:
         with self._lock:
             self.capacity_ml = float(capacity_ml)
             self.capacity_status = "ok"
+
+    def set_refill_required(self, required: bool) -> None:
+        """Hide shots-left until the user confirms the tank was refilled.
+
+        Used water is left as it is. Confirming the refill is a separate
+        reset of that count.
+        """
+        with self._lock:
+            self.refill_required = bool(required)
 
     def update(self, total_ml: float) -> float:
         """
@@ -166,6 +176,8 @@ class WaterTank:
         return remaining <= capacity * self.low_fraction
 
     def _shots_left(self, used: float) -> Optional[int]:
+        if self.refill_required:
+            return None
         remaining = self._remaining_ml(used)
         if remaining is None:
             return None
@@ -216,10 +228,12 @@ class WaterTank:
             refills = self._refills
             capacity = self.capacity_ml
             status = self.capacity_status
+            refill_required = self.refill_required
 
         # Everything below is derived from that one reading, so the figures in
         # a payload always agree with each other. No capacity means shots-left
-        # is absent: there is no size to divide by.
+        # is absent: there is no size to divide by. A refill flag hides it
+        # too, until the user confirms the tank was filled.
         if capacity is None:
             return {
                 "capacity_ml": None,
@@ -230,12 +244,15 @@ class WaterTank:
                 "empty": None,
                 "shots_left": None,
                 "refills": refills,
+                "refill_required": refill_required,
                 "status": status,
             }
         remaining = max(capacity - used, 0.0)
         percent = (
             0.0 if capacity <= 0 else max(0.0, min(100.0, remaining / capacity * 100.0))
         )
+        if refill_required:
+            status = "refill_needed"
         return {
             "capacity_ml": round(capacity, 1),
             "used_ml": round(used, 1),
@@ -243,8 +260,9 @@ class WaterTank:
             "percent": round(percent, 1),
             "low": remaining <= capacity * self.low_fraction,
             "empty": remaining <= 0.0,
-            "shots_left": int(remaining // self.SHOT_ML),
+            "shots_left": None if refill_required else int(remaining // self.SHOT_ML),
             "refills": refills,
+            "refill_required": refill_required,
             "status": status,
         }
 

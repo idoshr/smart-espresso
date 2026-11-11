@@ -10,13 +10,18 @@ from smart_espresso.json_store import atomic_write_json
 from smart_espresso.machine_profile import (
     CATALOG,
     CATALOG_ORDER,
+    DEFAULT_PRESSURE_TARGET_BAR,
     GAGGIA_CLASSIC_E24_SOURCE,
     LEGACY_DEFAULT_TANK_ML,
+    ML_PER_CUP,
     RANCILIO_SILVIA_SOURCE,
+    SHOT_TIME_HIGH_S,
+    SHOT_TIME_LOW_S,
     UNSET_LABEL,
     MachineProfile,
     MachineProfileStore,
     ProfileError,
+    global_settings,
     require_source_url,
 )
 from smart_espresso.machine_state import MachineStateClassifier
@@ -98,10 +103,9 @@ class TestMigration(unittest.TestCase):
         tank = WaterTank(state_path=None)
         tank.update(0.0)
         tank.update(80.0)
-        store.apply(
-            MachineStateClassifier(shot_history=ShotHistory(state_path=None)), tank
-        )
+        store.apply(tank)
         self.assertEqual(tank.used_ml, 80.0)
+        self.assertFalse(store.public()["refill_required"])
         self.assertIsNone(tank.capacity_ml)
         self.assertIsNone(tank.shots_left)
         snapshot = tank.snapshot()
@@ -119,15 +123,16 @@ class TestMigration(unittest.TestCase):
         self.assertEqual(state["tank_capacity_ml"], 1600.0)
         self.assertEqual(state["tank_capacity_source"], "custom")
         self.assertEqual(state["status"], "ready")
+        self.assertFalse(state["refill_required"])
+        self.assertEqual(state["pressure_target_bar"], DEFAULT_PRESSURE_TARGET_BAR)
 
         tank = WaterTank(capacity_ml=None, state_path=self.tank_path)
-        store.apply(
-            MachineStateClassifier(shot_history=ShotHistory(state_path=None)), tank
-        )
+        store.apply(tank)
         self.assertEqual(tank.used_ml, 400.0)
         self.assertEqual(tank.capacity_ml, 1600.0)
         self.assertEqual(tank.shots_left, int(1200 // WaterTank.SHOT_ML))
         self.assertEqual(tank.snapshot()["status"], "ok")
+        self.assertFalse(tank.snapshot()["refill_required"])
 
     def test_water_tank_ml_migrates_when_no_profile_is_saved(self):
         store = self.store(environ={"WATER_TANK_ML": "1750"}, tank_path=self.tank_path)
@@ -164,6 +169,7 @@ class TestMigration(unittest.TestCase):
         third = self.store()
         self.assertFalse(third.public()["prompt_pick_model"])
         self.assertEqual(third.active().tank_capacity_ml, 1900.0)
+        self.assertFalse(third.public()["refill_required"])
 
     def test_unknown_id_is_machine_not_set_without_a_borrowed_capacity(self):
         store = self.store(environ={"MACHINE_PROFILE": "no-such-machine"})
@@ -194,27 +200,31 @@ class TestCustomValues(unittest.TestCase):
                     store.select("custom", {"tank_capacity_ml": bad})
                 self.assertIsNone(store.active())
 
+        omitted = store.select("custom", {"tank_capacity_ml": 1800})
+        self.assertEqual(omitted["pressure_target_bar"], DEFAULT_PRESSURE_TARGET_BAR)
         saved = store.select(
             "custom",
             {
                 "tank_capacity_ml": 1800,
-                "pressure": {"boiler_ready_min_bar": 1.0, "boiler_ready_max_bar": 1.4},
+                "pressure_target_bar": 8.5,
                 "accent": "copper",
             },
         )
         self.assertEqual(saved["tank_capacity_ml"], 1800.0)
-        self.assertEqual(saved["pressure"]["boiler_ready_min_bar"], 1.0)
+        self.assertEqual(saved["pressure_target_bar"], 8.5)
         self.assertEqual(saved["theme"], {"accent": "copper"})
         self.assertFalse(saved["capacity_confirmed"])
+        self.assertNotIn("shot_time_low_s", saved)
+        self.assertNotIn("ml_per_cup", saved)
 
         reloaded = self.store()
         self.assertEqual(reloaded.active().tank_capacity_ml, 1800.0)
-        self.assertEqual(reloaded.active().pressure.boiler_ready_min_bar, 1.0)
+        self.assertEqual(reloaded.active().pressure_target_bar, 8.5)
         self.assertEqual(reloaded.active().accent, "copper")
 
         with self.assertRaises(ProfileError):
-            store.select("custom", {"pressure": {"head_max_bar": 6}})
-        self.assertEqual(store.active().pressure.head_max_bar, 12.0)
+            store.select("custom", {"pressure_target_bar": 0})
+        self.assertEqual(store.active().pressure_target_bar, 8.5)
         self.assertEqual(store.active().tank_capacity_ml, 1800.0)
 
     def test_user_capacity_on_an_unconfirmed_model_is_not_a_spec_figure(self):
@@ -231,19 +241,53 @@ class TestCustomValues(unittest.TestCase):
             store.select("gaggia-classic-e24", {"tank_capacity_ml": 1400})
         self.assertEqual(store.active().id, "generic")
 
-    def test_switching_recounts_shots_left_and_keeps_used_water(self):
+    def test_switching_hides_shots_left_until_the_refill_is_confirmed(self):
         store = self.store()
         store.select("gaggia-classic-e24")
         tank = WaterTank(capacity_ml=2100.0, state_path=None)
         tank.update(0.0)
         tank.update(1000.0)
-        classifier = MachineStateClassifier(shot_history=ShotHistory(state_path=None))
+        history = ShotHistory(state_path=None, now=lambda: 1_700_000_000.0)
+        history.open()
+        history.commit(27.0, 36.0)
+        classifier = MachineStateClassifier(shot_history=history)
+        ready_before = classifier.ready_min_bar
+        globals_before = global_settings()
+        self.assertEqual(WaterTank.SHOT_ML, ML_PER_CUP)
+        self.assertEqual(SHOT_TIME_LOW_S, 25.0)
+        self.assertEqual(SHOT_TIME_HIGH_S, 30.0)
+
         store.select("rancilio-silvia")
-        store.apply(classifier, tank)
+        store.apply(tank)
         self.assertEqual(tank.used_ml, 1000.0)
         self.assertEqual(tank.capacity_ml, 2000.0)
-        self.assertEqual(tank.shots_left, int(1000 // WaterTank.SHOT_ML))
-        self.assertNotEqual(tank.shots_left, int(1100 // WaterTank.SHOT_ML))
+        self.assertIsNone(tank.shots_left)
+        self.assertTrue(tank.refill_required)
+        self.assertEqual(tank.snapshot()["status"], "refill_needed")
+        self.assertTrue(store.public()["refill_required"])
+        self.assertEqual(store.active().pressure_target_bar, 9.0)
+        self.assertEqual(classifier.ready_min_bar, ready_before)
+        self.assertEqual(global_settings(), globals_before)
+        self.assertEqual(WaterTank.SHOT_ML, 36.0)
+        self.assertEqual(history.list_payload()["count"], 1)
+
+        history.open()
+        history.commit(26.0, 30.0)
+        tank.update(1036.0)
+        self.assertEqual(history.list_payload()["count"], 2)
+        self.assertEqual(tank.used_ml, 1036.0)
+        self.assertTrue(store.public()["refill_required"])
+        self.assertIsNone(tank.shots_left)
+
+        tank.reset()
+        store.clear_refill()
+        store.apply(tank)
+        self.assertEqual(tank.used_ml, 0.0)
+        self.assertFalse(store.public()["refill_required"])
+        self.assertEqual(tank.snapshot()["status"], "ok")
+        self.assertEqual(tank.shots_left, int(2000 // WaterTank.SHOT_ML))
+        self.assertEqual(history.list_payload()["count"], 2)
+        self.assertEqual(global_settings(), globals_before)
 
 
 class TestDeferredSwitch(unittest.TestCase):
@@ -296,9 +340,11 @@ class TestDeferredSwitch(unittest.TestCase):
         self.assertEqual(body["pending"]["status"], "pending")
         self.assertEqual(body["pending"]["reason"], "shot_in_progress")
         self.assertEqual(body["id"], "gaggia-classic-e24")
+        self.assertFalse(body["refill_required"])
         self.assertEqual(tank.capacity_ml, 2100.0)
         self.assertEqual(tank.used_ml, 1000.0)
         self.assertEqual(tank.shots_left, int(1100 // WaterTank.SHOT_ML))
+        globals_before = client.get("/api/status").get_json()["globals"]
 
         for _ in range(4):
             step(0.0, 0.0, total)
@@ -306,14 +352,32 @@ class TestDeferredSwitch(unittest.TestCase):
         self.assertFalse(history.current_payload()["active"])
         self.assertEqual(tank.used_ml, 1000.0)
         self.assertEqual(tank.capacity_ml, 2000.0)
-        self.assertEqual(tank.shots_left, int(1000 // WaterTank.SHOT_ML))
+        self.assertIsNone(tank.shots_left)
+        self.assertEqual(tank.snapshot()["status"], "refill_needed")
         live = client.get("/api/machine-profile").get_json()
         self.assertEqual(live["id"], "rancilio-silvia")
         self.assertIsNone(live["pending"])
-        self.assertEqual(live["status"], "ready")
+        self.assertTrue(live["refill_required"])
+        self.assertEqual(live["pressure_target_bar"], 9.0)
         status = client.get("/api/status").get_json()
         self.assertEqual(status["machine_profile"]["id"], "rancilio-silvia")
-        self.assertEqual(status["tank"]["shots_left"], tank.shots_left)
+        self.assertIsNone(status["tank"]["shots_left"])
+        self.assertEqual(status["tank"]["status"], "refill_needed")
+        self.assertEqual(status["globals"], globals_before)
+        self.assertEqual(status["globals"]["shot_time_low_s"], 25.0)
+        self.assertEqual(status["globals"]["ml_per_cup"], 36.0)
+
+        confirmed = client.post("/api/machine-profile/refilled", headers=DASHBOARD)
+        self.assertEqual(confirmed.status_code, 200)
+        self.assertFalse(confirmed.get_json()["refill_required"])
+        self.assertEqual(tank.used_ml, 0.0)
+        self.assertEqual(tank.shots_left, int(2000 // WaterTank.SHOT_ML))
+        self.assertEqual(history.list_payload()["count"], 1)
+        self.assertEqual(
+            client.get("/api/status").get_json()["globals"], globals_before
+        )
+        blocked = client.post("/api/machine-profile/refilled")
+        self.assertEqual(blocked.status_code, 403)
 
     def test_api_rejects_a_bad_switch_and_requires_the_dashboard_header(self):
         tmp = tempfile.TemporaryDirectory()
@@ -365,15 +429,13 @@ class TestProfileShape(unittest.TestCase):
     def test_pressure_and_url_rules_reject_bad_values(self):
         store = MachineProfileStore(state_path=None)
         cases = (
-            {"pressure": "high"},
-            {"pressure": {"nope": 1}},
-            {"pressure": {"head_max_bar": 20}},
-            {"pressure": {"boiler_max_bar": 0.2}},
-            {"pressure": {"head_band_low_bar": 11, "head_band_high_bar": 10}},
-            {"pressure": {"boiler_ready_min_bar": 1.5, "boiler_ready_max_bar": 1.2}},
-            {"pressure": {"pump_head_bar": 1}},
-            {"pressure": {"shot_window_low_s": 40, "shot_window_high_s": 20}},
-            {"pressure": {"head_max_bar": float("nan")}},
+            {"pressure_target_bar": "high"},
+            {"pressure_target_bar": 0},
+            {"pressure_target_bar": -1},
+            {"pressure_target_bar": 20},
+            {"pressure_target_bar": float("nan")},
+            {"shot_window_low_s": 25},
+            {"pressure": {"head_max_bar": 12}},
             {"accent": "Not A Token"},
             {"accent": "#ff00aa"},
             {"logo": "gaggia.png"},
@@ -402,13 +464,20 @@ class TestProfileShape(unittest.TestCase):
         with self.assertRaises(ProfileError):
             require_source_url(empty)
         self.assertIsNone(require_source_url(CATALOG["custom"]))
-
-        class Bare:
-            pass
-
-        bare_classifier = Bare()
-        store.apply(bare_classifier, None)
-        self.assertEqual(bare_classifier.ready_min_bar, 0.8)
+        for profile in CATALOG_ORDER:
+            self.assertEqual(profile.pressure_target_bar, DEFAULT_PRESSURE_TARGET_BAR)
+            self.assertNotIn("shot_time_low_s", profile.to_dict())
+        self.assertEqual(global_settings()["ml_per_cup"], WaterTank.SHOT_ML)
+        store.select("custom", {"pressure_target_bar": None, "tank_capacity_ml": None})
+        self.assertEqual(
+            store.active().pressure_target_bar, DEFAULT_PRESSURE_TARGET_BAR
+        )
+        self.assertIsNone(store.active().tank_capacity_ml)
+        with self.assertRaises(ProfileError):
+            store.select("custom", {"pressure_target_bar": "nan"})
+        with self.assertRaises(ProfileError):
+            store.select("gaggia-classic-e24", {"pressure_target_bar": None})
+        store.apply(None)
 
     def test_corrupt_files_pending_switches_and_explicit_env_profiles(self):
         tmp = tempfile.TemporaryDirectory()
@@ -484,6 +553,7 @@ class TestProfileShape(unittest.TestCase):
             {"machine_profile": "generic", "pending": "soon"},
             {"machine_profile": "generic", "migrated_from_tank": "yes"},
             {"machine_profile": None, "custom": {"tank_capacity_ml": 50}},
+            {"machine_profile": "generic", "refill_required": "yes"},
             {"machine_profile": "custom", "custom": {"accent": "Nope"}},
             {"machine_profile": "generic", "user_capacities": {"generic": 10}},
         )
@@ -538,6 +608,42 @@ class TestProfileShape(unittest.TestCase):
         )
         self.assertEqual(fixed.active().tank_capacity_ml, 2100.0)
 
+        no_legacy = MachineProfileStore(
+            state_path=os.path.join(tmp.name, "no-legacy.json"),
+            read_env=True,
+            environ={"MACHINE_PROFILE": "gaggia-classic-e24"},
+            tank_state_path=None,
+        )
+        self.assertEqual(no_legacy.active().tank_capacity_ml, 2100.0)
+        self.assertFalse(no_legacy.public()["refill_required"])
+
+        bare_tank = os.path.join(tmp.name, "bare-tank.json")
+        atomic_write_json(bare_tank, {"refills": 1})
+        bare = MachineProfileStore(
+            state_path=os.path.join(tmp.name, "bare-profile.json"),
+            read_env=True,
+            environ={},
+            tank_state_path=bare_tank,
+        )
+        self.assertEqual(bare.public()["status"], "machine_not_set")
+
+        atomic_write_json(
+            os.path.join(tmp.name, "pending-generic.json"),
+            {
+                "machine_profile": "gaggia-classic-e24",
+                "pending": {"id": "generic", "tank_capacity_ml": 1300},
+                "prompt_pick_model": False,
+                "refill_required": False,
+            },
+        )
+        resumed = MachineProfileStore(
+            state_path=os.path.join(tmp.name, "pending-generic.json"),
+            read_env=False,
+        )
+        self.assertEqual(resumed.active().id, "generic")
+        self.assertEqual(resumed.active().tank_capacity_ml, 1300.0)
+        self.assertTrue(resumed.public()["refill_required"])
+
         memory = MachineProfileStore(state_path=None)
         self.assertFalse(memory.activate_pending())
         memory.select("generic", defer=True)
@@ -548,9 +654,7 @@ class TestProfileShape(unittest.TestCase):
         self.assertEqual(memory.active().id, "generic")
         self.assertEqual(memory.public()["status"], "capacity_unconfirmed")
         tank = WaterTank(capacity_ml=2000, state_path=None)
-        memory.apply(
-            MachineStateClassifier(shot_history=ShotHistory(state_path=None)), tank
-        )
+        memory.apply(tank)
         self.assertIsNone(tank.capacity_ml)
         self.assertEqual(tank.snapshot()["status"], "capacity_unconfirmed")
         self.assertIsNone(tank.shots_left)

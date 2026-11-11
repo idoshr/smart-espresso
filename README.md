@@ -194,14 +194,22 @@ The API then reports `prompt_pick_model: true`. Dismiss it with
 `X-Espresso-Dashboard: 1`). The flag stays false. Migration does not
 run again, and it does not overwrite a capacity the user set later.
 
-`GET /api/machine-profiles` lists models. `GET /api/machine-profile`
-is the live one. `POST /api/machine-profile` switches without a
-restart and keeps the used-water count; only shots-left is recounted.
-A switch during an open shot stays `pending` until that shot is saved.
-Built-in models carry a tank size only with a maker spec URL. A model
-with no spec URL has no capacity until the user enters one. Theme data
-is an accent colour id, not a logo. Forced refill on switch is not
-part of this API.
+`GET /api/machine-profiles` lists models and the global shot settings
+(25 to 30 s, 36 ml per cup). Those two settings are not on a profile,
+and switching models does not change them. `GET /api/machine-profile`
+is the live one. A profile has a tank capacity and one pressure
+target, 9 bar when the profile does not set another.
+`POST /api/machine-profile` switches without a restart. Used water
+stays. The tank status becomes `refill_needed`, `refill_required` is
+true, and shots-left is hidden. Shots are not blocked. Confirm with
+`POST /api/machine-profile/refilled` (same dashboard header): used
+water goes to 0 and the flag clears. Shot history is left as it is.
+A switch during an open shot stays `pending` until that shot is saved,
+and the refill flag is set then. The upgrade migration is not a
+switch, so it does not ask for a refill. Built-in models carry a tank
+size only with a maker spec URL. A model with no spec URL has no
+capacity until the user enters one. Theme data is an accent colour id,
+not a logo.
 
 `HEAD_V_MIN` / `HEAD_V_MAX` and `BOILER_V_MIN` / `BOILER_V_MAX` are the
 voltages that map to zero pressure and to the sensor's rated full scale.

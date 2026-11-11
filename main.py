@@ -425,7 +425,7 @@ def main(argv=None):
                 ),
             )
             classifier = MachineStateClassifier(shot_history=history)
-            profiles.apply(classifier, tank)
+            profiles.apply(tank)
         else:
             tank = serve.tank
             history = serve.shot_history
