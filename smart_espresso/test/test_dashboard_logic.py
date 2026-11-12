@@ -1478,3 +1478,51 @@ class TestMachineProfileUi:
         assert banner["pick"] == "Pick my machine"
         assert banner["later"] == "Not now"
         assert "tank size and pressure target" in banner["text"]
+
+    def test_model_button_names_and_the_sheet_traps_focus(self):
+        listed = call(
+            "logic.modelButtonName(%s)"
+            % json.dumps(
+                {
+                    "id": "gaggia-classic-e24",
+                    "vendor": "Gaggia",
+                    "model": "Classic E24",
+                    "status": "ready",
+                    "tank_capacity_ml": 2100,
+                }
+            )
+        )
+        custom = call(
+            "logic.modelButtonName(%s)"
+            % json.dumps(
+                {
+                    "id": "custom",
+                    "vendor": "Custom",
+                    "model": "Custom",
+                    "custom": True,
+                    "status": "ready",
+                    "tank_capacity_ml": 2000,
+                }
+            )
+        )
+        unset = call(
+            "logic.modelButtonName(%s)" % json.dumps({"status": "machine_not_set"})
+        )
+        assert listed == "Machine model, Gaggia Classic E24, 2.1 L tank. Change"
+        assert custom == "Machine model, custom machine, 2 L tank. Change"
+        assert unset == "Machine model, not set. Choose"
+        assert call('logic.focusTrapTarget(["a", "b", "c"], "c", false)') == "a"
+        assert call('logic.focusTrapTarget(["a", "b", "c"], "a", true)') == "c"
+        assert call('logic.focusTrapTarget(["a", "b", "c"], "b", false)') is None
+        assert call('logic.focusTrapTarget(["a", "b", "c"], "outside", false)') == "a"
+        page = (
+            Path(__file__).resolve().parents[1] / "web" / "static" / "index.html"
+        ).read_text(encoding="utf-8")
+        assert 'aria-modal="true"' in page
+        assert "holdSettingsBackground" in page
+        assert "setAttribute('inert'" in page
+        assert "event.key === 'Escape'" in page
+        assert "settingsOpener" in page
+        assert "line.append(button, grow)" in page
+        assert "button.append(grow)" not in page
+        assert "modelButtonName" in page

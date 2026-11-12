@@ -409,6 +409,45 @@
   .model-line small .spec-link { color: var(--acc); text-decoration: underline; }
   .picker-row small a { color: var(--acc); }
   .picker-row.selected b, .picker-row.selected small { color: var(--acc); }
+  .picker-line.picker-row {
+    position: relative;
+    display: block;
+    width: 100%;
+    padding: 0;
+    min-height: 44px;
+  }
+  .picker-open {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    min-height: 44px;
+    margin: 0;
+    padding: 0;
+    background: transparent;
+    border: none;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+  }
+  .picker-line .grow {
+    position: relative;
+    z-index: 1;
+    display: block;
+    padding: 14px 16px;
+    pointer-events: none;
+  }
+  .picker-line.selected .grow { padding-right: 44px; }
+  .picker-line .spec-link { position: relative; z-index: 2; pointer-events: auto; }
+  .picker-line .mark {
+    position: absolute;
+    right: 16px;
+    top: 0;
+    bottom: 0;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    pointer-events: none;
+  }
   .machine-hero { display: flex; align-items: center; gap: 12px; padding: 14px 16px; }
   .machine-hero b { display: block; font-size: 18px; font-weight: 800; }
   .machine-hero small { display: block; margin-top: 2px; font-size: 13px; font-weight: 600; color: var(--mute); }
@@ -2051,10 +2090,10 @@
 
 <div class="toast" id="toast" role="status" hidden></div>
 
-<div class="settings-screen" id="settings-screen" hidden>
+<div class="settings-screen" id="settings-screen" role="dialog" aria-modal="true" aria-labelledby="settings-title" hidden>
   <div class="settings-top">
     <button type="button" class="settings-back" id="settings-back" aria-label="Back">‹</button>
-    <h2>Settings</h2>
+    <h2 id="settings-title">Settings</h2>
   </div>
   <div class="settings-label">Your machine</div>
   <div class="settings-card machine-hero" id="machine-hero">
@@ -2073,7 +2112,7 @@
     <div class="settings-label">Machine model</div>
     <div class="settings-card">
       <div class="model-line">
-        <button type="button" class="model-open" id="open-picker" aria-label="Machine model">
+        <button type="button" class="model-open" id="open-picker" aria-label="Machine model, not set. Choose">
           <span aria-hidden="true" class="chev">›</span>
         </button>
         <span class="grow">
@@ -2759,6 +2798,9 @@ function applyMachineChrome(profile, globals) {
   } else {
     detail.textContent = row.detail;
   }
+  document.getElementById('open-picker').setAttribute(
+    'aria-label', DashboardLogic.modelButtonName(profile)
+  );
   document.getElementById('shot-time-value').textContent = shotGlobals.shotTime;
   document.getElementById('cup-size-value').textContent = shotGlobals.cupSize;
   const aim = document.getElementById('shot-aim');
@@ -3093,9 +3135,10 @@ document.getElementById('settings-back').addEventListener('click', () => {
     document.getElementById('settings-picker').hidden = true;
     document.getElementById('settings-home').hidden = false;
     document.querySelector('#settings-screen h2').textContent = 'Settings';
+    document.getElementById('open-picker').focus();
     return;
   }
-  document.getElementById('settings-screen').hidden = true;
+  closeSettings();
 });
 document.getElementById('open-picker').addEventListener('click', openPicker);
 document.getElementById('upgrade-pick').addEventListener('click', () => {
@@ -3114,14 +3157,123 @@ document.getElementById('switch-cancel').addEventListener('click', () => {
 });
 document.getElementById('switch-go').addEventListener('click', confirmSwitch);
 
+let settingsOpener = null;
+const inertRestore = new Map();
+
+function holdInert(el) {
+  if (!el || inertRestore.has(el)) return;
+  inertRestore.set(el, {
+    inert: el.hasAttribute('inert'),
+    hidden: el.hasAttribute('aria-hidden') ? el.getAttribute('aria-hidden') : null,
+  });
+  el.setAttribute('inert', '');
+  el.setAttribute('aria-hidden', 'true');
+}
+
+function releaseInert(el) {
+  const prev = inertRestore.get(el);
+  if (!prev) return;
+  inertRestore.delete(el);
+  if (prev.inert) el.setAttribute('inert', '');
+  else el.removeAttribute('inert');
+  if (prev.hidden == null) el.removeAttribute('aria-hidden');
+  else el.setAttribute('aria-hidden', prev.hidden);
+}
+
+function settingsBackground() {
+  return Array.from(document.body.children).filter(el =>
+    el.id !== 'settings-screen' && el.id !== 'switch-dialog' && el.id !== 'toast'
+  );
+}
+
+function holdSettingsBackground() {
+  settingsBackground().forEach(holdInert);
+}
+
+function releaseSettingsBackground() {
+  settingsBackground().forEach(releaseInert);
+}
+
 function openSettings() {
-  document.getElementById('settings-screen').hidden = false;
+  const sheet = document.getElementById('settings-screen');
+  const wasOpen = !sheet.hidden;
+  if (!wasOpen) {
+    settingsOpener = document.activeElement;
+    holdSettingsBackground();
+  }
+  sheet.hidden = false;
   document.getElementById('settings-home').hidden = false;
   document.getElementById('settings-picker').hidden = true;
   pickerOpen = false;
   document.querySelector('#settings-screen h2').textContent = 'Settings';
+  if (!wasOpen) document.getElementById('settings-back').focus();
   loadCatalog();
 }
+
+function closeSettings() {
+  const sheet = document.getElementById('settings-screen');
+  const wasOpen = !sheet.hidden;
+  pickerOpen = false;
+  document.getElementById('settings-picker').hidden = true;
+  document.getElementById('settings-home').hidden = false;
+  document.getElementById('switch-dialog').hidden = true;
+  pendingSwitch = null;
+  sheet.hidden = true;
+  document.querySelector('#settings-screen h2').textContent = 'Settings';
+  releaseSettingsBackground();
+  const opener = settingsOpener;
+  settingsOpener = null;
+  if (wasOpen && opener && typeof opener.focus === 'function') opener.focus();
+}
+
+function sheetFocusables(root) {
+  const selector = [
+    'a[href]',
+    'button:not([disabled])',
+    'input:not([disabled])',
+    'select:not([disabled])',
+    'textarea:not([disabled])',
+    '[tabindex]:not([tabindex="-1"])',
+  ].join(',');
+  return Array.from(root.querySelectorAll(selector)).filter(el => {
+    if (el.closest('[hidden]')) return false;
+    return el.getClientRects().length > 0;
+  });
+}
+
+function trapRoot() {
+  const dialog = document.getElementById('switch-dialog');
+  if (dialog && !dialog.hidden) return dialog;
+  const sheet = document.getElementById('settings-screen');
+  if (sheet && !sheet.hidden) return sheet;
+  return null;
+}
+
+document.addEventListener('keydown', event => {
+  if (event.key === 'Escape') {
+    const dialog = document.getElementById('switch-dialog');
+    if (dialog && !dialog.hidden) {
+      event.preventDefault();
+      pendingSwitch = null;
+      dialog.hidden = true;
+      return;
+    }
+    if (trapRoot()) {
+      event.preventDefault();
+      closeSettings();
+    }
+    return;
+  }
+  if (event.key !== 'Tab') return;
+  const root = trapRoot();
+  if (!root) return;
+  const items = sheetFocusables(root);
+  if (!items.length) return;
+  const next = DashboardLogic.focusTrapTarget(items, document.activeElement, event.shiftKey);
+  if (!next) return;
+  event.preventDefault();
+  next.focus();
+});
 
 async function loadCatalog() {
   try {
@@ -3146,6 +3298,7 @@ function openPicker() {
   document.getElementById('model-search').value = '';
   document.getElementById('size-field').hidden = true;
   paintPicker();
+  document.getElementById('model-search').focus();
 }
 
 function paintPicker() {
@@ -3158,20 +3311,25 @@ function paintPicker() {
   list.replaceChildren();
   const activeId = activeProfile && activeProfile.id;
   model.rows.forEach(row => {
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.className = 'picker-row';
     const selected = row.unlisted
       ? activeId === 'generic' || activeId === 'custom'
       : activeId === row.id;
-    button.classList.toggle('selected', selected);
+    const line = document.createElement('div');
+    line.className = 'picker-row picker-line' + (selected ? ' selected' : '');
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'picker-open';
+    const size = row.detail.split(' \u00b7 ')[0];
+    button.setAttribute(
+      'aria-label',
+      row.sourceUrl ? row.title + ', ' + size : row.title + ', ' + row.detail
+    );
     const grow = document.createElement('span');
     grow.className = 'grow';
     const title = document.createElement('b');
     title.textContent = row.title;
     const detail = document.createElement('small');
     if (row.sourceUrl) {
-      const size = row.detail.split(' \u00b7 ')[0];
       detail.append(document.createTextNode(size + ' \u00b7 '));
       const link = document.createElement('a');
       link.className = 'spec-link';
@@ -3179,21 +3337,21 @@ function paintPicker() {
       link.target = '_blank';
       link.rel = 'noopener';
       link.textContent = 'From the maker\u2019s spec';
-      link.addEventListener('click', event => event.stopPropagation());
       detail.append(link);
     } else {
       detail.textContent = row.detail;
     }
     grow.append(title, detail);
-    button.append(grow);
+    line.append(button, grow);
     if (selected) {
       const mark = document.createElement('span');
+      mark.className = 'mark';
       mark.textContent = '\u2713';
       mark.setAttribute('aria-hidden', 'true');
-      button.append(mark);
+      line.append(mark);
     }
     button.addEventListener('click', () => chooseModel(row));
-    list.append(button);
+    list.append(line);
   });
 }
 
@@ -3263,6 +3421,7 @@ function openSwitch(next) {
     body.append(p);
   });
   document.getElementById('switch-dialog').hidden = false;
+  document.getElementById('switch-cancel').focus();
 }
 
 async function confirmSwitch() {
@@ -3285,9 +3444,7 @@ async function confirmSwitch() {
     });
     if (!res.ok) throw new Error('switch');
     const saved = await res.json();
-    document.getElementById('switch-dialog').hidden = true;
-    document.getElementById('settings-screen').hidden = true;
-    pendingSwitch = null;
+    closeSettings();
     if (saved.status === 'pending') {
       awaitToastFor = saved.pending && saved.pending.id;
     } else {
