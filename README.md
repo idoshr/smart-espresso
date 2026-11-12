@@ -43,7 +43,8 @@ Built for your home network. Beta, and still a work in progress.
 - OLED display (SH1106 128x64)
 - Machine state classification (off / heating / ready / brewing / steaming / over pressure)
 - Shot history with head-pressure and flow curves, kept across reboots
-- Water tank counter with refill reset, so you know before the 2 L tank runs dry
+- Water tank counter with refill reset, sized to your machine's tank,
+  so you know before it runs dry
 - Web dashboard for phone and desktop: live pressure curve and shot timer,
   pressure meters, machine state, recent shots, water tank and room readings
 - Machine profiles: pick your model for its tank size and pressure target,
