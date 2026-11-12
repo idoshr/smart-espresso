@@ -379,6 +379,34 @@
     font-weight: 600;
     color: var(--mute);
   }
+  .spec-link { color: var(--acc); text-decoration: underline; font-weight: 650; }
+  .model-line {
+    position: relative;
+    display: block;
+    padding: 14px 36px 14px 16px;
+    min-height: 44px;
+  }
+  .model-open {
+    position: absolute;
+    inset: 0;
+    background: transparent;
+    border: none;
+    min-height: 44px;
+  }
+  .model-line .grow { position: relative; z-index: 1; pointer-events: none; }
+  .model-line .spec-link { pointer-events: auto; }
+  .model-line .chev {
+    position: absolute;
+    right: 16px;
+    top: 50%;
+    margin-top: -10px;
+    z-index: 1;
+    pointer-events: none;
+    color: var(--mute);
+  }
+  .model-line b { display: block; font-size: 16px; font-weight: 750; }
+  .model-line small { display: block; margin-top: 2px; font-size: 13px; font-weight: 600; color: var(--mute); }
+  .model-line small .spec-link { color: var(--acc); text-decoration: underline; }
   .picker-row small a { color: var(--acc); }
   .picker-row.selected b, .picker-row.selected small { color: var(--acc); }
   .machine-hero { display: flex; align-items: center; gap: 12px; padding: 14px 16px; }
@@ -391,11 +419,25 @@
     color: var(--acc);
   }
   #save-machine { width: 100%; margin-top: 12px; }
+  .search-wrap {
+    position: relative;
+    display: block;
+    margin-bottom: 12px;
+  }
+  .search-icon {
+    position: absolute;
+    left: 16px;
+    top: 50%;
+    width: 18px;
+    height: 18px;
+    margin-top: -9px;
+    color: var(--mute);
+    pointer-events: none;
+  }
   .search {
     width: 100%;
-    margin-bottom: 12px;
     min-height: 48px;
-    padding: 0 16px;
+    padding: 0 16px 0 42px;
     border: none;
     border-radius: 16px;
     background: var(--card);
@@ -2030,13 +2072,15 @@
   <div id="settings-home">
     <div class="settings-label">Machine model</div>
     <div class="settings-card">
-      <button type="button" class="settings-row" id="open-picker">
+      <div class="model-line">
+        <button type="button" class="model-open" id="open-picker" aria-label="Machine model">
+          <span aria-hidden="true" class="chev">›</span>
+        </button>
         <span class="grow">
           <b id="model-row-title">Set your machine</b>
           <small id="model-row-detail"></small>
         </span>
-        <span aria-hidden="true">›</span>
-      </button>
+      </div>
     </div>
     <div class="settings-label">Your shots</div>
     <div class="settings-card">
@@ -2046,7 +2090,13 @@
   </div>
   <div id="settings-picker" hidden>
     <div class="settings-label">Machine model</div>
-    <input class="search" id="model-search" type="search" placeholder="Search by maker or model" autocomplete="off">
+    <label class="search-wrap">
+      <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <circle cx="11" cy="11" r="6.5" fill="none" stroke="currentColor" stroke-width="2"/>
+        <path d="M16.2 16.2 20.5 20.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+      </svg>
+      <input class="search" id="model-search" type="search" placeholder="Search by maker or model" autocomplete="off">
+    </label>
     <p class="picker-note" id="picker-empty" hidden></p>
     <div class="settings-card" id="picker-list"></div>
     <div class="size-field" id="size-field" hidden>
@@ -2695,7 +2745,20 @@ function applyMachineChrome(profile, globals) {
   document.getElementById('machine-detail').textContent = summary.detail;
   const row = DashboardLogic.modelRow(profile);
   document.getElementById('model-row-title').textContent = row.title;
-  document.getElementById('model-row-detail').textContent = row.detail;
+  const detail = document.getElementById('model-row-detail');
+  detail.replaceChildren();
+  if (row.sourceUrl) {
+    detail.append(document.createTextNode(row.sizeLabel + ' \u00b7 '));
+    const link = document.createElement('a');
+    link.className = 'spec-link';
+    link.href = row.sourceUrl;
+    link.target = '_blank';
+    link.rel = 'noopener';
+    link.textContent = row.specLabel;
+    detail.append(link);
+  } else {
+    detail.textContent = row.detail;
+  }
   document.getElementById('shot-time-value').textContent = shotGlobals.shotTime;
   document.getElementById('cup-size-value').textContent = shotGlobals.cupSize;
   const aim = document.getElementById('shot-aim');
@@ -3111,6 +3174,7 @@ function paintPicker() {
       const size = row.detail.split(' \u00b7 ')[0];
       detail.append(document.createTextNode(size + ' \u00b7 '));
       const link = document.createElement('a');
+      link.className = 'spec-link';
       link.href = row.sourceUrl;
       link.target = '_blank';
       link.rel = 'noopener';
