@@ -1426,6 +1426,25 @@ class TestMachineProfileUi:
         assert refill["showMeter"] is False
         assert refill["showRefill"] is True
         assert refill["used"] == "420 ml used"
+        over = call(
+            "logic.tankView(%s, %s)"
+            % (
+                json.dumps(
+                    {
+                        "used_ml": 2500,
+                        "capacity_ml": 2000,
+                        "shots_left": 0,
+                        "refill_required": False,
+                        "percent": 0,
+                        "low": True,
+                    }
+                ),
+                json.dumps(nxt),
+            )
+        )
+        assert over["note"] == (
+            "That's more than this tank holds. If it's full now, tap I refilled it."
+        )
         banner = call(
             "logic.upgradeBanner(%s)" % json.dumps({"prompt_pick_model": True})
         )

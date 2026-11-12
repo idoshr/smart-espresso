@@ -858,7 +858,7 @@
       low: !!(tank && tank.low),
       showRefill: false,
       note: over
-        ? "The used amount is more than this tank\u2019s size. If the tank is full, tap I refilled it."
+        ? "That's more than this tank holds. If it's full now, tap I refilled it."
         : "",
     };
   }
