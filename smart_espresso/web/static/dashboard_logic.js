@@ -737,6 +737,28 @@
     };
   }
 
+  // The settings row is a button beside the visible text, so its name is set
+  // explicitly and refreshed whenever the profile changes.
+  function modelButtonName(profile) {
+    if (!profile || !profile.id || profile.status === "machine_not_set") {
+      return "Machine model, not set. Choose";
+    }
+    const size = capacityText(profile.tank_capacity_ml);
+    const tank = size ? ", " + size + " tank" : "";
+    if (isOwnMachine(profile)) return "Machine model, custom machine" + tank + ". Change";
+    return "Machine model, " + makerModel(profile) + tank + ". Change";
+  }
+
+  // The element to focus when Tab would leave the open sheet or dialog.
+  // Null means the key stays with the browser, which moves inside the group.
+  function focusTrapTarget(items, active, shiftKey) {
+    if (!items || !items.length) return null;
+    const index = items.indexOf(active);
+    if (shiftKey) return index <= 0 ? items[items.length - 1] : null;
+    if (index < 0 || index === items.length - 1) return items[0];
+    return null;
+  }
+
   function pickerRow(profile) {
     if (!profile) return null;
     if (profile.id === "generic" || profile.id === "custom" || profile.custom) {
@@ -957,5 +979,7 @@
     tankView: tankView,
     isOwnMachine: isOwnMachine,
     modelRow: modelRow,
+    modelButtonName: modelButtonName,
+    focusTrapTarget: focusTrapTarget,
   };
 });
