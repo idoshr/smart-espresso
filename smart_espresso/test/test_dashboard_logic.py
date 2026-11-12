@@ -1314,10 +1314,23 @@ class TestMachineProfileUi:
         )
         assert unset == "Machine not set"
         summary = call("logic.settingsSummary(%s)" % json.dumps(custom))
-        assert summary["title"] == "Custom machine \u00b7 2 L tank"
+        assert summary["title"] == "Custom machine"
+        assert summary["detail"] == "2 L tank \u00b7 9 bar"
         listed = call("logic.settingsSummary(%s)" % json.dumps(gaggia))
         assert listed["title"] == "Gaggia Classic E24"
         assert listed["detail"] == "2.1 L tank \u00b7 9 bar"
+        row = call(
+            "logic.modelRow(%s)"
+            % json.dumps(
+                {
+                    **gaggia,
+                    "capacity_confirmed": True,
+                    "source_url": "https://www.gaggia.com/manual-machines/new-classic-e24/",
+                }
+            )
+        )
+        assert row["title"] == "Gaggia Classic E24"
+        assert row["detail"] == "2.1 L tank \u00b7 From the maker\u2019s spec"
 
     def test_picker_hides_the_word_generic_and_keeps_globals(self):
         profiles = [

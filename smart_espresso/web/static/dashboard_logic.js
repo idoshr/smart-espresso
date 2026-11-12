@@ -700,13 +700,37 @@
     );
     if (isOwnMachine(profile)) {
       return {
-        title: size ? "Custom machine \u00b7 " + size + " tank" : "Custom machine",
-        detail: "",
+        title: "Custom machine",
+        detail: [size ? size + " tank" : null, bar].filter(Boolean).join(" \u00b7 "),
       };
     }
     return {
       title: makerModel(profile),
       detail: [size ? size + " tank" : null, bar].filter(Boolean).join(" \u00b7 "),
+    };
+  }
+
+  function modelRow(profile) {
+    if (!profile || !profile.id || profile.status === "machine_not_set") {
+      return { title: "Set your machine", detail: "Tank size not set" };
+    }
+    if (isOwnMachine(profile)) {
+      const size = capacityText(profile.tank_capacity_ml);
+      return {
+        title: "Custom machine",
+        detail: size ? size + " tank" : "Enter the tank size yourself",
+      };
+    }
+    const size = capacityText(profile.tank_capacity_ml);
+    if (profile.capacity_confirmed && profile.source_url && size) {
+      return {
+        title: makerModel(profile),
+        detail: size + " tank \u00b7 From the maker\u2019s spec",
+      };
+    }
+    return {
+      title: makerModel(profile),
+      detail: "Tank size not confirmed \u00b7 Enter yours",
     };
   }
 
@@ -929,5 +953,6 @@
     shotIsOpen: shotIsOpen,
     tankView: tankView,
     isOwnMachine: isOwnMachine,
+    modelRow: modelRow,
   };
 });
