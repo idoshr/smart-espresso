@@ -85,6 +85,15 @@
     --alert-ink: var(--bg);
   }
 
+  /* Maker accent is applied to --acc from the profile id. Look C
+     surfaces stay. Type tone is only the wordmark and the for line. */
+  :root[data-tone="default"] header h1,
+  :root[data-tone="default"] .for-line { letter-spacing: -0.02em; }
+  :root[data-tone="open"] header h1,
+  :root[data-tone="open"] .for-line { letter-spacing: 0; }
+  :root[data-tone="tight"] header h1,
+  :root[data-tone="tight"] .for-line { letter-spacing: -0.04em; }
+
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 
   /* Author display rules (a flex pill, an inline-block chip) would
@@ -106,11 +115,18 @@
 
   header {
     display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 2px;
     margin-bottom: 18px;
     padding: 0 2px;
+  }
+  .brand-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+    min-width: 0;
   }
 
   h1 {
@@ -129,6 +145,13 @@
     font-size: 20px;
     font-weight: 800;
     letter-spacing: -.02em;
+  }
+  /* Two 44px controls sit beside the today line. Below 400px the title
+     steps down and the row uses a little of the page padding so
+     "6 shots · 231 ml today" stays whole at 375. */
+  @media (max-width: 400px) {
+    header h1 { font-size: 17px; }
+    .brand-row { margin: 0 -10px; gap: 4px; }
   }
 
   .header-tools {
@@ -186,6 +209,19 @@
     position: relative;
     flex: none;
     width: 44px;
+    min-width: 44px;
+    height: 44px;
+    padding: 0;
+    margin-left: -6px;
+  }
+  #settings {
+    position: relative;
+    flex: none;
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
+    padding: 0;
+    margin-left: -4px;
   }
   #wake-text {
     position: absolute;
@@ -240,8 +276,178 @@
      hides with the tally; the wake control stays. */
   @media (max-width: 374px) {
     header .tagline,
-    header .conn { display: none !important; }
+    header .conn,
+    .for-line { display: none !important; }
   }
+
+  .brand { min-width: 0; }
+  .for-line {
+    margin: 1px 0 0;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--mute);
+    letter-spacing: -0.02em;
+  }
+  #settings .pill-face { padding: 0; width: 36px; }
+  .upgrade {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin: 0 0 12px;
+    padding: 16px;
+    background: var(--card);
+    border-radius: var(--radius);
+  }
+  .upgrade p { margin: 0; font-size: 15px; font-weight: 650; line-height: 1.35; }
+  .upgrade-actions { display: flex; gap: 8px; }
+  .upgrade button, .dialog button, #refill-now, #save-machine, .settings-back {
+    font-family: var(--body);
+    font-size: 15px;
+    font-weight: 700;
+    border-radius: 999px;
+    min-height: 44px;
+    padding: 0 16px;
+  }
+  .upgrade .later, .dialog .cancel {
+    background: transparent;
+    color: var(--ink);
+    border: 1.5px solid var(--mute);
+  }
+  .upgrade .pick, .dialog .go, #refill-now, #save-machine {
+    background: var(--acc);
+    color: var(--card);
+    border: 1.5px solid var(--acc);
+  }
+  #refill-now { width: 100%; margin-top: 12px; }
+  .settings-screen {
+    position: fixed;
+    inset: 0;
+    z-index: 30;
+    overflow: auto;
+    background: var(--bg);
+    color: var(--ink);
+    padding: 18px 16px 32px;
+  }
+  .settings-top { display: flex; align-items: center; gap: 8px; margin-bottom: 18px; }
+  .settings-top h2 { margin: 0; font-size: 22px; font-weight: 800; letter-spacing: -.02em; }
+  .settings-back {
+    width: 44px;
+    padding: 0;
+    background: transparent;
+    border: none;
+    color: var(--ink);
+    font-size: 22px;
+  }
+  .settings-label {
+    margin: 18px 2px 8px;
+    font-size: 13px;
+    font-weight: 650;
+    color: var(--mute);
+  }
+  .settings-card {
+    background: var(--card);
+    border-radius: var(--radius);
+    padding: 4px 0;
+  }
+  .settings-row, .picker-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    text-align: left;
+    background: transparent;
+    border: none;
+    color: inherit;
+    font-family: var(--body);
+    padding: 14px 16px;
+    min-height: 44px;
+  }
+  .settings-row + .settings-row, .picker-row + .picker-row {
+    border-top: 1px solid var(--bg);
+  }
+  .settings-row .grow, .picker-row .grow { flex: 1; min-width: 0; }
+  .shot-value { font-size: 15px; font-weight: 650; color: var(--ink); }
+  .settings-row b, .picker-row b {
+    display: block;
+    font-size: 16px;
+    font-weight: 750;
+  }
+  .settings-row small, .picker-row small, .picker-note {
+    display: block;
+    margin-top: 2px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--mute);
+  }
+  .picker-row small a { color: var(--acc); }
+  .picker-row.selected b, .picker-row.selected small { color: var(--acc); }
+  .machine-hero { display: flex; align-items: center; gap: 12px; padding: 14px 16px; }
+  .machine-hero b { display: block; font-size: 18px; font-weight: 800; }
+  .machine-hero small { display: block; margin-top: 2px; font-size: 13px; font-weight: 600; color: var(--mute); }
+  .machine-mark {
+    width: 48px;
+    height: 48px;
+    flex: 0 0 auto;
+    color: var(--acc);
+  }
+  #save-machine { width: 100%; margin-top: 12px; }
+  .search {
+    width: 100%;
+    margin-bottom: 12px;
+    min-height: 48px;
+    padding: 0 16px;
+    border: none;
+    border-radius: 16px;
+    background: var(--card);
+    color: var(--ink);
+    font: 600 16px var(--body);
+  }
+  .size-field { padding: 0 16px 14px; }
+  .size-field label { display: block; font-size: 13px; font-weight: 700; margin-bottom: 6px; }
+  .size-field input {
+    width: 100%;
+    min-height: 44px;
+    border: none;
+    border-radius: 12px;
+    background: var(--bg);
+    color: var(--ink);
+    font: 650 16px var(--body);
+    padding: 0 12px;
+  }
+  .size-field p { margin: 6px 0 0; font-size: 13px; color: var(--mute); }
+  .dialog-back {
+    position: fixed;
+    inset: 0;
+    z-index: 40;
+    background: rgba(58, 42, 32, .45);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }
+  .dialog {
+    width: min(100%, 340px);
+    background: var(--card);
+    color: var(--ink);
+    border-radius: 24px;
+    padding: 22px 18px 16px;
+  }
+  .dialog h3 { margin: 0 0 8px; font-size: 22px; font-weight: 800; letter-spacing: -.02em; }
+  .dialog p { margin: 0 0 10px; font-size: 15px; line-height: 1.4; }
+  .dialog-actions { display: flex; gap: 8px; margin-top: 8px; }
+  .dialog-actions button { flex: 1; }
+  .set-link {
+    display: inline-block;
+    margin-top: 6px;
+    color: var(--acc);
+    font-size: 14px;
+    font-weight: 700;
+    background: none;
+    border: none;
+    padding: 0;
+    font-family: var(--body);
+  }
+  .tank-note { margin: 8px 0 0; font-size: 13px; color: var(--mute); }
 
   /* The connection word stays for the status role. The header shows the dot. */
   #conn {
@@ -1647,8 +1853,17 @@
   <button class="retry" id="retry" type="button">Retry now</button>
 </div>
 
+<div class="upgrade" id="upgrade" hidden>
+  <p id="upgrade-text"></p>
+  <div class="upgrade-actions">
+    <button type="button" class="later" id="upgrade-later">Not now</button>
+    <button type="button" class="pick" id="upgrade-pick">Pick my machine</button>
+  </div>
+</div>
+
 <header>
-  <h1>Smart Espresso</h1>
+  <div class="brand-row">
+    <h1>Smart Espresso</h1>
   <div class="header-tools">
     <!-- Connecting, not live: the shell is often cached and painted before
          /api/status has ever answered. A green dot here is a lie. -->
@@ -1663,7 +1878,15 @@
         stroke-linejoin="round"><rect x="8.2" y="3.4" width="7.6" height="13.2"
         rx="1.6"/><path d="M10.6 14.2h2.8"/><path d="M5.4 7.4 3.8 5.8M4.8 12H2.6M5.4 16.4 4 18M18.6 7.4 20.2 5.8M19.2 12h2.2M18.6 16.4 20 18"/></g></svg><span
         id="wake-text">Keep screen on</span></span></button>
+    <button class="live" id="settings" type="button" title="Settings"
+            aria-label="Settings"><span class="pill-face"><svg class="wake-icon"
+            viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="none"
+            stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path
+            d="M10.2 3h3.6l.4 2.1a7 7 0 0 1 1.5.9l2-.8 1.8 3.1-1.6 1.5a7 7 0 0 1 0 1.8l1.6 1.5-1.8 3.1-2-.8a7 7 0 0 1-1.5.9l-.4 2.1h-3.6l-.4-2.1a7 7 0 0 1-1.5-.9l-2 .8-1.8-3.1 1.6-1.5a7 7 0 0 1 0-1.8L4.5 8.3l1.8-3.1 2 .8a7 7 0 0 1 1.5-.9L10.2 3z"/><circle
+            cx="12" cy="12" r="2.3"/></g></svg></span></button>
   </div>
+  </div>
+  <p class="for-line" id="for-line" hidden></p>
 </header>
 
 <div class="stack">
@@ -1750,7 +1973,9 @@
     <div class="card" id="tank-card" hidden>
       <div class="pair-label">Water tank</div>
       <div class="pair-lead" id="tank-lead">Tank's probably empty. Refill before the next shot.</div>
-      <div class="level"><i id="tank-fill" style="width:0%"></i></div>
+      <button type="button" class="set-link" id="tank-set" hidden>Set your machine</button>
+      <p class="tank-note" id="tank-note" hidden></p>
+      <div class="level" id="tank-meter"><i id="tank-fill" style="width:0%"></i></div>
       <div class="used-row" id="tank-used-row">
         <span class="pair-sub" id="tank-used-line">0 ml used</span>
       </div>
@@ -1759,6 +1984,7 @@
         <span class="refill-hint" id="tank-offline-hint" hidden>Reconnect to save the refill</span>
         <button class="reset refill-pill" id="tank-reset" type="button" aria-label="I refilled the tank" aria-disabled="true"><span class="refill-long">I refilled the tank</span><span class="refill-short">I refilled it</span></button>
       </div>
+      <button class="reset" id="refill-now" type="button" hidden>I refilled it</button>
     </div>
     <div class="card" id="other-card" hidden>
       <div class="pair-label">Room</div>
@@ -1782,6 +2008,66 @@
 </div>
 
 <div class="toast" id="toast" role="status" hidden></div>
+
+<div class="settings-screen" id="settings-screen" hidden>
+  <div class="settings-top">
+    <button type="button" class="settings-back" id="settings-back" aria-label="Back">‹</button>
+    <h2>Settings</h2>
+  </div>
+  <div class="settings-label">Your machine</div>
+  <div class="settings-card machine-hero" id="machine-hero">
+    <svg class="machine-mark" viewBox="0 0 48 48" aria-hidden="true">
+      <rect x="10" y="14" width="22" height="20" rx="3" fill="none" stroke="currentColor" stroke-width="2"/>
+      <path d="M32 20h5.5a3.2 3.2 0 0 1 0 6.4H32" fill="none" stroke="currentColor" stroke-width="2"/>
+      <path d="M16 34v4M26 34v4M14 38h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+      <path d="M18 18h6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+    </svg>
+    <span class="grow">
+      <b id="machine-title">Machine not set</b>
+      <small id="machine-detail"></small>
+    </span>
+  </div>
+  <div id="settings-home">
+    <div class="settings-label">Machine model</div>
+    <div class="settings-card">
+      <button type="button" class="settings-row" id="open-picker">
+        <span class="grow">
+          <b id="model-row-title">Set your machine</b>
+          <small id="model-row-detail"></small>
+        </span>
+        <span aria-hidden="true">›</span>
+      </button>
+    </div>
+    <div class="settings-label">Your shots</div>
+    <div class="settings-card">
+      <div class="settings-row"><span class="grow"><b>Shot time</b></span><span class="shot-value" id="shot-time-value">25 to 30 s</span></div>
+      <div class="settings-row"><span class="grow"><b>Cup size</b></span><span class="shot-value" id="cup-size-value">36 ml</span></div>
+    </div>
+  </div>
+  <div id="settings-picker" hidden>
+    <div class="settings-label">Machine model</div>
+    <input class="search" id="model-search" type="search" placeholder="Search by maker or model" autocomplete="off">
+    <p class="picker-note" id="picker-empty" hidden></p>
+    <div class="settings-card" id="picker-list"></div>
+    <div class="size-field" id="size-field" hidden>
+      <label for="tank-litres">Tank size (L)</label>
+      <input id="tank-litres" inputmode="decimal" placeholder="2.1">
+      <p>It&rsquo;s in your manual, or measure a full tank.</p>
+      <button type="button" class="pick" id="save-machine">Save machine</button>
+    </div>
+  </div>
+</div>
+
+<div class="dialog-back" id="switch-dialog" hidden>
+  <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="switch-title">
+    <h3 id="switch-title"></h3>
+    <div id="switch-body"></div>
+    <div class="dialog-actions">
+      <button type="button" class="cancel" id="switch-cancel">Cancel</button>
+      <button type="button" class="go" id="switch-go">Switch</button>
+    </div>
+  </div>
+</div>
 
 <script src="/dashboard_logic.js"></script>
 <script>
@@ -2373,7 +2659,54 @@ function paintShot(detail, shot) {
   detail.innerHTML = `<div class="history-meta">${bits.map(escapeHtml).join(' · ')}</div>${charts}`;
 }
 
-// ---- tank ----------------------------------------------------------------
+// ---- machine profile -----------------------------------------------------
+
+let activeProfile = null;
+let shotGlobals = DashboardLogic.shotGlobals(null);
+let machineState = null;
+let catalog = [];
+let pendingSwitch = null;
+let pickerOpen = false;
+let awaitToastFor = null;
+
+function applyMachineChrome(profile, globals) {
+  activeProfile = profile || null;
+  if (globals) shotGlobals = DashboardLogic.shotGlobals(globals);
+  const accentId = profile && profile.theme && profile.theme.accent;
+  const theme = DashboardLogic.accentTheme(accentId || 'crema');
+  const root = document.documentElement;
+  root.dataset.accent = accentId || 'crema';
+  root.dataset.tone = theme.tone;
+  const forced = root.dataset.theme;
+  const dark = forced === 'dark' || (
+    forced !== 'light' && window.matchMedia('(prefers-color-scheme: dark)').matches
+  );
+  root.style.setProperty('--acc', dark ? theme.dark : theme.light);
+  const forLine = document.getElementById('for-line');
+  const text = DashboardLogic.headerForLine(profile);
+  forLine.textContent = text || '';
+  forLine.hidden = !text;
+  const banner = DashboardLogic.upgradeBanner(profile);
+  const upgrade = document.getElementById('upgrade');
+  upgrade.hidden = !banner;
+  if (banner) document.getElementById('upgrade-text').textContent = banner.text;
+  const summary = DashboardLogic.settingsSummary(profile);
+  document.getElementById('machine-title').textContent = summary.title;
+  document.getElementById('machine-detail').textContent = summary.detail;
+  const row = DashboardLogic.modelRow(profile);
+  document.getElementById('model-row-title').textContent = row.title;
+  document.getElementById('model-row-detail').textContent = row.detail;
+  document.getElementById('shot-time-value').textContent = shotGlobals.shotTime;
+  document.getElementById('cup-size-value').textContent = shotGlobals.cupSize;
+  const aim = document.getElementById('shot-aim');
+  if (aim) aim.textContent = shotGlobals.aim;
+  const windowLabel = document.querySelector('.shot-track + .tl .wl');
+  if (windowLabel) windowLabel.textContent = shotGlobals.window;
+  if (awaitToastFor && profile && profile.id === awaitToastFor && profile.status !== 'pending') {
+    showToast(DashboardLogic.switchConfirm(null, profile, false).toast);
+    awaitToastFor = null;
+  }
+}
 
 function renderRoom(sensors) {
   const card = document.getElementById('other-card');
@@ -2402,32 +2735,40 @@ function renderRoom(sensors) {
 }
 
 function renderTank(tank) {
-  document.getElementById('tank-used-line').textContent =
-    `${Math.round(tank.used_ml).toLocaleString('en-US')} ml used`;
-  const shotsLeft = tank.shots_left;
+  const view = DashboardLogic.tankView(tank, activeProfile);
+  document.getElementById('tank-used-line').textContent = view.used || '';
   const lead = document.getElementById('tank-lead');
   lead.replaceChildren();
-  lead.classList.toggle('empty', shotsLeft === 0);
-  if (shotsLeft === 0) {
-    lead.textContent = DashboardLogic.tankLead(0);
-  } else {
+  lead.classList.toggle('empty', view.mode === 'empty' || view.mode === 'unset');
+  if (view.mode === 'ready' && typeof view.shots === 'number') {
     const count = document.createElement('span');
-    count.textContent = shotsLeft === 1 ? 'About 1' : `About ${shotsLeft}`;
+    count.textContent = view.shots === 1 ? 'About 1' : `About ${view.shots}`;
     const rest = document.createElement('small');
-    rest.textContent = shotsLeft === 1 ? ' shot left' : ' shots left';
+    rest.textContent = view.shots === 1 ? ' shot left' : ' shots left';
     lead.append(count, rest);
+  } else {
+    lead.textContent = view.lead || '';
   }
-
+  const setLink = document.getElementById('tank-set');
+  setLink.hidden = view.mode !== 'unset';
+  const note = document.getElementById('tank-note');
+  note.hidden = !view.note;
+  note.textContent = view.note || '';
+  const meter = document.getElementById('tank-meter');
+  meter.hidden = !view.showMeter || DashboardLogic.tankMeterHidden(view.shots);
   const fill = document.getElementById('tank-fill');
-  const meter = fill.parentElement;
-  meter.hidden = DashboardLogic.tankMeterHidden(shotsLeft);
-  fill.style.width = `${tank.percent}%`;
-  fill.classList.toggle('low', tank.low);
-
+  if (view.showMeter) {
+    fill.style.width = `${view.percent || 0}%`;
+    fill.classList.toggle('low', !!view.low);
+  }
+  document.getElementById('refill-now').hidden = !view.showRefill;
   const warn = document.getElementById('tank-warn');
-  warn.hidden = tank.empty || !tank.low;
+  warn.hidden = view.mode === 'refill' || view.mode === 'unset' || tank.empty || !tank.low;
   warn.textContent = 'Time to refill';
-  applyRefill(shotsLeft === 0);
+  const foot = document.getElementById('tank-foot');
+  foot.hidden = view.mode === 'refill' || view.mode === 'unset';
+  resetButton.hidden = view.mode !== 'empty';
+  if (view.mode === 'empty') applyRefill(true);
 }
 
 // ---- pour chart ----------------------------------------------------------
@@ -2497,6 +2838,8 @@ function renderToday(machine) {
 }
 
 function render(data) {
+  machineState = data.machine;
+  applyMachineChrome(data.machine_profile, data.globals);
   renderState(data.machine, data.pressure);
   renderMeters(data.pressure);
   renderRecent(data.shots);
@@ -2660,6 +3003,255 @@ function applyRefill(empty) {
 function disarmReset() {
   resetButton.classList.remove('armed');
   applyRefill(tankIsEmpty);
+}
+
+const refillNow = document.getElementById('refill-now');
+refillNow.addEventListener('click', async () => {
+  if (!DashboardLogic.tankPostAllowed(connected)) {
+    showToast('Couldn\u2019t switch machines. Check the connection and try again.');
+    return;
+  }
+  try {
+    const res = await fetch('/api/machine-profile/refilled', {
+      method: 'POST',
+      headers: { 'X-Espresso-Dashboard': '1' },
+    });
+    if (!res.ok) throw new Error('refill');
+    await refreshStatus();
+  } catch (err) {
+    showToast('Couldn\u2019t switch machines. Check the connection and try again.');
+  }
+});
+
+document.getElementById('settings').addEventListener('click', openSettings);
+document.getElementById('settings-back').addEventListener('click', () => {
+  if (pickerOpen) {
+    pickerOpen = false;
+    document.getElementById('settings-picker').hidden = true;
+    document.getElementById('settings-home').hidden = false;
+    document.querySelector('#settings-screen h2').textContent = 'Settings';
+    return;
+  }
+  document.getElementById('settings-screen').hidden = true;
+});
+document.getElementById('open-picker').addEventListener('click', openPicker);
+document.getElementById('upgrade-pick').addEventListener('click', () => {
+  openSettings();
+  openPicker();
+});
+document.getElementById('upgrade-later').addEventListener('click', dismissUpgrade);
+document.getElementById('tank-set').addEventListener('click', () => {
+  openSettings();
+  openPicker();
+});
+document.getElementById('model-search').addEventListener('input', paintPicker);
+document.getElementById('switch-cancel').addEventListener('click', () => {
+  pendingSwitch = null;
+  document.getElementById('switch-dialog').hidden = true;
+});
+document.getElementById('switch-go').addEventListener('click', confirmSwitch);
+
+function openSettings() {
+  document.getElementById('settings-screen').hidden = false;
+  document.getElementById('settings-home').hidden = false;
+  document.getElementById('settings-picker').hidden = true;
+  pickerOpen = false;
+  document.querySelector('#settings-screen h2').textContent = 'Settings';
+  loadCatalog();
+}
+
+async function loadCatalog() {
+  try {
+    const res = await fetch('/api/machine-profiles', { cache: 'no-store' });
+    if (!res.ok) return;
+    const body = await res.json();
+    catalog = body.profiles || [];
+    if (body.globals) shotGlobals = DashboardLogic.shotGlobals(body.globals);
+    document.getElementById('shot-time-value').textContent = shotGlobals.shotTime;
+    document.getElementById('cup-size-value').textContent = shotGlobals.cupSize;
+    if (pickerOpen) paintPicker();
+  } catch (err) {
+    catalog = catalog || [];
+  }
+}
+
+function openPicker() {
+  pickerOpen = true;
+  document.getElementById('settings-home').hidden = true;
+  document.getElementById('settings-picker').hidden = false;
+  document.querySelector('#settings-screen h2').textContent = 'Settings';
+  document.getElementById('model-search').value = '';
+  document.getElementById('size-field').hidden = true;
+  paintPicker();
+}
+
+function paintPicker() {
+  const query = document.getElementById('model-search').value;
+  const model = DashboardLogic.pickerModels(catalog, query);
+  const empty = document.getElementById('picker-empty');
+  empty.hidden = !model.emptyNote;
+  empty.textContent = model.emptyNote;
+  const list = document.getElementById('picker-list');
+  list.replaceChildren();
+  const activeId = activeProfile && activeProfile.id;
+  model.rows.forEach(row => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'picker-row';
+    const selected = row.unlisted
+      ? activeId === 'generic' || activeId === 'custom'
+      : activeId === row.id;
+    button.classList.toggle('selected', selected);
+    const grow = document.createElement('span');
+    grow.className = 'grow';
+    const title = document.createElement('b');
+    title.textContent = row.title;
+    const detail = document.createElement('small');
+    if (row.sourceUrl) {
+      const size = row.detail.split(' \u00b7 ')[0];
+      detail.append(document.createTextNode(size + ' \u00b7 '));
+      const link = document.createElement('a');
+      link.href = row.sourceUrl;
+      link.target = '_blank';
+      link.rel = 'noopener';
+      link.textContent = 'From the maker\u2019s spec';
+      link.addEventListener('click', event => event.stopPropagation());
+      detail.append(link);
+    } else {
+      detail.textContent = row.detail;
+    }
+    grow.append(title, detail);
+    button.append(grow);
+    if (selected) {
+      const mark = document.createElement('span');
+      mark.textContent = '\u2713';
+      mark.setAttribute('aria-hidden', 'true');
+      button.append(mark);
+    }
+    button.addEventListener('click', () => chooseModel(row));
+    list.append(button);
+  });
+}
+
+function profileById(id) {
+  return (catalog || []).find(profile => profile.id === id) || null;
+}
+
+function chooseModel(row) {
+  const field = document.getElementById('size-field');
+  if (row.unlisted || row.needsSize) {
+    field.hidden = false;
+    document.getElementById('tank-litres').focus();
+    pendingSwitch = { row: row, waitForSize: true };
+    return;
+  }
+  field.hidden = true;
+  const currentId = activeProfile && activeProfile.id;
+  if (currentId === row.id) return;
+  const next = Object.assign({}, profileById(row.id) || { id: row.id }, {
+    tank_capacity_ml: sizedCapacity(row),
+  });
+  openSwitch(next);
+}
+
+function saveCustomMachine() {
+  if (!pendingSwitch || !pendingSwitch.row) return;
+  const ml = sizedCapacity(pendingSwitch.row);
+  if (ml == null) return;
+  const known = profileById('custom') || {
+    id: 'custom',
+    vendor: 'Custom',
+    model: 'Custom',
+    custom: true,
+    pressure_target_bar: 9,
+    theme: { accent: 'crema' },
+  };
+  openSwitch(Object.assign({}, known, { id: 'custom', custom: true, tank_capacity_ml: ml }));
+}
+
+function sizedCapacity(row) {
+  const known = profileById(row.id);
+  const raw = document.getElementById('tank-litres').value.trim();
+  if (raw) {
+    const litres = Number(raw);
+    if (isFinite(litres) && litres > 0) return Math.round(litres * 1000);
+  }
+  if (known && typeof known.tank_capacity_ml === 'number') return known.tank_capacity_ml;
+  if (row.unlisted && activeProfile && (activeProfile.id === 'custom' || activeProfile.id === 'generic')) {
+    return activeProfile.tank_capacity_ml;
+  }
+  return null;
+}
+
+document.getElementById('save-machine').addEventListener('click', saveCustomMachine);
+
+function openSwitch(next) {
+  pendingSwitch = { next: next };
+  const copy = DashboardLogic.switchConfirm(
+    activeProfile, next, DashboardLogic.shotIsOpen(machineState)
+  );
+  document.getElementById('switch-title').textContent = copy.title;
+  const body = document.getElementById('switch-body');
+  body.replaceChildren();
+  copy.lines.forEach(line => {
+    const p = document.createElement('p');
+    p.textContent = line;
+    body.append(p);
+  });
+  document.getElementById('switch-dialog').hidden = false;
+}
+
+async function confirmSwitch() {
+  if (!pendingSwitch || !pendingSwitch.next) return;
+  const next = pendingSwitch.next;
+  const id = next.id === 'generic' && activeProfile && activeProfile.id === 'custom'
+    ? 'custom' : next.id;
+  const body = { id: id };
+  if (typeof next.tank_capacity_ml === 'number' && (id === 'custom' || id === 'generic')) {
+    body.tank_capacity_ml = next.tank_capacity_ml;
+  }
+  try {
+    const res = await fetch('/api/machine-profile', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Espresso-Dashboard': '1',
+      },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) throw new Error('switch');
+    const saved = await res.json();
+    document.getElementById('switch-dialog').hidden = true;
+    document.getElementById('settings-screen').hidden = true;
+    pendingSwitch = null;
+    if (saved.status === 'pending') {
+      awaitToastFor = saved.pending && saved.pending.id;
+    } else {
+      showToast(DashboardLogic.switchConfirm(null, saved, false).toast);
+    }
+    await refreshStatus();
+  } catch (err) {
+    showToast('Couldn\u2019t switch machines. Check the connection and try again.');
+  }
+}
+
+async function dismissUpgrade() {
+  try {
+    const res = await fetch('/api/machine-profile/prompt/dismiss', {
+      method: 'POST',
+      headers: { 'X-Espresso-Dashboard': '1' },
+    });
+    if (!res.ok) throw new Error('dismiss');
+    await refreshStatus();
+  } catch (err) {
+    showToast('Couldn\u2019t switch machines. Check the connection and try again.');
+  }
+}
+
+async function refreshStatus() {
+  const res = await fetch('/api/status', { cache: 'no-store' });
+  if (!res.ok) return;
+  render(await res.json());
 }
 
 // ---- polling, with a backoff so a down machine is not hammered ----------
@@ -2886,7 +3478,7 @@ wakeBtn.addEventListener('click', () => {
   syncWake();
 });
 
-if ('wakeLock' in navigator) wakeBtn.hidden = false;
+wakeBtn.hidden = false;
 
 document.getElementById('all-shots').addEventListener('click', () => {
   const list = document.getElementById('history-card');

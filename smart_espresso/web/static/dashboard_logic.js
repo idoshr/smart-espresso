@@ -642,6 +642,251 @@
     return best;
   }
 
+  const ACCENTS = {
+    gaggia: { light: "#8C4550", dark: "#D88C99", tone: "open" },
+    rancilio: { light: "#2C667F", dark: "#77A8C6", tone: "tight" },
+    crema: { light: "#A04620", dark: "#E58A5C", tone: "default" },
+  };
+
+  function accentTheme(id) {
+    return ACCENTS[id] || ACCENTS.crema;
+  }
+
+  // Litres when the size lands on a tenth of a litre. Anything else stays ml.
+  function capacityText(ml) {
+    if (typeof ml !== "number" || !isFinite(ml)) return null;
+    const tenth = Math.round((ml / 1000) * 10) / 10;
+    if (Math.abs(ml - tenth * 1000) < 0.51) {
+      const label = tenth % 1 === 0 ? String(tenth.toFixed(0)) : tenth.toFixed(1);
+      return label + " L";
+    }
+    return Math.round(ml).toLocaleString("en-US") + " ml";
+  }
+
+  function pressureText(bar) {
+    if (typeof bar !== "number" || !isFinite(bar)) return null;
+    const rounded = Math.round(bar * 10) / 10;
+    const label = rounded % 1 === 0 ? String(rounded.toFixed(0)) : rounded.toFixed(1);
+    return label + " bar";
+  }
+
+  function isOwnMachine(profile) {
+    if (!profile || !profile.id) return false;
+    if (profile.id === "generic" || profile.id === "custom" || profile.custom) return true;
+    return profile.vendor === "Custom" && profile.model === "Custom";
+  }
+
+  function makerModel(profile) {
+    if (!profile || isOwnMachine(profile)) return "";
+    return [profile.vendor, profile.model].filter(Boolean).join(" ");
+  }
+
+  function headerForLine(profile) {
+    if (!profile || !profile.id || profile.status === "machine_not_set") {
+      return "Machine not set";
+    }
+    if (isOwnMachine(profile)) return "for your machine";
+    const name = makerModel(profile);
+    return name ? "for " + name : "Machine not set";
+  }
+
+  function settingsSummary(profile) {
+    if (!profile || !profile.id || profile.status === "machine_not_set") {
+      return { title: "Machine not set", detail: "Set your machine" };
+    }
+    const size = capacityText(profile.tank_capacity_ml);
+    const bar = pressureText(
+      typeof profile.pressure_target_bar === "number" ? profile.pressure_target_bar : 9
+    );
+    if (isOwnMachine(profile)) {
+      return {
+        title: "Custom machine",
+        detail: [size ? size + " tank" : null, bar].filter(Boolean).join(" \u00b7 "),
+      };
+    }
+    return {
+      title: makerModel(profile),
+      detail: [size ? size + " tank" : null, bar].filter(Boolean).join(" \u00b7 "),
+    };
+  }
+
+  function modelRow(profile) {
+    if (!profile || !profile.id || profile.status === "machine_not_set") {
+      return { title: "Set your machine", detail: "Tank size not set" };
+    }
+    if (isOwnMachine(profile)) {
+      const size = capacityText(profile.tank_capacity_ml);
+      return {
+        title: "Custom machine",
+        detail: size ? size + " tank" : "Enter the tank size yourself",
+      };
+    }
+    const size = capacityText(profile.tank_capacity_ml);
+    if (profile.capacity_confirmed && profile.source_url && size) {
+      return {
+        title: makerModel(profile),
+        detail: size + " tank \u00b7 From the maker\u2019s spec",
+      };
+    }
+    return {
+      title: makerModel(profile),
+      detail: "Tank size not confirmed \u00b7 Enter yours",
+    };
+  }
+
+  function pickerRow(profile) {
+    if (!profile) return null;
+    if (profile.id === "generic" || profile.id === "custom" || profile.custom) {
+      return {
+        id: profile.id === "custom" ? "custom" : "generic",
+        title: "My model isn\u2019t listed",
+        detail: "Enter the tank size yourself",
+        unlisted: true,
+        sourceUrl: null,
+      };
+    }
+    const size = capacityText(profile.tank_capacity_ml);
+    const confirmed = !!(profile.capacity_confirmed && profile.source_url && size);
+    return {
+      id: profile.id,
+      title: makerModel(profile),
+      detail: confirmed
+        ? size + " tank \u00b7 From the maker\u2019s spec"
+        : "Tank size not confirmed \u00b7 Enter yours",
+      unlisted: false,
+      sourceUrl: confirmed ? profile.source_url : null,
+      needsSize: !confirmed,
+    };
+  }
+
+  function pickerModels(profiles, query) {
+    const q = String(query || "").trim().toLowerCase();
+    const listed = [];
+    let unlisted = null;
+    (profiles || []).forEach(function (profile) {
+      if (!profile || profile.id === "custom") return;
+      const row = pickerRow(profile);
+      if (!row) return;
+      if (row.unlisted) {
+        unlisted = row;
+        return;
+      }
+      if (!q) {
+        listed.push(row);
+        return;
+      }
+      const hay = (
+        row.title + " " + (profile.vendor || "") + " " + (profile.model || "")
+      ).toLowerCase();
+      if (hay.indexOf(q) >= 0) listed.push(row);
+    });
+    if (!unlisted) {
+      unlisted = pickerRow({ id: "generic", vendor: "Generic", model: "Current setup" });
+    }
+    const rows = listed.slice();
+    rows.push(unlisted);
+    return {
+      rows: rows,
+      emptyNote: q && !listed.length ? "No listed machine matches. You can add yours." : "",
+    };
+  }
+
+  function switchConfirm(current, next, shotOpen) {
+    const size = capacityText(next && next.tank_capacity_ml);
+    const lines = [];
+    if (size) {
+      lines.push(
+        "The tank size changes to " + size +
+          ". Fill the tank, then tap I refilled it. Your shot history stays as it is."
+      );
+    }
+    const cur = current && typeof current.pressure_target_bar === "number"
+      ? current.pressure_target_bar : 9;
+    const nxt = next && typeof next.pressure_target_bar === "number"
+      ? next.pressure_target_bar : 9;
+    if (cur !== nxt) lines.push("Pressure target changes to " + pressureText(nxt) + ".");
+    if (shotOpen) lines.push("Switches after this shot is saved.");
+    const who = isOwnMachine(next) ? "your machine" : makerModel(next);
+    return {
+      title: "Switch to " + who + "?",
+      lines: lines,
+      toast: isOwnMachine(next)
+        ? "Now set up for your machine."
+        : "Now set up for a " + who + ".",
+    };
+  }
+
+  function shotGlobals(globals) {
+    const low = globals && globals.shot_time_low_s != null ? globals.shot_time_low_s : 25;
+    const high = globals && globals.shot_time_high_s != null ? globals.shot_time_high_s : 30;
+    const cup = globals && globals.ml_per_cup != null ? globals.ml_per_cup : 36;
+    return {
+      shotTime: low + " to " + high + " s",
+      cupSize: cup + " ml",
+      aim: "Aiming for " + low + " to " + high + " s",
+      window: low + "\u2013" + high + " s",
+    };
+  }
+
+  function upgradeBanner(profile) {
+    if (!profile || !profile.prompt_pick_model) return null;
+    return {
+      text: "Which machine is this? Pick your model so the tank size and pressure target match it.",
+      pick: "Pick my machine",
+      later: "Not now",
+    };
+  }
+
+  function shotIsOpen(machine) {
+    return !!(machine && (machine.shot || machine.state === "brewing"));
+  }
+
+  function tankView(tank, profile) {
+    const used = tank && typeof tank.used_ml === "number" ? Math.round(tank.used_ml) : null;
+    const usedLine = used == null ? "" : used.toLocaleString("en-US") + " ml used";
+    const refill = !!(tank && tank.refill_required) || !!(profile && profile.refill_required);
+    const capacity = profile && typeof profile.tank_capacity_ml === "number"
+      ? profile.tank_capacity_ml
+      : tank && typeof tank.capacity_ml === "number" ? tank.capacity_ml : null;
+    const unset = !profile || !profile.id || profile.status === "machine_not_set";
+    if (refill && typeof capacity === "number") {
+      return {
+        mode: "refill",
+        lead: "Refill needed",
+        used: usedLine,
+        showMeter: false,
+        showRefill: true,
+        note: "",
+      };
+    }
+    if (unset || typeof capacity !== "number") {
+      return {
+        mode: "unset",
+        lead: "Tank size not set",
+        action: "Set your machine",
+        used: usedLine,
+        showMeter: false,
+        showRefill: false,
+        note: "",
+      };
+    }
+    const shots = tank ? tank.shots_left : null;
+    const over = typeof tank.used_ml === "number" && tank.used_ml > capacity;
+    return {
+      mode: shots === 0 ? "empty" : "ready",
+      lead: shots === 0 ? tankLead(0) : null,
+      shots: shots,
+      used: usedLine,
+      showMeter: typeof shots === "number" && shots > 0,
+      percent: tank ? tank.percent : 0,
+      low: !!(tank && tank.low),
+      showRefill: false,
+      note: over
+        ? "That's more than this tank holds. If it's full now, tap I refilled it."
+        : "",
+    };
+  }
+
   return {
     pillText: pillText,
     footerText: footerText,
@@ -696,5 +941,18 @@
     heroCurveSlot: heroCurveSlot,
     heroCurveFigure: heroCurveFigure,
     READY_MIN_BAR: READY_MIN_BAR,
+    accentTheme: accentTheme,
+    capacityText: capacityText,
+    pressureText: pressureText,
+    headerForLine: headerForLine,
+    settingsSummary: settingsSummary,
+    pickerModels: pickerModels,
+    switchConfirm: switchConfirm,
+    shotGlobals: shotGlobals,
+    upgradeBanner: upgradeBanner,
+    shotIsOpen: shotIsOpen,
+    tankView: tankView,
+    isOwnMachine: isOwnMachine,
+    modelRow: modelRow,
   };
 });
