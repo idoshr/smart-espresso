@@ -1265,3 +1265,124 @@ class TestTokens:
         assert "font-size: 12.5px" in title
         assert "font-weight: 600" in title
         assert "gap: 3px" in _css_rule(self.page, ".figure")
+
+
+class TestMachineProfileUi:
+    def test_header_uses_maker_and_model_and_never_doubles_custom(self):
+        gaggia = {
+            "id": "gaggia-classic-e24",
+            "vendor": "Gaggia",
+            "model": "Classic E24",
+            "status": "ready",
+            "tank_capacity_ml": 2100,
+            "pressure_target_bar": 9,
+            "theme": {"accent": "gaggia"},
+        }
+        custom = {
+            "id": "custom",
+            "vendor": "Custom",
+            "model": "Custom",
+            "custom": True,
+            "status": "ready",
+            "tank_capacity_ml": 2000,
+            "pressure_target_bar": 9,
+            "theme": {"accent": "crema"},
+        }
+        generic = {
+            "id": "generic",
+            "vendor": "Generic",
+            "model": "Current setup",
+            "status": "ready",
+            "tank_capacity_ml": 1800,
+            "theme": {"accent": "crema"},
+        }
+        assert call("logic.headerForLine(%s)" % json.dumps(gaggia)) == "for Gaggia Classic E24"
+        assert call("logic.headerForLine(%s)" % json.dumps(custom)) == "for your machine"
+        assert call("logic.headerForLine(%s)" % json.dumps(generic)) == "for your machine"
+        assert "Custom Custom" not in call("logic.headerForLine(%s)" % json.dumps(custom))
+        unset = call("logic.headerForLine(%s)" % json.dumps({"status": "machine_not_set"}))
+        assert unset == "Machine not set"
+        summary = call("logic.settingsSummary(%s)" % json.dumps(custom))
+        assert summary["title"] == "Custom machine \u00b7 2 L tank"
+        listed = call("logic.settingsSummary(%s)" % json.dumps(gaggia))
+        assert listed["title"] == "Gaggia Classic E24"
+        assert listed["detail"] == "2.1 L tank \u00b7 9 bar"
+
+    def test_picker_hides_the_word_generic_and_keeps_globals(self):
+        profiles = [
+            {
+                "id": "gaggia-classic-e24",
+                "vendor": "Gaggia",
+                "model": "Classic E24",
+                "tank_capacity_ml": 2100,
+                "capacity_confirmed": True,
+                "source_url": "https://www.gaggia.com/manual-machines/new-classic-e24/",
+            },
+            {
+                "id": "rancilio-silvia",
+                "vendor": "Rancilio",
+                "model": "Silvia",
+                "tank_capacity_ml": 2000,
+                "capacity_confirmed": True,
+                "source_url": "https://www.ranciliogroup.com/rancilio/silvia/silvia/",
+            },
+            {
+                "id": "generic",
+                "vendor": "Generic",
+                "model": "Current setup",
+            },
+            {"id": "custom", "vendor": "Custom", "model": "Custom", "custom": True},
+        ]
+        rows = call("logic.pickerModels(%s, '')" % json.dumps(profiles))["rows"]
+        titles = [row["title"] for row in rows]
+        assert titles == [
+            "Gaggia Classic E24",
+            "Rancilio Silvia",
+            "My model isn\u2019t listed",
+        ]
+        assert "Generic" not in titles
+        assert rows[0]["detail"] == "2.1 L tank \u00b7 From the maker\u2019s spec"
+        assert rows[2]["detail"] == "Enter the tank size yourself"
+        missed = call("logic.pickerModels(%s, 'zzzz')" % json.dumps(profiles))
+        assert missed["emptyNote"] == "No listed machine matches. You can add yours."
+        assert missed["rows"][-1]["title"] == "My model isn\u2019t listed"
+        globals_ = call("logic.shotGlobals(%s)" % json.dumps({
+            "shot_time_low_s": 25, "shot_time_high_s": 30, "ml_per_cup": 36,
+        }))
+        assert globals_["shotTime"] == "25 to 30 s"
+        assert globals_["cupSize"] == "36 ml"
+
+    def test_switch_copy_refill_and_accents(self):
+        current = {"id": "gaggia-classic-e24", "vendor": "Gaggia", "model": "Classic E24",
+                   "tank_capacity_ml": 2100, "pressure_target_bar": 9}
+        nxt = {"id": "rancilio-silvia", "vendor": "Rancilio", "model": "Silvia",
+               "tank_capacity_ml": 2000, "pressure_target_bar": 9}
+        quiet = call("logic.switchConfirm(%s, %s, false)" % (json.dumps(current), json.dumps(nxt)))
+        assert quiet["title"] == "Switch to Rancilio Silvia?"
+        assert quiet["lines"] == [
+            "The tank size changes to 2 L. Fill the tank, then tap I refilled it. "
+            "Your shot history stays as it is."
+        ]
+        mid = call("logic.switchConfirm(%s, %s, true)" % (json.dumps(current), json.dumps(nxt)))
+        assert mid["lines"][-1] == "Switches after this shot is saved."
+        changed = dict(nxt, pressure_target_bar=10)
+        pressure = call(
+            "logic.switchConfirm(%s, %s, false)" % (json.dumps(current), json.dumps(changed))
+        )
+        assert "Pressure target changes to 10 bar." in pressure["lines"]
+        theme = call("logic.accentTheme('rancilio')")
+        assert theme["light"] == "#2C667F"
+        assert theme["dark"] == "#77A8C6"
+        assert theme["tone"] == "tight"
+        refill = call("logic.tankView(%s, %s)" % (
+            json.dumps({"used_ml": 420, "refill_required": True, "capacity_ml": 2000, "shots_left": None}),
+            json.dumps(nxt),
+        ))
+        assert refill["lead"] == "Refill needed"
+        assert refill["showMeter"] is False
+        assert refill["showRefill"] is True
+        assert refill["used"] == "420 ml used"
+        banner = call("logic.upgradeBanner(%s)" % json.dumps({"prompt_pick_model": True}))
+        assert banner["pick"] == "Pick my machine"
+        assert banner["later"] == "Not now"
+        assert "tank size and pressure target" in banner["text"]
