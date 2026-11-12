@@ -1,13 +1,38 @@
 # Smart Espresso
 
+**Every shot, on the record.**
+
 [![Python Version](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/license-BSD--3--Clause-green.svg)](LICENSE)
 [![Status](https://img.shields.io/badge/status-beta-yellow.svg)](https://github.com/idoshr/smart-espresso)
 
-_**WORK IN PROGRESS**_
+![The dashboard on a phone, pulling a shot at 26 seconds with its pressure curve drawing live. Demo data, not a real machine.](docs/img/hero-default-captioned.png)
 
-DIY espresso machine monitoring with Raspberry Pi 4, pressure sensors,
-OLED display, and optional Home Assistant integration.
+A Raspberry Pi 4 that watches your espresso machine and saves every shot.
+You see its pressure curve, flow, shot time and volume on your phone, over
+your own network.
+
+- **Every shot is saved.** Each one keeps its pressure and flow curves,
+  time and volume. The history survives a reboot and keeps the last 200.
+- **Watch the shot as it runs.** The pressure curve draws live next to a
+  shot timer and the 25 to 30 s window. Head and boiler pressure and flow
+  update as you brew, and it knows when the machine is warming up, ready
+  or steaming.
+- **Set it up for your machine.** Pick your model in Settings for its tank
+  size and pressure target, or enter your own tank size.
+- **Your machine in Home Assistant.** Each sensor shows up as its own
+  entity, ready for your automations.
+
+It reads your machine and never drives it. The sensors sit on the plumbing,
+and the machine's own controls stay as they are. If you want pressure
+profiling, a control mod such as Gaggiuino or GaggiMate is the better fit.
+
+No Pi yet? [Run the dashboard on simulated sensors](#simulator) first.
+
+Built for your home network. Beta, and still a work in progress.
+
+<!-- markdownlint-disable-next-line MD013 -->
+[Try it](#simulator) · [Hardware](#hardware) · [Install](#installation) · [Dashboard](#web-dashboard) · [Home Assistant](#generating-home-assistant-api-token)
 
 ## Features
 
@@ -18,9 +43,12 @@ OLED display, and optional Home Assistant integration.
 - OLED display (SH1106 128x64)
 - Machine state classification (off / heating / ready / brewing / steaming / over pressure)
 - Shot history with head-pressure and flow curves, kept across reboots
-- Water tank counter with refill reset, so you know before the 2 L tank runs dry
-- Mobile web dashboard: manometers, machine state, tank level, shot history,
-  and water used in the last 2 minutes
+- Water tank counter with refill reset, sized to your machine's tank,
+  so you know before it runs dry
+- Web dashboard for phone and desktop: live pressure curve and shot timer,
+  pressure meters, machine state, recent shots, water tank and room readings
+- Machine profiles: pick your model for its tank size and pressure target,
+  or enter your own tank size
 - Home Assistant integration
 - Extensible sensor architecture
 
