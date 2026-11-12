@@ -726,6 +726,9 @@
       return {
         title: makerModel(profile),
         detail: size + " tank \u00b7 From the maker\u2019s spec",
+        sizeLabel: size + " tank",
+        specLabel: "From the maker\u2019s spec",
+        sourceUrl: profile.source_url,
       };
     }
     return {

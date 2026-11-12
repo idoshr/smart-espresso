@@ -1331,6 +1331,20 @@ class TestMachineProfileUi:
         )
         assert row["title"] == "Gaggia Classic E24"
         assert row["detail"] == "2.1 L tank \u00b7 From the maker\u2019s spec"
+        assert (
+            row["sourceUrl"]
+            == "https://www.gaggia.com/manual-machines/new-classic-e24/"
+        )
+        page = (
+            Path(__file__).resolve().parents[1] / "web" / "static" / "index.html"
+        ).read_text(encoding="utf-8")
+        assert 'placeholder="Search by maker or model"' in page
+        icon = page[
+            page.find('class="search-icon"') : page.find('class="search-icon"') + 80
+        ]
+        assert 'aria-hidden="true"' in icon
+        assert ".spec-link" in page
+        assert "color: var(--acc)" in page
 
     def test_picker_hides_the_word_generic_and_keeps_globals(self):
         profiles = [
