@@ -1,7 +1,7 @@
 """Classify what the espresso machine is doing from its live sensor readings."""
 import threading
 from time import localtime, monotonic
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 
 from smart_espresso.shot_history import ShotHistory
 
@@ -209,6 +209,9 @@ class MachineStateClassifier:
         self.pressure_hold_seconds = pressure_hold_seconds
         self.max_flowless_brew_seconds = max_flowless_brew_seconds
         self.shot_history = shot_history
+        # Status server sets this so a profile switch can wait until the
+        # open shot is saved. None keeps the classifier free of that module.
+        self.on_shot_closed: Optional[Callable[[bool], None]] = None
         self.min_shot_ml = min_shot_ml
         self.shot_vent_bar = shot_vent_bar
         self.shot_merge_seconds = shot_merge_seconds
@@ -580,6 +583,12 @@ class MachineStateClassifier:
         self._shot_suspended_at = None
         self._shot_pulse_from = None
 
+    @property
+    def shot_is_open(self) -> bool:
+        """True while a pull is in progress, including one not yet saved."""
+        with self._lock:
+            return self._shot_start is not None
+
     def _gate_flow(self, now: float, flow_mls: Optional[float]) -> Optional[float]:
         """Turn the pulse window into the boolean the state machine already uses.
 
@@ -700,12 +709,18 @@ class MachineStateClassifier:
         """Persist or drop the pull that just closed. No-op otherwise."""
         if self.shot_history is None or not outcome:
             return
+        saved = False
         if outcome[0] == "commit":
             # The log may be a couple of megabytes. Writing it here would
             # freeze the shot timer on the committing sample.
-            self.shot_history.commit(outcome[1], outcome[2], wait=False)
+            saved = (
+                self.shot_history.commit(outcome[1], outcome[2], wait=False) is not None
+            )
         else:
             self.shot_history.abandon()
+        callback = self.on_shot_closed
+        if callback is not None:
+            callback(saved)
 
     @property
     def label(self) -> str:

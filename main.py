@@ -8,6 +8,10 @@ from smart_espresso.analog_sensor.pressure_analog_sensor import (
     pressure_voltages_from_env,
 )
 from smart_espresso.analog_sensor.water_flow_sensor import WaterFlowAnalogSensor
+from smart_espresso.machine_profile import (
+    DEFAULT_STATE_PATH as DEFAULT_MACHINE_PROFILE_PATH,
+)
+from smart_espresso.machine_profile import MachineProfileStore
 from smart_espresso.machine_state import MachineStateClassifier
 from smart_espresso.shot_history import DEFAULT_STATE_PATH as DEFAULT_SHOT_HISTORY_PATH
 from smart_espresso.shot_history import ShotHistory
@@ -79,17 +83,44 @@ def build_display(enabled=None, factory=None, sim=None):
         return None
 
 
+def build_machine_profile_store(environ=None, tank_state_path=None):
+    """Load the machine profile, migrating a pre-profile tank size once.
+
+    A saved profile wins. With none, ``MACHINE_PROFILE`` selects a model.
+    With neither, an existing tank capacity becomes a Custom profile and
+    a fresh install stays unset.
+    """
+    env = os.environ if environ is None else environ
+    if tank_state_path is None:
+        tank_state_path = env.get("WATER_TANK_STATE", DEFAULT_STATE_PATH)
+    return MachineProfileStore(
+        state_path=env.get("MACHINE_PROFILE_STATE", DEFAULT_MACHINE_PROFILE_PATH),
+        read_env=True,
+        environ=env,
+        tank_state_path=tank_state_path,
+    )
+
+
+def _profile_capacity(store):
+    profile = store.active()
+    if profile is None:
+        return None
+    return profile.tank_capacity_ml
+
+
 # Mobile status dashboard, served on the local network.
 WEB_ENABLE = strtobool(os.environ.get("WEB_ENABLE") or True)
 web_server = None
 if WEB_ENABLE:
+    _machine_profiles = build_machine_profile_store()
     web_server = StatusServer(
         host=os.environ.get("WEB_HOST", "0.0.0.0"),
         port=int(os.environ.get("WEB_PORT", 8080)),
         tank=WaterTank(
-            capacity_ml=float(os.environ.get("WATER_TANK_ML", 2000)),
+            capacity_ml=_profile_capacity(_machine_profiles),
             state_path=os.environ.get("WATER_TANK_STATE", DEFAULT_STATE_PATH),
         ),
+        profiles=_machine_profiles,
         shot_history=ShotHistory(
             state_path=os.environ.get("SHOT_HISTORY_STATE", DEFAULT_SHOT_HISTORY_PATH),
             max_shots=int(os.environ.get("SHOT_HISTORY_MAX", ShotHistory.MAX_SHOTS)),
@@ -275,11 +306,25 @@ def build_from_env(environ=None, sim=None, recorder=None):
                 tank_path = os.environ.get(
                     "WATER_TANK_STATE", "~/.smart_espresso/sim_water_tank.json"
                 )
+                profile_path = os.environ.get(
+                    "MACHINE_PROFILE_STATE",
+                    "~/.smart_espresso/sim_machine_profile.json",
+                )
+                profiles = MachineProfileStore(
+                    state_path=profile_path,
+                    read_env=True,
+                    environ=os.environ,
+                    tank_state_path=tank_path,
+                )
                 serve = StatusServer(
                     host=os.environ.get("WEB_HOST", "0.0.0.0"),
                     port=int(os.environ.get("WEB_PORT", 8080)),
-                    tank=WaterTank(state_path=tank_path),
+                    tank=WaterTank(
+                        capacity_ml=_profile_capacity(profiles),
+                        state_path=tank_path,
+                    ),
                     shot_history=ShotHistory(state_path=shot_path),
+                    profiles=profiles,
                 )
         else:
             devices = build_analog_devices()
@@ -351,13 +396,26 @@ def main(argv=None):
                     "SHOT_HISTORY_STATE",
                     "~/.smart_espresso/sim_shot_history.json",
                 )
+                profile_path = os.environ.get(
+                    "MACHINE_PROFILE_STATE",
+                    "~/.smart_espresso/sim_machine_profile.json",
+                )
             else:
                 tank_path = os.environ.get("WATER_TANK_STATE", DEFAULT_STATE_PATH)
                 shot_path = os.environ.get(
                     "SHOT_HISTORY_STATE", DEFAULT_SHOT_HISTORY_PATH
                 )
+                profile_path = os.environ.get(
+                    "MACHINE_PROFILE_STATE", DEFAULT_MACHINE_PROFILE_PATH
+                )
+            profiles = MachineProfileStore(
+                state_path=profile_path,
+                read_env=True,
+                environ=os.environ,
+                tank_state_path=tank_path,
+            )
             tank = WaterTank(
-                capacity_ml=float(os.environ.get("WATER_TANK_ML", 2000)),
+                capacity_ml=_profile_capacity(profiles),
                 state_path=tank_path,
             )
             history = ShotHistory(
@@ -367,6 +425,7 @@ def main(argv=None):
                 ),
             )
             classifier = MachineStateClassifier(shot_history=history)
+            profiles.apply(tank)
         else:
             tank = serve.tank
             history = serve.shot_history
