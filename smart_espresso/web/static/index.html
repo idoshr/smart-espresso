@@ -441,11 +441,9 @@
   .picker-line .mark {
     position: absolute;
     right: 16px;
-    top: 0;
-    bottom: 0;
+    top: 50%;
     z-index: 1;
-    display: flex;
-    align-items: center;
+    transform: translateY(-50%);
     pointer-events: none;
   }
   .machine-hero { display: flex; align-items: center; gap: 12px; padding: 14px 16px; }
@@ -3151,13 +3149,11 @@ document.getElementById('tank-set').addEventListener('click', () => {
   openPicker();
 });
 document.getElementById('model-search').addEventListener('input', paintPicker);
-document.getElementById('switch-cancel').addEventListener('click', () => {
-  pendingSwitch = null;
-  document.getElementById('switch-dialog').hidden = true;
-});
+document.getElementById('switch-cancel').addEventListener('click', closeSwitchDialog);
 document.getElementById('switch-go').addEventListener('click', confirmSwitch);
 
 let settingsOpener = null;
+let switchOpener = null;
 const inertRestore = new Map();
 
 function holdInert(el) {
@@ -3218,6 +3214,7 @@ function closeSettings() {
   document.getElementById('settings-home').hidden = false;
   document.getElementById('switch-dialog').hidden = true;
   pendingSwitch = null;
+  switchOpener = null;
   sheet.hidden = true;
   document.querySelector('#settings-screen h2').textContent = 'Settings';
   releaseSettingsBackground();
@@ -3254,8 +3251,7 @@ document.addEventListener('keydown', event => {
     const dialog = document.getElementById('switch-dialog');
     if (dialog && !dialog.hidden) {
       event.preventDefault();
-      pendingSwitch = null;
-      dialog.hidden = true;
+      closeSwitchDialog();
       return;
     }
     if (trapRoot()) {
@@ -3350,7 +3346,11 @@ function paintPicker() {
       mark.setAttribute('aria-hidden', 'true');
       line.append(mark);
     }
-    button.addEventListener('click', () => chooseModel(row));
+    button.id = 'picker-row-' + row.id;
+    button.addEventListener('click', () => {
+      switchOpener = button;
+      chooseModel(row);
+    });
     list.append(line);
   });
 }
@@ -3407,7 +3407,19 @@ function sizedCapacity(row) {
 
 document.getElementById('save-machine').addEventListener('click', saveCustomMachine);
 
+function closeSwitchDialog() {
+  const opener = switchOpener;
+  switchOpener = null;
+  pendingSwitch = null;
+  document.getElementById('switch-dialog').hidden = true;
+  if (opener && opener.isConnected) opener.focus();
+}
+
 function openSwitch(next) {
+  if (!switchOpener || !switchOpener.isConnected) {
+    const current = document.activeElement;
+    if (current && current !== document.body) switchOpener = current;
+  }
   pendingSwitch = { next: next };
   const copy = DashboardLogic.switchConfirm(
     activeProfile, next, DashboardLogic.shotIsOpen(machineState)

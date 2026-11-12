@@ -1526,3 +1526,10 @@ class TestMachineProfileUi:
         assert "line.append(button, grow)" in page
         assert "button.append(grow)" not in page
         assert "modelButtonName" in page
+        mark = page.split(".picker-line .mark", 1)[1].split("}", 1)[0]
+        assert "top: 50%" in mark
+        assert "translateY(-50%)" in mark
+        assert "right: 16px" in mark
+        assert "bottom:" not in mark
+        assert "closeSwitchDialog" in page
+        assert "switchOpener" in page
